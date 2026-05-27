@@ -15,6 +15,18 @@ def _utcnow_iso() -> str:
     return datetime.utcnow().isoformat(timespec="microseconds") + "Z"
 
 
+def _iso_to_epoch(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        v = value
+        if v.endswith("Z"):
+            v = v[:-1] + "+00:00"
+        return datetime.fromisoformat(v).timestamp()
+    except Exception:
+        return None
+
+
 class ConnectorSyncStore:
     """Local sync state store for cursors, run history, dead-letter queue, and durable schedules."""
 
@@ -496,6 +508,98 @@ class ConnectorSyncStore:
                 ),
             )
             return cur.rowcount > 0
+
+    def list_recent_runs(self, limit: int = 100) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, run_id, source_id, entity_type, started_at, finished_at,
+                       status, fetched_count, persisted_count, duplicate, error_text
+                FROM connector_sync_run
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (max(1, min(limit, 1000)),),
+            ).fetchall()
+
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            out.append(
+                {
+                    "id": int(row["id"]),
+                    "run_id": row["run_id"],
+                    "source_id": row["source_id"],
+                    "entity_type": row["entity_type"],
+                    "started_at": row["started_at"],
+                    "finished_at": row["finished_at"],
+                    "status": row["status"],
+                    "fetched_count": int(row["fetched_count"]),
+                    "persisted_count": int(row["persisted_count"]),
+                    "duplicate": bool(row["duplicate"]),
+                    "error_text": row["error_text"],
+                }
+            )
+        return out
+
+    def get_reliability_metrics(self) -> dict[str, Any]:
+        now_epoch = datetime.utcnow().timestamp()
+
+        with self._connect() as conn:
+            schedule_rows = conn.execute(
+                """
+                SELECT source_id, entity_type, next_run_at, last_run_finished_at, last_status
+                FROM connector_sync_schedule
+                WHERE enabled = 1
+                """
+            ).fetchall()
+
+            run_rows = conn.execute(
+                """
+                SELECT status
+                FROM connector_sync_run
+                ORDER BY id DESC
+                LIMIT 200
+                """
+            ).fetchall()
+
+            dead_pending_row = conn.execute(
+                """
+                SELECT COUNT(1) AS cnt
+                FROM connector_dead_letter
+                WHERE status = 'pending'
+                """
+            ).fetchone()
+
+        due_lag_seconds: list[float] = []
+        freshness_lag_seconds: list[float] = []
+        stale_schedules = 0
+
+        for row in schedule_rows:
+            next_epoch = _iso_to_epoch(row["next_run_at"])
+            if next_epoch is not None and now_epoch > next_epoch:
+                due_lag_seconds.append(now_epoch - next_epoch)
+
+            finished_epoch = _iso_to_epoch(row["last_run_finished_at"])
+            if finished_epoch is not None:
+                freshness_lag_seconds.append(now_epoch - finished_epoch)
+            else:
+                stale_schedules += 1
+
+        total_runs = len(run_rows)
+        failed_runs = sum(1 for r in run_rows if r["status"] != "success")
+        run_success_rate = (1.0 - (failed_runs / total_runs)) if total_runs else 1.0
+
+        max_due_lag = max(due_lag_seconds) if due_lag_seconds else 0.0
+        max_freshness_lag = max(freshness_lag_seconds) if freshness_lag_seconds else 0.0
+
+        return {
+            "schedules_enabled": len(schedule_rows),
+            "schedules_without_successful_run": stale_schedules,
+            "max_schedule_due_lag_seconds": round(max_due_lag, 3),
+            "max_freshness_lag_seconds": round(max_freshness_lag, 3),
+            "run_success_rate_last_200": round(run_success_rate, 6),
+            "pending_dead_letters": int(dead_pending_row["cnt"] if dead_pending_row else 0),
+        }
 
     @staticmethod
     def _row_to_schedule_dict(row: sqlite3.Row) -> dict[str, Any]:

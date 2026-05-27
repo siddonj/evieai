@@ -1,0 +1,18 @@
+{
+  "thresholds": {
+    "max_sync_lag_seconds": 1800,
+    "max_event_lag_seconds": 600,
+    "min_action_success_rate": 0.95,
+    "max_hallucination_rate": 0.02,
+    "min_citation_accuracy": 0.95,
+    "max_write_failures": 5
+  },
+  "current": {
+    "sync_lag_seconds": 120,
+    "event_lag_seconds": 40,
+    "action_success_rate": 0.99,
+    "hallucination_rate": 0.01,
+    "citation_accuracy": 0.98,
+    "write_failures": 0
+  }
+}

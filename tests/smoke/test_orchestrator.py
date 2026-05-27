@@ -25,6 +25,8 @@ async def test_health():
         assert "connectors" in body
         assert "runtime" in body["connectors"]
         assert "health" in body["connectors"]
+        assert "reliability" in body
+        assert "run_success_rate_last_200" in body["reliability"]
 
 
 @pytest.mark.asyncio

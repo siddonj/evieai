@@ -130,3 +130,27 @@ def test_schedule_toggle_and_delete(tmp_path: Path):
     removed = store.delete_schedule("propexo", "property")
     assert removed is True
     assert store.get_schedule("propexo", "property") is None
+
+
+def test_schedule_claim_requires_owner_for_completion(tmp_path: Path):
+    db_path = tmp_path / "sync.db"
+    store = ConnectorSyncStore(str(db_path))
+
+    created = store.upsert_schedule(
+        source_id="propexo",
+        entity_type="resident",
+        limit_value=100,
+        interval_seconds=30,
+        enabled=True,
+    )
+
+    claimed = store.claim_due_schedule(worker_id="worker-a", lease_seconds=60)
+    assert claimed is not None
+    assert claimed["id"] == created["id"]
+
+    denied = store.complete_claimed_schedule(
+        schedule_id=int(claimed["id"]),
+        worker_id="worker-b",
+        success=True,
+    )
+    assert denied is False

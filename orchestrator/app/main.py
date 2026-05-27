@@ -805,6 +805,7 @@ def health() -> dict[str, Any]:
             "config": _connector_config_snapshot(),
             "health": _connector_health_snapshot(),
         },
+        "reliability": CONNECTOR_SYNC_STORE.get_reliability_metrics(),
     }
 
 
@@ -1100,6 +1101,38 @@ def connector_sync_worker_status() -> dict[str, Any]:
 def list_sync_dead_letters(status: str = "pending", limit: int = 50) -> dict[str, Any]:
     rows = CONNECTOR_SYNC_STORE.list_dead_letters(status=status, limit=limit)
     return {"count": len(rows), "dead_letters": rows}
+
+
+@app.get("/connectors/sync/runs/recent")
+def list_recent_sync_runs(limit: int = 100) -> dict[str, Any]:
+    rows = CONNECTOR_SYNC_STORE.list_recent_runs(limit=limit)
+    return {"count": len(rows), "runs": rows}
+
+
+@app.get("/connectors/sync/reliability")
+def connector_sync_reliability() -> dict[str, Any]:
+    thresholds = {
+        "max_schedule_due_lag_seconds": float(os.getenv("SLO_MAX_SCHEDULE_DUE_LAG_SECONDS", "1800")),
+        "max_freshness_lag_seconds": float(os.getenv("SLO_MAX_FRESHNESS_LAG_SECONDS", "3600")),
+        "min_run_success_rate": float(os.getenv("SLO_MIN_RUN_SUCCESS_RATE", "0.95")),
+        "max_pending_dead_letters": int(os.getenv("SLO_MAX_PENDING_DEAD_LETTERS", "20")),
+    }
+    current = CONNECTOR_SYNC_STORE.get_reliability_metrics()
+
+    checks = {
+        "schedule_due_lag_ok": current["max_schedule_due_lag_seconds"] <= thresholds["max_schedule_due_lag_seconds"],
+        "freshness_lag_ok": current["max_freshness_lag_seconds"] <= thresholds["max_freshness_lag_seconds"],
+        "run_success_rate_ok": current["run_success_rate_last_200"] >= thresholds["min_run_success_rate"],
+        "dead_letters_ok": current["pending_dead_letters"] <= thresholds["max_pending_dead_letters"],
+    }
+    gate_pass = all(checks.values())
+
+    return {
+        "pass": gate_pass,
+        "checks": checks,
+        "thresholds": thresholds,
+        "current": current,
+    }
 
 
 @app.post("/connectors/sync/replay")

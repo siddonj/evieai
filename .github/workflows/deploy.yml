@@ -18,6 +18,32 @@ env:
   RESOURCE_GROUP: rg-aiagent2-dev
 
 jobs:
+  release-gate:
+    name: Phase 6 Release Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install gate deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install httpx
+
+      - name: Unit tests (contract + replay)
+        run: |
+          pytest -q \
+            tests/unit/test_propexo_contract.py \
+            tests/unit/test_connector_sync_store.py \
+            tests/unit/test_connector_reliability_metrics.py
+
+      - name: Reliability threshold gate
+        run: |
+          python scripts/evals/reliability_gate.py
+
   lint:
     name: Lint & Typecheck
     runs-on: ubuntu-latest
@@ -89,7 +115,7 @@ jobs:
 
   build-push:
     name: Build & Push
-    needs: changed
+    needs: [changed, release-gate]
     if: |
       needs.changed.outputs.orchestrator == 'true' ||
       needs.changed.outputs.file_share == 'true' ||
