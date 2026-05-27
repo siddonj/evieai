@@ -710,6 +710,7 @@ class ConnectorFetchRequest(BaseModel):
     entity_type: str
     limit: int = 100
     cursor: str | None = None
+    idempotency_key: str | None = None
 
 
 @app.post("/auth/teams-token")
@@ -788,17 +789,21 @@ def fetch_connector_records(source_id: str, payload: ConnectorFetchRequest) -> d
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Connector fetch failed: {exc}") from exc
 
-    persisted = BITEMPORAL_STORE.persist_page(
+    persist_result = BITEMPORAL_STORE.persist_page(
         source_id=source_id,
         entity_type=payload.entity_type,
         records=page.records,
+        idempotency_key=payload.idempotency_key,
     )
 
     return {
         "source_id": source_id,
         "entity_type": payload.entity_type,
         "count": len(page.records),
-        "persisted": persisted,
+        "persisted": persist_result.get("persisted", 0),
+        "duplicate": bool(persist_result.get("duplicate", False)),
+        "store_backend": persist_result.get("backend"),
+        "idempotency_key": persist_result.get("idempotency_key"),
         "next_cursor": page.next_cursor.value if page.next_cursor else None,
         "records": page.records,
     }
