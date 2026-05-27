@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from time import sleep
 from typing import Any, AsyncIterator, Dict, List, Set
 
 import httpx
@@ -11,16 +12,82 @@ from ..types import Capability, ConnectorEvent, HealthStatus, Page, RateLimit, S
 
 
 class PropexoAdapter(Connector):
-    """Draft adapter skeleton for Propexo Unified API."""
+    """Propexo Unified API connector with retry/backoff and simple circuit breaker."""
 
     source_id = "propexo"
     display_name = "Propexo Unified API"
     capabilities: Set[Capability] = {Capability.READ, Capability.WRITE, Capability.SCHEMA}
     rate_limit = RateLimit(requests_per_minute=150, burst=300)
 
-    def __init__(self, *, api_key: str, base_url: str = "https://api.propexo.com/v1") -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        base_url: str = "https://api.propexo.com/v1",
+        max_retries: int = 3,
+        backoff_seconds: float = 0.5,
+        failure_threshold: int = 4,
+        circuit_cooldown_seconds: int = 30,
+    ) -> None:
         self.api_key = api_key
         self.base_url = base_url
+        self.max_retries = max_retries
+        self.backoff_seconds = backoff_seconds
+        self.failure_threshold = failure_threshold
+        self.circuit_cooldown_seconds = circuit_cooldown_seconds
+
+        self._consecutive_failures = 0
+        self._circuit_open_until: datetime | None = None
+
+    def _circuit_open(self) -> bool:
+        if self._circuit_open_until is None:
+            return False
+        if datetime.utcnow() >= self._circuit_open_until:
+            self._circuit_open_until = None
+            self._consecutive_failures = 0
+            return False
+        return True
+
+    def _record_success(self) -> None:
+        self._consecutive_failures = 0
+        self._circuit_open_until = None
+
+    def _record_failure(self) -> None:
+        self._consecutive_failures += 1
+        if self._consecutive_failures >= self.failure_threshold:
+            self._circuit_open_until = datetime.utcnow() + timedelta(seconds=self.circuit_cooldown_seconds)
+
+    def _request_json(self, endpoint: str, params: Dict[str, Any] | None = None) -> Any:
+        if self._circuit_open():
+            raise RuntimeError("Propexo circuit is open; retry later")
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Accept": "application/json",
+        }
+
+        last_exc: Exception | None = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                with httpx.Client(timeout=15.0, follow_redirects=True) as client:
+                    resp = client.get(endpoint, params=params, headers=headers)
+
+                if resp.status_code >= 500:
+                    raise httpx.HTTPStatusError(
+                        f"server error {resp.status_code}", request=resp.request, response=resp
+                    )
+                resp.raise_for_status()
+
+                self._record_success()
+                return resp.json()
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                self._record_failure()
+                if attempt < self.max_retries and not self._circuit_open():
+                    sleep(self.backoff_seconds * attempt)
+
+        assert last_exc is not None
+        raise last_exc
 
     def discover_entities(self) -> List[str]:
         return [
@@ -56,15 +123,7 @@ class PropexoAdapter(Connector):
             params["cursor"] = cursor.value
 
         endpoint = f"{self.base_url.rstrip('/')}/{entity_type}s"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Accept": "application/json",
-        }
-
-        with httpx.Client(timeout=15.0, follow_redirects=True) as client:
-            resp = client.get(endpoint, params=params, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        data = self._request_json(endpoint, params=params)
 
         records = data.get("data") if isinstance(data, dict) else data
         if not isinstance(records, list):
@@ -99,16 +158,10 @@ class PropexoAdapter(Connector):
 
     def health_check(self) -> HealthStatus:
         endpoint = f"{self.base_url.rstrip('/')}/health"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Accept": "application/json",
-        }
 
         try:
-            with httpx.Client(timeout=8.0, follow_redirects=True) as client:
-                resp = client.get(endpoint, headers=headers)
-            if resp.status_code == 200:
-                return HealthStatus(ok=True, detail="ok")
-            return HealthStatus(ok=False, detail=f"health status={resp.status_code}")
+            data = self._request_json(endpoint)
+            detail = "ok" if not isinstance(data, dict) else str(data.get("status") or "ok")
+            return HealthStatus(ok=True, detail=detail)
         except Exception as exc:
             return HealthStatus(ok=False, detail=f"health check failed: {exc}")

@@ -22,6 +22,7 @@ except ImportError:
     def get_obo_exchange():
         return None
 from app.cache import get as cache_get, set as cache_set
+from app.bitemporal_store import get_bitemporal_store
 from app.connector_runtime import (
     build_connector_registry,
     connector_runtime_summary,
@@ -34,6 +35,7 @@ from connectors.types import Capability, SyncCursor
 CONNECTOR_CONFIG = load_connector_config()
 CONNECTOR_REGISTRY: ConnectorRegistry = build_connector_registry(CONNECTOR_CONFIG)
 CONNECTOR_RUNTIME = connector_runtime_summary(CONNECTOR_REGISTRY, CONNECTOR_CONFIG)
+BITEMPORAL_STORE = get_bitemporal_store()
 
 logger = logging.getLogger("orchestrator")
 logger.info("Connector runtime initialized: %s", CONNECTOR_RUNTIME)
@@ -786,10 +788,17 @@ def fetch_connector_records(source_id: str, payload: ConnectorFetchRequest) -> d
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Connector fetch failed: {exc}") from exc
 
+    persisted = BITEMPORAL_STORE.persist_page(
+        source_id=source_id,
+        entity_type=payload.entity_type,
+        records=page.records,
+    )
+
     return {
         "source_id": source_id,
         "entity_type": payload.entity_type,
         "count": len(page.records),
+        "persisted": persisted,
         "next_cursor": page.next_cursor.value if page.next_cursor else None,
         "records": page.records,
     }
