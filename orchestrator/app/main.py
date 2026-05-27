@@ -6,6 +6,7 @@ import logging
 import os
 import urllib.parse
 import uuid
+from contextlib import asynccontextmanager, suppress
 from typing import Any, AsyncGenerator, Literal
 
 import httpx
@@ -44,7 +45,108 @@ CONNECTOR_SYNC_STORE = get_connector_sync_store()
 logger = logging.getLogger("orchestrator")
 logger.info("Connector runtime initialized: %s", CONNECTOR_RUNTIME)
 
-SYNC_TASKS: dict[str, asyncio.Task[Any]] = {}
+SCHEDULER_TASK: asyncio.Task[Any] | None = None
+SCHEDULER_WORKER_ID = os.getenv("CONNECTOR_SYNC_WORKER_ID", f"worker-{uuid.uuid4()}")
+SCHEDULER_POLL_SECONDS = max(2, int(os.getenv("CONNECTOR_SYNC_POLL_SECONDS", "5")))
+SCHEDULER_LEASE_SECONDS = max(10, int(os.getenv("CONNECTOR_SYNC_LEASE_SECONDS", "60")))
+
+
+def _normalize_schedule(source_id: str, entity_type: str, row: dict[str, Any] | None) -> dict[str, Any]:
+    if not row:
+        return {
+            "source_id": source_id,
+            "entity_type": entity_type,
+            "scheduled": False,
+        }
+    return {
+        "source_id": row["source_id"],
+        "entity_type": row["entity_type"],
+        "scheduled": True,
+        "schedule_id": row["id"],
+        "enabled": row["enabled"],
+        "limit": row["limit_value"],
+        "interval_seconds": row["interval_seconds"],
+        "next_run_at": row["next_run_at"],
+        "lease_owner": row["lease_owner"],
+        "lease_until": row["lease_until"],
+        "last_status": row["last_status"],
+        "last_error": row["last_error"],
+        "last_run_started_at": row["last_run_started_at"],
+        "last_run_finished_at": row["last_run_finished_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+async def _durable_scheduler_loop() -> None:
+    logger.info(
+        "Starting durable connector scheduler loop worker_id=%s poll=%ss lease=%ss",
+        SCHEDULER_WORKER_ID,
+        SCHEDULER_POLL_SECONDS,
+        SCHEDULER_LEASE_SECONDS,
+    )
+    while True:
+        claimed = CONNECTOR_SYNC_STORE.claim_due_schedule(
+            worker_id=SCHEDULER_WORKER_ID,
+            lease_seconds=SCHEDULER_LEASE_SECONDS,
+        )
+        if not claimed:
+            await asyncio.sleep(SCHEDULER_POLL_SECONDS)
+            continue
+
+        schedule_id = int(claimed["id"])
+        try:
+            _run_sync_once(
+                source_id=str(claimed["source_id"]),
+                entity_type=str(claimed["entity_type"]),
+                limit=int(claimed["limit_value"]),
+                use_saved_cursor=True,
+            )
+            CONNECTOR_SYNC_STORE.complete_claimed_schedule(
+                schedule_id=schedule_id,
+                worker_id=SCHEDULER_WORKER_ID,
+                success=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "durable scheduled sync failed schedule_id=%s source=%s entity=%s error=%s",
+                schedule_id,
+                claimed.get("source_id"),
+                claimed.get("entity_type"),
+                exc,
+            )
+            CONNECTOR_SYNC_STORE.complete_claimed_schedule(
+                schedule_id=schedule_id,
+                worker_id=SCHEDULER_WORKER_ID,
+                success=False,
+                error_text=str(exc),
+            )
+
+        await asyncio.sleep(0)
+
+
+async def _start_scheduler() -> None:
+    global SCHEDULER_TASK
+    if SCHEDULER_TASK is None or SCHEDULER_TASK.done():
+        SCHEDULER_TASK = asyncio.create_task(_durable_scheduler_loop())
+
+
+async def _stop_scheduler() -> None:
+    global SCHEDULER_TASK
+    task = SCHEDULER_TASK
+    if task is not None:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+    SCHEDULER_TASK = None
+
+
+async def _scheduled_sync_loop(*_args: Any, **_kwargs: Any) -> None:
+    """Deprecated in Phase 5: in-memory loops replaced by durable DB-backed scheduler."""
+    return None
+
+
+def _schedule_key(source_id: str, entity_type: str) -> str:
+    return f"{source_id}:{entity_type}"
 
 
 def _run_connector_fetch(
@@ -136,25 +238,16 @@ def _run_sync_once(
         raise
 
 
-def _schedule_key(source_id: str, entity_type: str) -> str:
-    return f"{source_id}:{entity_type}"
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+    await _start_scheduler()
+    try:
+        yield
+    finally:
+        await _stop_scheduler()
 
 
-async def _scheduled_sync_loop(source_id: str, entity_type: str, limit: int, interval_seconds: int) -> None:
-    while True:
-        try:
-            _run_sync_once(
-                source_id=source_id,
-                entity_type=entity_type,
-                limit=limit,
-                use_saved_cursor=True,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("scheduled sync failed for %s/%s: %s", source_id, entity_type, exc)
-        await asyncio.sleep(max(5, interval_seconds))
-
-
-app = FastAPI(title="orchestrator", version="0.4.0")
+app = FastAPI(title="orchestrator", version="0.4.0", lifespan=lifespan)
 
 
 def _connector_health_snapshot() -> dict[str, Any]:
@@ -938,41 +1031,69 @@ def run_connector_sync(source_id: str, payload: ConnectorSyncRequest) -> dict[st
 
 
 @app.post("/connectors/sync/schedule")
-async def schedule_connector_sync(payload: ConnectorSyncScheduleRequest) -> dict[str, Any]:
+def schedule_connector_sync(payload: ConnectorSyncScheduleRequest) -> dict[str, Any]:
     if not CONNECTOR_REGISTRY.has(payload.source_id):
         raise HTTPException(status_code=404, detail=f"Unknown connector '{payload.source_id}'.")
 
-    key = _schedule_key(payload.source_id, payload.entity_type)
-    if key in SYNC_TASKS and not SYNC_TASKS[key].done():
-        return {"scheduled": True, "already_running": True, "key": key}
-
-    task = asyncio.create_task(
-        _scheduled_sync_loop(
-            source_id=payload.source_id,
-            entity_type=payload.entity_type,
-            limit=payload.limit,
-            interval_seconds=payload.interval_seconds,
-        )
+    row = CONNECTOR_SYNC_STORE.upsert_schedule(
+        source_id=payload.source_id,
+        entity_type=payload.entity_type,
+        limit_value=payload.limit,
+        interval_seconds=payload.interval_seconds,
+        enabled=True,
     )
-    SYNC_TASKS[key] = task
+    return _normalize_schedule(payload.source_id, payload.entity_type, row)
+
+
+@app.get("/connectors/sync/schedules")
+def list_connector_sync_schedules(enabled_only: bool = False) -> dict[str, Any]:
+    rows = CONNECTOR_SYNC_STORE.list_schedules(enabled_only=enabled_only)
     return {
-        "scheduled": True,
-        "already_running": False,
-        "key": key,
-        "interval_seconds": payload.interval_seconds,
+        "count": len(rows),
+        "schedules": [_normalize_schedule(r["source_id"], r["entity_type"], r) for r in rows],
     }
 
 
 @app.post("/connectors/sync/stop")
 def stop_connector_sync(source_id: str, entity_type: str) -> dict[str, Any]:
-    key = _schedule_key(source_id, entity_type)
-    task = SYNC_TASKS.get(key)
-    if task is None:
-        return {"stopped": False, "reason": "not_found", "key": key}
+    changed = CONNECTOR_SYNC_STORE.set_schedule_enabled(source_id, entity_type, enabled=False)
+    if not changed:
+        return {"stopped": False, "reason": "not_found", "source_id": source_id, "entity_type": entity_type}
 
-    task.cancel()
-    SYNC_TASKS.pop(key, None)
-    return {"stopped": True, "key": key}
+    row = CONNECTOR_SYNC_STORE.get_schedule(source_id, entity_type)
+    return {
+        "stopped": True,
+        **_normalize_schedule(source_id, entity_type, row),
+    }
+
+
+@app.delete("/connectors/sync/schedule")
+def delete_connector_sync_schedule(source_id: str, entity_type: str) -> dict[str, Any]:
+    removed = CONNECTOR_SYNC_STORE.delete_schedule(source_id, entity_type)
+    return {
+        "deleted": bool(removed),
+        "source_id": source_id,
+        "entity_type": entity_type,
+    }
+
+
+@app.post("/connectors/sync/schedule/enable")
+def enable_connector_sync_schedule(source_id: str, entity_type: str) -> dict[str, Any]:
+    changed = CONNECTOR_SYNC_STORE.set_schedule_enabled(source_id, entity_type, enabled=True)
+    if not changed:
+        raise HTTPException(status_code=404, detail=f"Schedule not found for {source_id}/{entity_type}")
+    row = CONNECTOR_SYNC_STORE.get_schedule(source_id, entity_type)
+    return _normalize_schedule(source_id, entity_type, row)
+
+
+@app.get("/connectors/sync/worker")
+def connector_sync_worker_status() -> dict[str, Any]:
+    return {
+        "worker_id": SCHEDULER_WORKER_ID,
+        "poll_seconds": SCHEDULER_POLL_SECONDS,
+        "lease_seconds": SCHEDULER_LEASE_SECONDS,
+        "running": bool(SCHEDULER_TASK and not SCHEDULER_TASK.done()),
+    }
 
 
 @app.get("/connectors/sync/runs")

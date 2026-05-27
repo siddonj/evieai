@@ -16,7 +16,7 @@ def _utcnow_iso() -> str:
 
 
 class ConnectorSyncStore:
-    """Local sync state store for cursors, run history, and dead-letter queue."""
+    """Local sync state store for cursors, run history, dead-letter queue, and durable schedules."""
 
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
@@ -74,6 +74,28 @@ class ConnectorSyncStore:
 
                 CREATE INDEX IF NOT EXISTS idx_connector_dead_letter_status
                     ON connector_dead_letter(status, created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS connector_sync_schedule (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_id TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    limit_value INTEGER NOT NULL DEFAULT 100,
+                    interval_seconds INTEGER NOT NULL DEFAULT 300,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    next_run_at TEXT NOT NULL,
+                    lease_owner TEXT,
+                    lease_until TEXT,
+                    last_run_started_at TEXT,
+                    last_run_finished_at TEXT,
+                    last_status TEXT,
+                    last_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(source_id, entity_type)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_connector_sync_schedule_due
+                    ON connector_sync_schedule(enabled, next_run_at);
                 """
             )
 
@@ -264,6 +286,236 @@ class ConnectorSyncStore:
                 """,
                 (error_text or 'Replay failed', now, dead_letter_id),
             )
+
+    def upsert_schedule(
+        self,
+        *,
+        source_id: str,
+        entity_type: str,
+        limit_value: int,
+        interval_seconds: int,
+        enabled: bool = True,
+    ) -> dict[str, Any]:
+        now = _utcnow_iso()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO connector_sync_schedule (
+                    source_id, entity_type, limit_value, interval_seconds, enabled,
+                    next_run_at, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(source_id, entity_type)
+                DO UPDATE SET
+                    limit_value = excluded.limit_value,
+                    interval_seconds = excluded.interval_seconds,
+                    enabled = excluded.enabled,
+                    updated_at = excluded.updated_at,
+                    next_run_at = CASE
+                        WHEN connector_sync_schedule.next_run_at < excluded.updated_at
+                        THEN excluded.updated_at
+                        ELSE connector_sync_schedule.next_run_at
+                    END
+                """,
+                (
+                    source_id,
+                    entity_type,
+                    max(1, limit_value),
+                    max(5, interval_seconds),
+                    1 if enabled else 0,
+                    now,
+                    now,
+                    now,
+                ),
+            )
+
+        row = self.get_schedule(source_id, entity_type)
+        if row is None:
+            raise RuntimeError("Failed to upsert schedule")
+        return row
+
+    def list_schedules(self, enabled_only: bool = False) -> list[dict[str, Any]]:
+        query = """
+            SELECT id, source_id, entity_type, limit_value, interval_seconds,
+                   enabled, next_run_at, lease_owner, lease_until,
+                   last_run_started_at, last_run_finished_at, last_status,
+                   last_error, created_at, updated_at
+            FROM connector_sync_schedule
+        """
+        params: tuple[Any, ...] = ()
+        if enabled_only:
+            query += " WHERE enabled = 1"
+        query += " ORDER BY source_id, entity_type"
+
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [self._row_to_schedule_dict(row) for row in rows]
+
+    def get_schedule(self, source_id: str, entity_type: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id, source_id, entity_type, limit_value, interval_seconds,
+                       enabled, next_run_at, lease_owner, lease_until,
+                       last_run_started_at, last_run_finished_at, last_status,
+                       last_error, created_at, updated_at
+                FROM connector_sync_schedule
+                WHERE source_id = ? AND entity_type = ?
+                """,
+                (source_id, entity_type),
+            ).fetchone()
+        return self._row_to_schedule_dict(row) if row else None
+
+    def set_schedule_enabled(self, source_id: str, entity_type: str, enabled: bool) -> bool:
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                UPDATE connector_sync_schedule
+                SET enabled = ?,
+                    updated_at = ?,
+                    next_run_at = CASE WHEN ? = 1 THEN ? ELSE next_run_at END
+                WHERE source_id = ? AND entity_type = ?
+                """,
+                (1 if enabled else 0, _utcnow_iso(), 1 if enabled else 0, _utcnow_iso(), source_id, entity_type),
+            )
+            return cur.rowcount > 0
+
+    def delete_schedule(self, source_id: str, entity_type: str) -> bool:
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                DELETE FROM connector_sync_schedule
+                WHERE source_id = ? AND entity_type = ?
+                """,
+                (source_id, entity_type),
+            )
+            return cur.rowcount > 0
+
+    def claim_due_schedule(self, *, worker_id: str, lease_seconds: int = 60) -> dict[str, Any] | None:
+        now = _utcnow_iso()
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id, source_id, entity_type, limit_value, interval_seconds,
+                       enabled, next_run_at, lease_owner, lease_until,
+                       last_run_started_at, last_run_finished_at, last_status,
+                       last_error, created_at, updated_at
+                FROM connector_sync_schedule
+                WHERE enabled = 1
+                  AND next_run_at <= ?
+                  AND (lease_until IS NULL OR lease_until <= ?)
+                ORDER BY next_run_at ASC
+                LIMIT 1
+                """,
+                (now, now),
+            ).fetchone()
+            if not row:
+                return None
+
+            schedule_id = int(row["id"])
+            lease_until = datetime.utcnow().timestamp() + max(5, lease_seconds)
+            lease_until_iso = datetime.utcfromtimestamp(lease_until).isoformat(timespec="microseconds") + "Z"
+
+            cur = conn.execute(
+                """
+                UPDATE connector_sync_schedule
+                SET lease_owner = ?,
+                    lease_until = ?,
+                    last_run_started_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                  AND (lease_until IS NULL OR lease_until <= ?)
+                """,
+                (worker_id, lease_until_iso, now, now, schedule_id, now),
+            )
+            if cur.rowcount == 0:
+                return None
+
+        # reload with lease assignment
+        with self._connect() as conn2:
+            claimed = conn2.execute(
+                """
+                SELECT id, source_id, entity_type, limit_value, interval_seconds,
+                       enabled, next_run_at, lease_owner, lease_until,
+                       last_run_started_at, last_run_finished_at, last_status,
+                       last_error, created_at, updated_at
+                FROM connector_sync_schedule
+                WHERE id = ?
+                """,
+                (schedule_id,),
+            ).fetchone()
+        return self._row_to_schedule_dict(claimed) if claimed else None
+
+    def complete_claimed_schedule(
+        self,
+        *,
+        schedule_id: int,
+        worker_id: str,
+        success: bool,
+        error_text: str | None = None,
+    ) -> bool:
+        now = _utcnow_iso()
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT interval_seconds, lease_owner
+                FROM connector_sync_schedule
+                WHERE id = ?
+                """,
+                (schedule_id,),
+            ).fetchone()
+            if not row:
+                return False
+            if row["lease_owner"] != worker_id:
+                return False
+
+            interval_seconds = int(row["interval_seconds"])
+            next_run_dt = datetime.utcnow().timestamp() + max(5, interval_seconds)
+            next_run_iso = datetime.utcfromtimestamp(next_run_dt).isoformat(timespec="microseconds") + "Z"
+
+            cur = conn.execute(
+                """
+                UPDATE connector_sync_schedule
+                SET lease_owner = NULL,
+                    lease_until = NULL,
+                    next_run_at = ?,
+                    last_run_finished_at = ?,
+                    last_status = ?,
+                    last_error = ?,
+                    updated_at = ?
+                WHERE id = ? AND lease_owner = ?
+                """,
+                (
+                    next_run_iso,
+                    now,
+                    "success" if success else "failed",
+                    None if success else (error_text or "Schedule run failed"),
+                    now,
+                    schedule_id,
+                    worker_id,
+                ),
+            )
+            return cur.rowcount > 0
+
+    @staticmethod
+    def _row_to_schedule_dict(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": int(row["id"]),
+            "source_id": row["source_id"],
+            "entity_type": row["entity_type"],
+            "limit_value": int(row["limit_value"]),
+            "interval_seconds": int(row["interval_seconds"]),
+            "enabled": bool(row["enabled"]),
+            "next_run_at": row["next_run_at"],
+            "lease_owner": row["lease_owner"],
+            "lease_until": row["lease_until"],
+            "last_run_started_at": row["last_run_started_at"],
+            "last_run_finished_at": row["last_run_finished_at"],
+            "last_status": row["last_status"],
+            "last_error": row["last_error"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
 
 
 def get_connector_sync_store() -> ConnectorSyncStore:
