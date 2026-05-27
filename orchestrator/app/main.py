@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import urllib.parse
+import uuid
 from typing import Any, AsyncGenerator, Literal
 
 import httpx
@@ -28,6 +30,7 @@ from app.connector_runtime import (
     connector_runtime_summary,
     load_connector_config,
 )
+from app.connector_sync_store import get_connector_sync_store
 from connectors.registry import ConnectorRegistry
 from connectors.types import Capability, SyncCursor
 
@@ -36,9 +39,119 @@ CONNECTOR_CONFIG = load_connector_config()
 CONNECTOR_REGISTRY: ConnectorRegistry = build_connector_registry(CONNECTOR_CONFIG)
 CONNECTOR_RUNTIME = connector_runtime_summary(CONNECTOR_REGISTRY, CONNECTOR_CONFIG)
 BITEMPORAL_STORE = get_bitemporal_store()
+CONNECTOR_SYNC_STORE = get_connector_sync_store()
 
 logger = logging.getLogger("orchestrator")
 logger.info("Connector runtime initialized: %s", CONNECTOR_RUNTIME)
+
+SYNC_TASKS: dict[str, asyncio.Task[Any]] = {}
+
+
+def _run_connector_fetch(
+    *,
+    source_id: str,
+    entity_type: str,
+    limit: int,
+    cursor_value: str | None,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    if not CONNECTOR_REGISTRY.has(source_id):
+        raise HTTPException(status_code=404, detail=f"Unknown connector '{source_id}'.")
+
+    reg = CONNECTOR_REGISTRY.get_registration(source_id)
+    if not reg.enabled:
+        raise HTTPException(status_code=409, detail=f"Connector '{source_id}' is disabled.")
+
+    cursor = SyncCursor(value=cursor_value) if cursor_value else None
+    page = reg.connector.fetch(entity_type=entity_type, cursor=cursor, limit=limit)
+    persist_result = BITEMPORAL_STORE.persist_page(
+        source_id=source_id,
+        entity_type=entity_type,
+        records=page.records,
+        idempotency_key=idempotency_key,
+    )
+
+    next_cursor = page.next_cursor.value if page.next_cursor else None
+    if next_cursor is not None:
+        CONNECTOR_SYNC_STORE.upsert_cursor(source_id, entity_type, next_cursor)
+
+    return {
+        "source_id": source_id,
+        "entity_type": entity_type,
+        "count": len(page.records),
+        "persisted": persist_result.get("persisted", 0),
+        "duplicate": bool(persist_result.get("duplicate", False)),
+        "store_backend": persist_result.get("backend"),
+        "idempotency_key": persist_result.get("idempotency_key"),
+        "next_cursor": next_cursor,
+        "records": page.records,
+    }
+
+
+def _run_sync_once(
+    *,
+    source_id: str,
+    entity_type: str,
+    limit: int,
+    use_saved_cursor: bool,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    run_id = str(uuid.uuid4())
+    run_row_id = CONNECTOR_SYNC_STORE.start_run(run_id=run_id, source_id=source_id, entity_type=entity_type)
+
+    cursor_value = CONNECTOR_SYNC_STORE.get_cursor(source_id, entity_type) if use_saved_cursor else None
+
+    try:
+        result = _run_connector_fetch(
+            source_id=source_id,
+            entity_type=entity_type,
+            limit=limit,
+            cursor_value=cursor_value,
+            idempotency_key=idempotency_key,
+        )
+        CONNECTOR_SYNC_STORE.finish_run(
+            run_row_id,
+            status="success",
+            fetched_count=int(result.get("count", 0)),
+            persisted_count=int(result.get("persisted", 0)),
+            duplicate=bool(result.get("duplicate", False)),
+        )
+        return {"run_id": run_id, **result}
+    except Exception as exc:  # noqa: BLE001
+        CONNECTOR_SYNC_STORE.finish_run(
+            run_row_id,
+            status="failed",
+            fetched_count=0,
+            persisted_count=0,
+            duplicate=False,
+            error_text=str(exc),
+        )
+        CONNECTOR_SYNC_STORE.add_dead_letter(
+            source_id=source_id,
+            entity_type=entity_type,
+            cursor_value=cursor_value,
+            payload={"limit": limit, "idempotency_key": idempotency_key},
+            error_text=str(exc),
+        )
+        raise
+
+
+def _schedule_key(source_id: str, entity_type: str) -> str:
+    return f"{source_id}:{entity_type}"
+
+
+async def _scheduled_sync_loop(source_id: str, entity_type: str, limit: int, interval_seconds: int) -> None:
+    while True:
+        try:
+            _run_sync_once(
+                source_id=source_id,
+                entity_type=entity_type,
+                limit=limit,
+                use_saved_cursor=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("scheduled sync failed for %s/%s: %s", source_id, entity_type, exc)
+        await asyncio.sleep(max(5, interval_seconds))
 
 
 app = FastAPI(title="orchestrator", version="0.4.0")
@@ -713,6 +826,24 @@ class ConnectorFetchRequest(BaseModel):
     idempotency_key: str | None = None
 
 
+class ConnectorSyncRequest(BaseModel):
+    entity_type: str
+    limit: int = 100
+    use_saved_cursor: bool = True
+    idempotency_key: str | None = None
+
+
+class ConnectorReplayRequest(BaseModel):
+    dead_letter_id: int
+
+
+class ConnectorSyncScheduleRequest(BaseModel):
+    source_id: str
+    entity_type: str
+    limit: int = 100
+    interval_seconds: int = 300
+
+
 @app.post("/auth/teams-token")
 def exchange_teams_token(payload: TeamsTokenRequest) -> dict[str, Any]:
     if not TEAMS_SSO_ENABLED:
@@ -776,37 +907,107 @@ def set_connector_enabled(source_id: str, payload: ConnectorSetEnabledRequest) -
 
 @app.post("/connectors/{source_id}/fetch")
 def fetch_connector_records(source_id: str, payload: ConnectorFetchRequest) -> dict[str, Any]:
-    if not CONNECTOR_REGISTRY.has(source_id):
-        raise HTTPException(status_code=404, detail=f"Unknown connector '{source_id}'.")
-
-    reg = CONNECTOR_REGISTRY.get_registration(source_id)
-    if not reg.enabled:
-        raise HTTPException(status_code=409, detail=f"Connector '{source_id}' is disabled.")
-
-    cursor = SyncCursor(value=payload.cursor) if payload.cursor else None
     try:
-        page = reg.connector.fetch(entity_type=payload.entity_type, cursor=cursor, limit=payload.limit)
+        return _run_connector_fetch(
+            source_id=source_id,
+            entity_type=payload.entity_type,
+            limit=payload.limit,
+            cursor_value=payload.cursor,
+            idempotency_key=payload.idempotency_key,
+        )
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Connector fetch failed: {exc}") from exc
 
-    persist_result = BITEMPORAL_STORE.persist_page(
-        source_id=source_id,
-        entity_type=payload.entity_type,
-        records=page.records,
-        idempotency_key=payload.idempotency_key,
-    )
 
+@app.post("/connectors/{source_id}/sync")
+def run_connector_sync(source_id: str, payload: ConnectorSyncRequest) -> dict[str, Any]:
+    try:
+        return _run_sync_once(
+            source_id=source_id,
+            entity_type=payload.entity_type,
+            limit=payload.limit,
+            use_saved_cursor=payload.use_saved_cursor,
+            idempotency_key=payload.idempotency_key,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Connector sync failed: {exc}") from exc
+
+
+@app.post("/connectors/sync/schedule")
+async def schedule_connector_sync(payload: ConnectorSyncScheduleRequest) -> dict[str, Any]:
+    if not CONNECTOR_REGISTRY.has(payload.source_id):
+        raise HTTPException(status_code=404, detail=f"Unknown connector '{payload.source_id}'.")
+
+    key = _schedule_key(payload.source_id, payload.entity_type)
+    if key in SYNC_TASKS and not SYNC_TASKS[key].done():
+        return {"scheduled": True, "already_running": True, "key": key}
+
+    task = asyncio.create_task(
+        _scheduled_sync_loop(
+            source_id=payload.source_id,
+            entity_type=payload.entity_type,
+            limit=payload.limit,
+            interval_seconds=payload.interval_seconds,
+        )
+    )
+    SYNC_TASKS[key] = task
     return {
-        "source_id": source_id,
-        "entity_type": payload.entity_type,
-        "count": len(page.records),
-        "persisted": persist_result.get("persisted", 0),
-        "duplicate": bool(persist_result.get("duplicate", False)),
-        "store_backend": persist_result.get("backend"),
-        "idempotency_key": persist_result.get("idempotency_key"),
-        "next_cursor": page.next_cursor.value if page.next_cursor else None,
-        "records": page.records,
+        "scheduled": True,
+        "already_running": False,
+        "key": key,
+        "interval_seconds": payload.interval_seconds,
     }
+
+
+@app.post("/connectors/sync/stop")
+def stop_connector_sync(source_id: str, entity_type: str) -> dict[str, Any]:
+    key = _schedule_key(source_id, entity_type)
+    task = SYNC_TASKS.get(key)
+    if task is None:
+        return {"stopped": False, "reason": "not_found", "key": key}
+
+    task.cancel()
+    SYNC_TASKS.pop(key, None)
+    return {"stopped": True, "key": key}
+
+
+@app.get("/connectors/sync/runs")
+def list_sync_dead_letters(status: str = "pending", limit: int = 50) -> dict[str, Any]:
+    rows = CONNECTOR_SYNC_STORE.list_dead_letters(status=status, limit=limit)
+    return {"count": len(rows), "dead_letters": rows}
+
+
+@app.post("/connectors/sync/replay")
+def replay_dead_letter(payload: ConnectorReplayRequest) -> dict[str, Any]:
+    row = CONNECTOR_SYNC_STORE.get_dead_letter(payload.dead_letter_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Dead-letter id {payload.dead_letter_id} not found")
+
+    replay_payload = row.get("payload") or {}
+    limit = int(replay_payload.get("limit", 100))
+    idempotency_key = replay_payload.get("idempotency_key")
+
+    try:
+        result = _run_sync_once(
+            source_id=str(row["source_id"]),
+            entity_type=str(row["entity_type"]),
+            limit=limit,
+            use_saved_cursor=False,
+            idempotency_key=idempotency_key,
+        )
+        CONNECTOR_SYNC_STORE.mark_dead_letter_replayed(payload.dead_letter_id, success=True)
+        return {"replayed": True, "dead_letter_id": payload.dead_letter_id, "result": result}
+    except Exception as exc:  # noqa: BLE001
+        CONNECTOR_SYNC_STORE.mark_dead_letter_replayed(
+            payload.dead_letter_id,
+            success=False,
+            error_text=str(exc),
+        )
+        raise HTTPException(status_code=502, detail=f"Replay failed: {exc}") from exc
 
 
 # ─── Admin Endpoints ──────────────────────────────────────────────────
