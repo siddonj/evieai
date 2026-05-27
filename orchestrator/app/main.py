@@ -335,6 +335,11 @@ _TOOL_NAME_TO_KEY: dict[str, str] = {
     "query_document_generation": "document_generation",
     "query_analytics": "analytics",
     "query_dashboard": "dashboard",
+    "get_connector_freshness": "sql",
+    "get_entity_lineage": "sql",
+    "get_confidence_breakdown": "sql",
+    "query_as_of": "sql",
+    "diff_between": "sql",
 }
 
 _TOOL_LABELS: dict[str, str] = {
@@ -347,6 +352,11 @@ _TOOL_LABELS: dict[str, str] = {
     "query_document_generation": "Docs → Report Generation",
     "query_analytics": "Analytics → MF KPIs & Trends",
     "query_dashboard": "Dashboard → Portfolio Views",
+    "get_connector_freshness": "Bitemporal → Connector Freshness",
+    "get_entity_lineage": "Bitemporal → Entity Lineage",
+    "get_confidence_breakdown": "Bitemporal → Confidence",
+    "query_as_of": "Bitemporal → As-Of Query",
+    "diff_between": "Bitemporal → Diff",
 }
 
 # Tool schemas presented to the Azure OpenAI model
@@ -467,7 +477,7 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "query_dashboard",
-            "description": "Returns structured dashboard views for multifamily brokerage \u2014 portfolio overview, deal pipeline funnel, market analytics, and upcoming activities. Use this when the user asks for a dashboard view, summary, or snapshot of the business.",
+            "description": "Returns structured dashboard views for multifamily brokerage — portfolio overview, deal pipeline funnel, market analytics, and upcoming activities. Use this when the user asks for a dashboard view, summary, or snapshot of the business.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -476,6 +486,76 @@ TOOLS: list[dict[str, Any]] = [
                 "required": ["query"],
             },
         },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_connector_freshness",
+            "description": "Get connector/entity freshness lag and latest recorded timestamps.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Optional JSON: {\"source_id\":\"...\",\"entity_type\":\"...\",\"limit\":100}."}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_entity_lineage",
+            "description": "Get lineage/history + audit chain for a specific source record.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "JSON: {\"source_id\":\"...\",\"entity_type\":\"...\",\"source_record_id\":\"...\",\"limit\":50}."}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_confidence_breakdown",
+            "description": "Get confidence statistics grouped by source/entity.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Optional JSON: {\"source_id\":\"...\",\"entity_type\":\"...\"}."}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_as_of",
+            "description": "Return entity snapshot records as-of a system timestamp.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "JSON: {\"as_of\":\"ISO-8601\",\"source_id\":\"...\",\"entity_type\":\"...\",\"limit\":100}."}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "diff_between",
+            "description": "Compute added/removed/changed records between two as-of timestamps.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "JSON: {\"t1\":\"ISO-8601\",\"t2\":\"ISO-8601\",\"source_id\":\"...\",\"entity_type\":\"...\",\"limit\":100}."}
+                },
+                "required": ["query"]
+            }
+        }
     },
 ]
 
@@ -489,6 +569,11 @@ _TOOL_TO_ROUTE: dict[str, str] = {
     "query_document_generation": "document_generation",
     "query_analytics": "analytics",
     "query_dashboard": "dashboard",
+    "get_connector_freshness": "sql",
+    "get_entity_lineage": "sql",
+    "get_confidence_breakdown": "sql",
+    "query_as_of": "sql",
+    "diff_between": "sql",
 }
 
 
@@ -538,6 +623,60 @@ def _summarize_mcp_result(result: dict[str, Any]) -> str:
 # ─── MCP Calling ──────────────────────────────────────────────────────
 
 async def _call_mcp(tool_name: str, query: str, user_id: str | None = None) -> dict[str, Any]:
+    local_bitemporal_tools = {
+        "get_connector_freshness",
+        "get_entity_lineage",
+        "get_confidence_breakdown",
+        "query_as_of",
+        "diff_between",
+    }
+    if tool_name in local_bitemporal_tools:
+        parsed: dict[str, Any] = {}
+        if query:
+            try:
+                parsed = json.loads(query)
+            except json.JSONDecodeError as exc:
+                return {"error": f"Invalid JSON query payload for {tool_name}: {exc.msg}"}
+
+        try:
+            if tool_name == "get_connector_freshness":
+                return BITEMPORAL_STORE.get_connector_freshness(
+                    source_id=parsed.get("source_id"),
+                    entity_type=parsed.get("entity_type"),
+                    limit=int(parsed.get("limit", 100)),
+                )
+            if tool_name == "get_entity_lineage":
+                return BITEMPORAL_STORE.get_entity_lineage(
+                    source_id=str(parsed["source_id"]),
+                    entity_type=str(parsed["entity_type"]),
+                    source_record_id=str(parsed["source_record_id"]),
+                    limit=int(parsed.get("limit", 50)),
+                )
+            if tool_name == "get_confidence_breakdown":
+                return BITEMPORAL_STORE.get_confidence_breakdown(
+                    source_id=parsed.get("source_id"),
+                    entity_type=parsed.get("entity_type"),
+                )
+            if tool_name == "query_as_of":
+                return BITEMPORAL_STORE.query_as_of(
+                    as_of=str(parsed["as_of"]),
+                    source_id=parsed.get("source_id"),
+                    entity_type=parsed.get("entity_type"),
+                    limit=int(parsed.get("limit", 100)),
+                )
+            if tool_name == "diff_between":
+                return BITEMPORAL_STORE.diff_between(
+                    t1=str(parsed["t1"]),
+                    t2=str(parsed["t2"]),
+                    source_id=parsed.get("source_id"),
+                    entity_type=parsed.get("entity_type"),
+                    limit=int(parsed.get("limit", 100)),
+                )
+        except KeyError as exc:
+            return {"error": f"Missing required field for {tool_name}: {exc.args[0]}"}
+        except Exception as exc:  # noqa: BLE001
+            return {"error": f"{tool_name} failed: {exc}"}
+
     route = _TOOL_TO_ROUTE[tool_name]
 
     # Auto-recovery: re-enable after cooldown
@@ -649,6 +788,10 @@ async def _stream_chat_response(
         "query_analytics for KPIs/trends/insights, "
         "query_document_generation for creating reports/documents, "
         "query_memory for user profile/bookmarks (auto-provided)."
+        "\n\nBitemporal policy: for connector/entity recency, provenance, trust, or historical comparison, "
+        "use tools get_connector_freshness, get_entity_lineage, get_confidence_breakdown, query_as_of, and diff_between. "
+        "When responding with facts from connector/entity data, include freshness timestamp/lag, source lineage, and confidence. "
+        "If freshness is stale or confidence is low for the claim, clearly warn and avoid overstating certainty."
     )
 
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_content}]
@@ -953,6 +1096,39 @@ class WebhookIngressRequest(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class BitemporalFreshnessQuery(BaseModel):
+    source_id: str | None = None
+    entity_type: str | None = None
+    limit: int = 100
+
+
+class BitemporalLineageQuery(BaseModel):
+    source_id: str
+    entity_type: str
+    source_record_id: str
+    limit: int = 50
+
+
+class BitemporalConfidenceQuery(BaseModel):
+    source_id: str | None = None
+    entity_type: str | None = None
+
+
+class BitemporalAsOfQuery(BaseModel):
+    as_of: str
+    source_id: str | None = None
+    entity_type: str | None = None
+    limit: int = 100
+
+
+class BitemporalDiffQuery(BaseModel):
+    t1: str
+    t2: str
+    source_id: str | None = None
+    entity_type: str | None = None
+    limit: int = 100
+
+
 @app.post("/auth/teams-token")
 def exchange_teams_token(payload: TeamsTokenRequest) -> dict[str, Any]:
     if not TEAMS_SSO_ENABLED:
@@ -1058,6 +1234,54 @@ def list_signals(source_id: str | None = None, limit: int = 100) -> dict[str, An
 def list_events(source_id: str | None = None, limit: int = 100) -> dict[str, Any]:
     rows = EVENT_SIGNAL_STORE.list_events(source_id=source_id, limit=limit)
     return {"count": len(rows), "events": rows}
+
+
+@app.post("/tools/get_connector_freshness")
+def tool_get_connector_freshness(payload: BitemporalFreshnessQuery) -> dict[str, Any]:
+    return BITEMPORAL_STORE.get_connector_freshness(
+        source_id=payload.source_id,
+        entity_type=payload.entity_type,
+        limit=payload.limit,
+    )
+
+
+@app.post("/tools/get_entity_lineage")
+def tool_get_entity_lineage(payload: BitemporalLineageQuery) -> dict[str, Any]:
+    return BITEMPORAL_STORE.get_entity_lineage(
+        source_id=payload.source_id,
+        entity_type=payload.entity_type,
+        source_record_id=payload.source_record_id,
+        limit=payload.limit,
+    )
+
+
+@app.post("/tools/get_confidence_breakdown")
+def tool_get_confidence_breakdown(payload: BitemporalConfidenceQuery) -> dict[str, Any]:
+    return BITEMPORAL_STORE.get_confidence_breakdown(
+        source_id=payload.source_id,
+        entity_type=payload.entity_type,
+    )
+
+
+@app.post("/tools/query_as_of")
+def tool_query_as_of(payload: BitemporalAsOfQuery) -> dict[str, Any]:
+    return BITEMPORAL_STORE.query_as_of(
+        as_of=payload.as_of,
+        source_id=payload.source_id,
+        entity_type=payload.entity_type,
+        limit=payload.limit,
+    )
+
+
+@app.post("/tools/diff_between")
+def tool_diff_between(payload: BitemporalDiffQuery) -> dict[str, Any]:
+    return BITEMPORAL_STORE.diff_between(
+        t1=payload.t1,
+        t2=payload.t2,
+        source_id=payload.source_id,
+        entity_type=payload.entity_type,
+        limit=payload.limit,
+    )
 
 
 @app.post("/connectors/{source_id}/enable")

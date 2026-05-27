@@ -24,6 +24,123 @@ def _digest(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _iso_to_epoch(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        v = value
+        if v.endswith("Z"):
+            v = v[:-1] + "+00:00"
+        return datetime.fromisoformat(v).timestamp()
+    except Exception:
+        return None
+
+
+def _now_epoch() -> float:
+    return datetime.utcnow().timestamp()
+
+
+def _json_loads(value: Any) -> Any:
+    if isinstance(value, (dict, list)):
+        return value
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return value
+    return value
+
+
+def _stable_json_hash(value: Any) -> str:
+    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _parse_limit(value: int, *, default: int = 100, min_value: int = 1, max_value: int = 1000) -> int:
+    return max(min_value, min(max_value, value if isinstance(value, int) else default))
+
+
+def _to_freshness(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    now = _now_epoch()
+    out_rows: list[dict[str, Any]] = []
+    max_lag = 0.0
+    for row in rows:
+        latest = row.get("latest_recorded_at")
+        epoch = _iso_to_epoch(latest)
+        lag = max(0.0, now - epoch) if epoch is not None else None
+        if lag is not None and lag > max_lag:
+            max_lag = lag
+        out_rows.append(
+            {
+                "source_id": row.get("source_id"),
+                "entity_type": row.get("entity_type"),
+                "latest_recorded_at": latest,
+                "record_count": int(row.get("record_count", 0)),
+                "freshness_lag_seconds": lag,
+            }
+        )
+
+    return {
+        "count": len(out_rows),
+        "max_freshness_lag_seconds": max_lag,
+        "rows": out_rows,
+    }
+
+
+def _build_diff(
+    *,
+    before_rows: list[dict[str, Any]],
+    after_rows: list[dict[str, Any]],
+    t1: str,
+    t2: str,
+) -> dict[str, Any]:
+    before_map = {str(r.get("source_record_id")): r for r in before_rows}
+    after_map = {str(r.get("source_record_id")): r for r in after_rows}
+
+    added: list[str] = []
+    removed: list[str] = []
+    changed: list[dict[str, Any]] = []
+
+    for key in sorted(set(before_map.keys()) | set(after_map.keys())):
+        b = before_map.get(key)
+        a = after_map.get(key)
+        if b is None and a is not None:
+            added.append(key)
+            continue
+        if a is None and b is not None:
+            removed.append(key)
+            continue
+
+        assert a is not None and b is not None
+        b_hash = _stable_json_hash(b.get("canonical") or {})
+        a_hash = _stable_json_hash(a.get("canonical") or {})
+        if b_hash != a_hash:
+            changed.append(
+                {
+                    "source_record_id": key,
+                    "before_hash": b_hash,
+                    "after_hash": a_hash,
+                    "before": b.get("canonical") or {},
+                    "after": a.get("canonical") or {},
+                }
+            )
+
+    return {
+        "t1": t1,
+        "t2": t2,
+        "added": added,
+        "removed": removed,
+        "changed": changed,
+        "counts": {
+            "added": len(added),
+            "removed": len(removed),
+            "changed": len(changed),
+        },
+    }
+
+
 class BaseBitemporalStore:
     backend = "base"
 
@@ -35,6 +152,54 @@ class BaseBitemporalStore:
         records: list[dict[str, Any]],
         idempotency_key: str | None = None,
     ) -> PersistResult:
+        raise NotImplementedError
+
+    def get_connector_freshness(
+        self,
+        *,
+        source_id: str | None = None,
+        entity_type: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def get_entity_lineage(
+        self,
+        *,
+        source_id: str,
+        entity_type: str,
+        source_record_id: str,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def get_confidence_breakdown(
+        self,
+        *,
+        source_id: str | None = None,
+        entity_type: str | None = None,
+    ) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def query_as_of(
+        self,
+        *,
+        as_of: str,
+        source_id: str | None = None,
+        entity_type: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def diff_between(
+        self,
+        *,
+        t1: str,
+        t2: str,
+        source_id: str | None = None,
+        entity_type: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
         raise NotImplementedError
 
 
@@ -292,8 +457,442 @@ class SqliteBitemporalStore(BaseBitemporalStore):
         }
 
 
+    def get_connector_freshness(
+        self,
+        *,
+        source_id: str | None = None,
+        entity_type: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        query = """
+            SELECT source_id,
+                   entity_type,
+                   MAX(recorded_at) AS latest_recorded_at,
+                   COUNT(1) AS record_count
+            FROM entity_snapshot
+            WHERE 1 = 1
+        """
+        params: list[Any] = []
+        if source_id:
+            query += " AND source_id = ?"
+            params.append(source_id)
+        if entity_type:
+            query += " AND entity_type = ?"
+            params.append(entity_type)
+        query += " GROUP BY source_id, entity_type ORDER BY latest_recorded_at DESC LIMIT ?"
+        params.append(_parse_limit(limit))
+
+        with self._connect() as conn:
+            rows = conn.execute(query, tuple(params)).fetchall()
+
+        return _to_freshness([dict(r) for r in rows])
+
+    def get_entity_lineage(
+        self,
+        *,
+        source_id: str,
+        entity_type: str,
+        source_record_id: str,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        with self._connect() as conn:
+            snapshots = conn.execute(
+                """
+                SELECT source_id, entity_type, source_record_id,
+                       canonical_json, payload_json, confidence,
+                       valid_from, valid_to, recorded_at, superseded_at, created_at
+                FROM entity_snapshot
+                WHERE source_id = ? AND entity_type = ? AND source_record_id = ?
+                ORDER BY recorded_at DESC
+                LIMIT ?
+                """,
+                (source_id, entity_type, source_record_id, _parse_limit(limit, max_value=500)),
+            ).fetchall()
+
+            ledger = conn.execute(
+                """
+                SELECT event_type, recorded_at, row_hash, prev_hash, payload_json
+                FROM audit_ledger
+                WHERE source_id = ? AND entity_type = ? AND source_record_id = ?
+                ORDER BY recorded_at DESC
+                LIMIT ?
+                """,
+                (source_id, entity_type, source_record_id, _parse_limit(limit, max_value=500)),
+            ).fetchall()
+
+        snapshot_rows = []
+        for row in snapshots:
+            snapshot_rows.append(
+                {
+                    "source_id": row["source_id"],
+                    "entity_type": row["entity_type"],
+                    "source_record_id": row["source_record_id"],
+                    "canonical": _json_loads(row["canonical_json"]),
+                    "payload": _json_loads(row["payload_json"]),
+                    "confidence": float(row["confidence"]),
+                    "valid_from": row["valid_from"],
+                    "valid_to": row["valid_to"],
+                    "recorded_at": row["recorded_at"],
+                    "superseded_at": row["superseded_at"],
+                    "created_at": row["created_at"],
+                }
+            )
+
+        ledger_rows = []
+        for row in ledger:
+            ledger_rows.append(
+                {
+                    "event_type": row["event_type"],
+                    "recorded_at": row["recorded_at"],
+                    "row_hash": row["row_hash"],
+                    "prev_hash": row["prev_hash"],
+                    "payload": _json_loads(row["payload_json"]),
+                }
+            )
+
+        return {
+            "source_id": source_id,
+            "entity_type": entity_type,
+            "source_record_id": source_record_id,
+            "snapshot_versions": snapshot_rows,
+            "audit_events": ledger_rows,
+        }
+
+    def get_confidence_breakdown(
+        self,
+        *,
+        source_id: str | None = None,
+        entity_type: str | None = None,
+    ) -> dict[str, Any]:
+        query = """
+            SELECT source_id,
+                   entity_type,
+                   COUNT(1) AS sample_size,
+                   AVG(confidence) AS avg_confidence,
+                   MIN(confidence) AS min_confidence,
+                   MAX(confidence) AS max_confidence
+            FROM entity_snapshot
+            WHERE superseded_at IS NULL
+        """
+        params: list[Any] = []
+        if source_id:
+            query += " AND source_id = ?"
+            params.append(source_id)
+        if entity_type:
+            query += " AND entity_type = ?"
+            params.append(entity_type)
+        query += " GROUP BY source_id, entity_type ORDER BY source_id, entity_type"
+
+        with self._connect() as conn:
+            rows = conn.execute(query, tuple(params)).fetchall()
+
+        groups = []
+        for row in rows:
+            groups.append(
+                {
+                    "source_id": row["source_id"],
+                    "entity_type": row["entity_type"],
+                    "sample_size": int(row["sample_size"]),
+                    "avg_confidence": float(row["avg_confidence"]),
+                    "min_confidence": float(row["min_confidence"]),
+                    "max_confidence": float(row["max_confidence"]),
+                }
+            )
+        return {"count": len(groups), "groups": groups}
+
+    def query_as_of(
+        self,
+        *,
+        as_of: str,
+        source_id: str | None = None,
+        entity_type: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        query = """
+            SELECT source_id, entity_type, source_record_id,
+                   canonical_json, payload_json, confidence,
+                   valid_from, valid_to, recorded_at, superseded_at, created_at
+            FROM entity_snapshot
+            WHERE recorded_at <= ?
+              AND (superseded_at IS NULL OR superseded_at > ?)
+        """
+        params: list[Any] = [as_of, as_of]
+        if source_id:
+            query += " AND source_id = ?"
+            params.append(source_id)
+        if entity_type:
+            query += " AND entity_type = ?"
+            params.append(entity_type)
+        query += " ORDER BY recorded_at DESC LIMIT ?"
+        params.append(_parse_limit(limit, max_value=1000))
+
+        with self._connect() as conn:
+            rows = conn.execute(query, tuple(params)).fetchall()
+
+        records = []
+        for row in rows:
+            records.append(
+                {
+                    "source_id": row["source_id"],
+                    "entity_type": row["entity_type"],
+                    "source_record_id": row["source_record_id"],
+                    "canonical": _json_loads(row["canonical_json"]),
+                    "payload": _json_loads(row["payload_json"]),
+                    "confidence": float(row["confidence"]),
+                    "valid_from": row["valid_from"],
+                    "valid_to": row["valid_to"],
+                    "recorded_at": row["recorded_at"],
+                    "superseded_at": row["superseded_at"],
+                    "created_at": row["created_at"],
+                }
+            )
+
+        return {"as_of": as_of, "count": len(records), "records": records}
+
+    def diff_between(
+        self,
+        *,
+        t1: str,
+        t2: str,
+        source_id: str | None = None,
+        entity_type: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        before = self.query_as_of(as_of=t1, source_id=source_id, entity_type=entity_type, limit=limit)
+        after = self.query_as_of(as_of=t2, source_id=source_id, entity_type=entity_type, limit=limit)
+        return _build_diff(
+            before_rows=before.get("records", []),
+            after_rows=after.get("records", []),
+            t1=t1,
+            t2=t2,
+        )
+
+
 class PostgresBitemporalStore(BaseBitemporalStore):
     backend = "postgres"
+
+    def get_connector_freshness(
+        self,
+        *,
+        source_id: str | None = None,
+        entity_type: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        query = """
+            SELECT source_id,
+                   entity_type,
+                   MAX(recorded_at) AS latest_recorded_at,
+                   COUNT(1) AS record_count
+            FROM entity_snapshot
+            WHERE 1 = 1
+        """
+        params: list[Any] = []
+        if source_id:
+            query += " AND source_id = %s"
+            params.append(source_id)
+        if entity_type:
+            query += " AND entity_type = %s"
+            params.append(entity_type)
+        query += " GROUP BY source_id, entity_type ORDER BY latest_recorded_at DESC LIMIT %s"
+        params.append(_parse_limit(limit))
+
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, tuple(params))
+                rows = [
+                    {
+                        "source_id": r[0],
+                        "entity_type": r[1],
+                        "latest_recorded_at": r[2].isoformat() if hasattr(r[2], "isoformat") else str(r[2]),
+                        "record_count": int(r[3]),
+                    }
+                    for r in cur.fetchall()
+                ]
+
+        return _to_freshness(rows)
+
+    def get_entity_lineage(
+        self,
+        *,
+        source_id: str,
+        entity_type: str,
+        source_record_id: str,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT source_id, entity_type, source_record_id,
+                           canonical_json, payload_json, confidence,
+                           valid_from, valid_to, recorded_at, superseded_at, created_at
+                    FROM entity_snapshot
+                    WHERE source_id = %s AND entity_type = %s AND source_record_id = %s
+                    ORDER BY recorded_at DESC
+                    LIMIT %s
+                    """,
+                    (source_id, entity_type, source_record_id, _parse_limit(limit, max_value=500)),
+                )
+                snapshots = cur.fetchall()
+
+                cur.execute(
+                    """
+                    SELECT event_type, recorded_at, row_hash, prev_hash, payload_json
+                    FROM audit_ledger
+                    WHERE source_id = %s AND entity_type = %s AND source_record_id = %s
+                    ORDER BY recorded_at DESC
+                    LIMIT %s
+                    """,
+                    (source_id, entity_type, source_record_id, _parse_limit(limit, max_value=500)),
+                )
+                ledger = cur.fetchall()
+
+        snapshot_rows = [
+            {
+                "source_id": r[0],
+                "entity_type": r[1],
+                "source_record_id": r[2],
+                "canonical": _json_loads(r[3]),
+                "payload": _json_loads(r[4]),
+                "confidence": float(r[5]),
+                "valid_from": r[6].isoformat() if hasattr(r[6], "isoformat") else str(r[6]),
+                "valid_to": (r[7].isoformat() if hasattr(r[7], "isoformat") and r[7] is not None else r[7]),
+                "recorded_at": r[8].isoformat() if hasattr(r[8], "isoformat") else str(r[8]),
+                "superseded_at": (r[9].isoformat() if hasattr(r[9], "isoformat") and r[9] is not None else r[9]),
+                "created_at": r[10].isoformat() if hasattr(r[10], "isoformat") else str(r[10]),
+            }
+            for r in snapshots
+        ]
+
+        ledger_rows = [
+            {
+                "event_type": r[0],
+                "recorded_at": r[1].isoformat() if hasattr(r[1], "isoformat") else str(r[1]),
+                "row_hash": r[2],
+                "prev_hash": r[3],
+                "payload": _json_loads(r[4]),
+            }
+            for r in ledger
+        ]
+
+        return {
+            "source_id": source_id,
+            "entity_type": entity_type,
+            "source_record_id": source_record_id,
+            "snapshot_versions": snapshot_rows,
+            "audit_events": ledger_rows,
+        }
+
+    def get_confidence_breakdown(
+        self,
+        *,
+        source_id: str | None = None,
+        entity_type: str | None = None,
+    ) -> dict[str, Any]:
+        query = """
+            SELECT source_id,
+                   entity_type,
+                   COUNT(1) AS sample_size,
+                   AVG(confidence) AS avg_confidence,
+                   MIN(confidence) AS min_confidence,
+                   MAX(confidence) AS max_confidence
+            FROM entity_snapshot
+            WHERE superseded_at IS NULL
+        """
+        params: list[Any] = []
+        if source_id:
+            query += " AND source_id = %s"
+            params.append(source_id)
+        if entity_type:
+            query += " AND entity_type = %s"
+            params.append(entity_type)
+        query += " GROUP BY source_id, entity_type ORDER BY source_id, entity_type"
+
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, tuple(params))
+                rows = cur.fetchall()
+
+        groups = [
+            {
+                "source_id": r[0],
+                "entity_type": r[1],
+                "sample_size": int(r[2]),
+                "avg_confidence": float(r[3]),
+                "min_confidence": float(r[4]),
+                "max_confidence": float(r[5]),
+            }
+            for r in rows
+        ]
+        return {"count": len(groups), "groups": groups}
+
+    def query_as_of(
+        self,
+        *,
+        as_of: str,
+        source_id: str | None = None,
+        entity_type: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        query = """
+            SELECT source_id, entity_type, source_record_id,
+                   canonical_json, payload_json, confidence,
+                   valid_from, valid_to, recorded_at, superseded_at, created_at
+            FROM entity_snapshot
+            WHERE recorded_at <= %s::timestamptz
+              AND (superseded_at IS NULL OR superseded_at > %s::timestamptz)
+        """
+        params: list[Any] = [as_of, as_of]
+        if source_id:
+            query += " AND source_id = %s"
+            params.append(source_id)
+        if entity_type:
+            query += " AND entity_type = %s"
+            params.append(entity_type)
+        query += " ORDER BY recorded_at DESC LIMIT %s"
+        params.append(_parse_limit(limit, max_value=1000))
+
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, tuple(params))
+                rows = cur.fetchall()
+
+        records = [
+            {
+                "source_id": r[0],
+                "entity_type": r[1],
+                "source_record_id": r[2],
+                "canonical": _json_loads(r[3]),
+                "payload": _json_loads(r[4]),
+                "confidence": float(r[5]),
+                "valid_from": r[6].isoformat() if hasattr(r[6], "isoformat") else str(r[6]),
+                "valid_to": (r[7].isoformat() if hasattr(r[7], "isoformat") and r[7] is not None else r[7]),
+                "recorded_at": r[8].isoformat() if hasattr(r[8], "isoformat") else str(r[8]),
+                "superseded_at": (r[9].isoformat() if hasattr(r[9], "isoformat") and r[9] is not None else r[9]),
+                "created_at": r[10].isoformat() if hasattr(r[10], "isoformat") else str(r[10]),
+            }
+            for r in rows
+        ]
+
+        return {"as_of": as_of, "count": len(records), "records": records}
+
+    def diff_between(
+        self,
+        *,
+        t1: str,
+        t2: str,
+        source_id: str | None = None,
+        entity_type: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        before = self.query_as_of(as_of=t1, source_id=source_id, entity_type=entity_type, limit=limit)
+        after = self.query_as_of(as_of=t2, source_id=source_id, entity_type=entity_type, limit=limit)
+        return _build_diff(
+            before_rows=before.get("records", []),
+            after_rows=after.get("records", []),
+            t1=t1,
+            t2=t2,
+        )
 
     def __init__(self, dsn: str, migration_sql_path: str | None = None, auto_migrate: bool = True) -> None:
         try:
