@@ -4,13 +4,13 @@ import json
 import logging
 import os
 import urllib.parse
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Literal
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncAzureOpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
 from app.security import _limiter, validate_and_sanitize
@@ -28,6 +28,7 @@ from app.connector_runtime import (
     load_connector_config,
 )
 from connectors.registry import ConnectorRegistry
+from connectors.types import Capability, SyncCursor
 
 
 CONNECTOR_CONFIG = load_connector_config()
@@ -286,8 +287,8 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
-    tool_calls: list[dict[str, Any]] = []
-    mcp_results: list[dict[str, Any]] = []
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    mcp_results: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # ─── SSE Helpers ──────────────────────────────────────────────────────
@@ -699,6 +700,16 @@ class TeamsTokenRequest(BaseModel):
     token: str
 
 
+class ConnectorSetEnabledRequest(BaseModel):
+    enabled: bool
+
+
+class ConnectorFetchRequest(BaseModel):
+    entity_type: str
+    limit: int = 100
+    cursor: str | None = None
+
+
 @app.post("/auth/teams-token")
 def exchange_teams_token(payload: TeamsTokenRequest) -> dict[str, Any]:
     if not TEAMS_SSO_ENABLED:
@@ -710,6 +721,78 @@ def exchange_teams_token(payload: TeamsTokenRequest) -> dict[str, Any]:
     if graph_token is None:
         return {"error": "OBO token exchange failed.", "exchanged": False}
     return {"exchanged": True, "token_type": "Bearer", "scope": "Mail.Read Files.Read User.Read"}
+
+
+# ─── Connector Admin Endpoints ────────────────────────────────────────
+
+
+@app.get("/connectors")
+def list_connectors(capability: str | None = None, include_disabled: bool = True) -> dict[str, Any]:
+    cap_filter: Capability | None = None
+    if capability:
+        normalized = capability.strip().lower()
+        try:
+            cap_filter = Capability(normalized)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid capability '{capability}'.") from exc
+
+    rows: list[dict[str, Any]] = []
+    for reg in CONNECTOR_REGISTRY.list_all():
+        connector = reg.connector
+        if cap_filter is not None and cap_filter not in connector.capabilities:
+            continue
+        if not include_disabled and not reg.enabled:
+            continue
+
+        rows.append(
+            {
+                "source_id": connector.source_id,
+                "display_name": connector.display_name,
+                "enabled": reg.enabled,
+                "tenant_id": reg.tenant_id,
+                "capabilities": sorted([cap.value for cap in connector.capabilities]),
+                "rate_limit": {
+                    "requests_per_minute": connector.rate_limit.requests_per_minute,
+                    "burst": connector.rate_limit.burst,
+                },
+                "entities": connector.discover_entities(),
+            }
+        )
+
+    return {"count": len(rows), "connectors": rows}
+
+
+@app.post("/connectors/{source_id}/enable")
+def set_connector_enabled(source_id: str, payload: ConnectorSetEnabledRequest) -> dict[str, Any]:
+    if not CONNECTOR_REGISTRY.has(source_id):
+        raise HTTPException(status_code=404, detail=f"Unknown connector '{source_id}'.")
+
+    CONNECTOR_REGISTRY.set_enabled(source_id, payload.enabled)
+    return {"source_id": source_id, "enabled": CONNECTOR_REGISTRY.is_enabled(source_id)}
+
+
+@app.post("/connectors/{source_id}/fetch")
+def fetch_connector_records(source_id: str, payload: ConnectorFetchRequest) -> dict[str, Any]:
+    if not CONNECTOR_REGISTRY.has(source_id):
+        raise HTTPException(status_code=404, detail=f"Unknown connector '{source_id}'.")
+
+    reg = CONNECTOR_REGISTRY.get_registration(source_id)
+    if not reg.enabled:
+        raise HTTPException(status_code=409, detail=f"Connector '{source_id}' is disabled.")
+
+    cursor = SyncCursor(value=payload.cursor) if payload.cursor else None
+    try:
+        page = reg.connector.fetch(entity_type=payload.entity_type, cursor=cursor, limit=payload.limit)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Connector fetch failed: {exc}") from exc
+
+    return {
+        "source_id": source_id,
+        "entity_type": payload.entity_type,
+        "count": len(page.records),
+        "next_cursor": page.next_cursor.value if page.next_cursor else None,
+        "records": page.records,
+    }
 
 
 # ─── Admin Endpoints ──────────────────────────────────────────────────

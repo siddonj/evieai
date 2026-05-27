@@ -3,7 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Set
 
+import httpx
+
 from ..base import Connector
+from ..mappers import map_propexo_record
 from ..types import Capability, ConnectorEvent, HealthStatus, Page, RateLimit, SyncCursor, WriteResult
 
 
@@ -44,10 +47,38 @@ class PropexoAdapter(Connector):
         }
 
     def fetch(self, entity_type: str, cursor: SyncCursor | None = None, limit: int = 500) -> Page:
-        # TODO: replace with actual HTTP calls.
-        # Expected shape: GET /{entity_type}?cursor=...&limit=...
-        _ = (entity_type, cursor, limit)
-        return Page(records=[], next_cursor=None)
+        """Fetch records from Propexo Unified API and map to canonical ingest stubs."""
+        if entity_type not in self.discover_entities():
+            raise ValueError(f"Unsupported entity_type for Propexo: {entity_type}")
+
+        params: Dict[str, Any] = {"limit": max(1, min(limit, 1000))}
+        if cursor is not None:
+            params["cursor"] = cursor.value
+
+        endpoint = f"{self.base_url.rstrip('/')}/{entity_type}s"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Accept": "application/json",
+        }
+
+        with httpx.Client(timeout=15.0, follow_redirects=True) as client:
+            resp = client.get(endpoint, params=params, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+
+        records = data.get("data") if isinstance(data, dict) else data
+        if not isinstance(records, list):
+            records = []
+
+        mapped = [map_propexo_record(entity_type, r) for r in records if isinstance(r, dict)]
+
+        next_token = None
+        if isinstance(data, dict):
+            paging = data.get("paging") or data.get("meta") or {}
+            next_token = paging.get("next_cursor") or paging.get("next") or data.get("next_cursor")
+
+        next_cursor = SyncCursor(value=str(next_token)) if next_token else None
+        return Page(records=mapped, next_cursor=next_cursor)
 
     async def stream(self) -> AsyncIterator[ConnectorEvent]:
         # Propexo is primarily pull-based in this draft.
@@ -67,5 +98,17 @@ class PropexoAdapter(Connector):
         return WriteResult(success=False, status_code=501, message="Not implemented")
 
     def health_check(self) -> HealthStatus:
-        # TODO: perform token validation / ping endpoint.
-        return HealthStatus(ok=True, detail="Draft adapter health check placeholder")
+        endpoint = f"{self.base_url.rstrip('/')}/health"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Accept": "application/json",
+        }
+
+        try:
+            with httpx.Client(timeout=8.0, follow_redirects=True) as client:
+                resp = client.get(endpoint, headers=headers)
+            if resp.status_code == 200:
+                return HealthStatus(ok=True, detail="ok")
+            return HealthStatus(ok=False, detail=f"health status={resp.status_code}")
+        except Exception as exc:
+            return HealthStatus(ok=False, detail=f"health check failed: {exc}")
