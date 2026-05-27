@@ -18,13 +18,52 @@ try:
     from app.auth import get_obo_exchange, TEAMS_SSO_ENABLED
 except ImportError:
     TEAMS_SSO_ENABLED = False
+
     def get_obo_exchange():
         return None
 from app.cache import get as cache_get, set as cache_set
+from app.connector_runtime import (
+    build_connector_registry,
+    connector_runtime_summary,
+    load_connector_config,
+)
+from connectors.registry import ConnectorRegistry
+
+
+CONNECTOR_CONFIG = load_connector_config()
+CONNECTOR_REGISTRY: ConnectorRegistry = build_connector_registry(CONNECTOR_CONFIG)
+CONNECTOR_RUNTIME = connector_runtime_summary(CONNECTOR_REGISTRY, CONNECTOR_CONFIG)
 
 logger = logging.getLogger("orchestrator")
+logger.info("Connector runtime initialized: %s", CONNECTOR_RUNTIME)
+
 
 app = FastAPI(title="orchestrator", version="0.4.0")
+
+
+def _connector_health_snapshot() -> dict[str, Any]:
+    report: dict[str, Any] = {}
+    for source_id, health in CONNECTOR_REGISTRY.health_report().items():
+        report[source_id] = {
+            "ok": health.ok,
+            "detail": health.detail,
+            "checked_at": health.checked_at.isoformat(),
+        }
+    return report
+
+
+def _connector_config_snapshot() -> list[dict[str, Any]]:
+    return [
+        {
+            "type": spec.type,
+            "source_id": spec.source_id,
+            "enabled": spec.enabled,
+            "tenant_id": spec.tenant_id,
+            "base_url": spec.base_url,
+            "api_key_env": spec.api_key_env,
+        }
+        for spec in CONNECTOR_CONFIG.connectors
+    ]
 
 _cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
 app.add_middleware(
@@ -549,8 +588,15 @@ def root() -> dict[str, str]:
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "healthy"}
+def health() -> dict[str, Any]:
+    return {
+        "status": "healthy",
+        "connectors": {
+            "runtime": CONNECTOR_RUNTIME,
+            "config": _connector_config_snapshot(),
+            "health": _connector_health_snapshot(),
+        },
+    }
 
 
 @app.get("/ready")

@@ -20,7 +20,11 @@ async def test_health():
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(f"{_base_url()}/health")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "healthy"
+        body = resp.json()
+        assert body["status"] == "healthy"
+        assert "connectors" in body
+        assert "runtime" in body["connectors"]
+        assert "health" in body["connectors"]
 
 
 @pytest.mark.asyncio
