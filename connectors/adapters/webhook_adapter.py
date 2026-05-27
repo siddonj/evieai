@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import hashlib
+import hmac
+import json
 from typing import Any, Dict
 
 from ..types import ConnectorEvent
@@ -21,9 +24,15 @@ class WebhookAdapter:
         self.source_id = source_id
 
     def verify_signature(self, envelope: WebhookEnvelope, secret: str) -> bool:
-        # TODO: implement HMAC/JWT provider-specific verification.
-        _ = (envelope, secret)
-        return True
+        provided = envelope.headers.get("x-webhook-signature", "")
+        if not secret:
+            return True
+        if not provided:
+            return False
+
+        payload_json = json.dumps(envelope.payload, sort_keys=True, separators=(",", ":"))
+        expected = hmac.new(secret.encode("utf-8"), payload_json.encode("utf-8"), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(provided, expected)
 
     def to_event(
         self,

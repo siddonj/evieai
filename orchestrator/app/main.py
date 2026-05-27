@@ -7,6 +7,7 @@ import os
 import urllib.parse
 import uuid
 from contextlib import asynccontextmanager, suppress
+from datetime import datetime
 from typing import Any, AsyncGenerator, Literal
 
 import httpx
@@ -32,6 +33,8 @@ from app.connector_runtime import (
     load_connector_config,
 )
 from app.connector_sync_store import get_connector_sync_store
+from app.event_signal_store import get_event_signal_store
+from connectors.adapters.webhook_adapter import WebhookAdapter, WebhookEnvelope
 from connectors.registry import ConnectorRegistry
 from connectors.types import Capability, SyncCursor
 
@@ -41,6 +44,9 @@ CONNECTOR_REGISTRY: ConnectorRegistry = build_connector_registry(CONNECTOR_CONFI
 CONNECTOR_RUNTIME = connector_runtime_summary(CONNECTOR_REGISTRY, CONNECTOR_CONFIG)
 BITEMPORAL_STORE = get_bitemporal_store()
 CONNECTOR_SYNC_STORE = get_connector_sync_store()
+EVENT_SIGNAL_STORE = get_event_signal_store()
+WEBHOOK_SOURCE_SECRET_ENV = os.getenv("WEBHOOK_SOURCE_SECRET_ENV", "WEBHOOK_SHARED_SECRET")
+WEBHOOK_ADAPTER = WebhookAdapter(source_id="webhook")
 
 logger = logging.getLogger("orchestrator")
 logger.info("Connector runtime initialized: %s", CONNECTOR_RUNTIME)
@@ -938,6 +944,15 @@ class ConnectorSyncScheduleRequest(BaseModel):
     interval_seconds: int = 300
 
 
+class WebhookIngressRequest(BaseModel):
+    source_id: str = "webhook"
+    event_type: str
+    entity_type: str
+    source_record_id: str
+    occurred_at: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
 @app.post("/auth/teams-token")
 def exchange_teams_token(payload: TeamsTokenRequest) -> dict[str, Any]:
     if not TEAMS_SSO_ENABLED:
@@ -988,6 +1003,61 @@ def list_connectors(capability: str | None = None, include_disabled: bool = True
         )
 
     return {"count": len(rows), "connectors": rows}
+
+
+@app.post("/webhooks/ingress")
+def webhook_ingress(payload: WebhookIngressRequest, request: Request) -> dict[str, Any]:
+    secret = os.getenv(WEBHOOK_SOURCE_SECRET_ENV, "")
+    provided_sig = request.headers.get("x-webhook-signature", "")
+
+    envelope = WebhookEnvelope(
+        headers={k.lower(): v for k, v in request.headers.items()},
+        payload=payload.payload,
+        received_at=datetime.utcnow(),
+    )
+
+    signature_valid = True
+    if secret:
+        signature_valid = WEBHOOK_ADAPTER.verify_signature(envelope=envelope, secret=secret)
+        if not signature_valid:
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    elif provided_sig:
+        raise HTTPException(status_code=500, detail=f"Webhook secret env '{WEBHOOK_SOURCE_SECRET_ENV}' not configured")
+
+    occurred_at = payload.occurred_at or envelope.received_at.isoformat(timespec="microseconds") + "Z"
+    ingest = EVENT_SIGNAL_STORE.ingest_event(
+        source_id=payload.source_id,
+        event_type=payload.event_type,
+        entity_type=payload.entity_type,
+        source_record_id=payload.source_record_id,
+        payload=payload.payload,
+        occurred_at=occurred_at,
+        signature_valid=signature_valid,
+    )
+
+    return {
+        "accepted": True,
+        "source_id": payload.source_id,
+        "event_type": payload.event_type,
+        "entity_type": payload.entity_type,
+        "source_record_id": payload.source_record_id,
+        "event_id": ingest["event_id"],
+        "signal_count": ingest["signal_count"],
+        "signal_ids": ingest["signal_ids"],
+        "received_at": ingest["received_at"],
+    }
+
+
+@app.get("/signals")
+def list_signals(source_id: str | None = None, limit: int = 100) -> dict[str, Any]:
+    rows = EVENT_SIGNAL_STORE.list_signals(source_id=source_id, limit=limit)
+    return {"count": len(rows), "signals": rows}
+
+
+@app.get("/events")
+def list_events(source_id: str | None = None, limit: int = 100) -> dict[str, Any]:
+    rows = EVENT_SIGNAL_STORE.list_events(source_id=source_id, limit=limit)
+    return {"count": len(rows), "events": rows}
 
 
 @app.post("/connectors/{source_id}/enable")
