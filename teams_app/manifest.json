@@ -1,0 +1,43 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.19/MicrosoftTeams.schema.json",
+  "version": "1.0.0",
+  "manifestVersion": "1.19",
+  "id": "c4bd759d-f585-431b-b604-9ab2933d5a58",
+  "packageName": "com.aiagent2.teams",
+  "name": {
+    "short": "AI Agent Q&A",
+    "full": "AI-Powered Agentic Q&A"
+  },
+  "developer": {
+    "name": "AI Agent Team",
+    "websiteUrl": "https://demo.resiq.co",
+    "privacyUrl": "https://demo.resiq.co/privacy",
+    "termsOfUseUrl": "https://demo.resiq.co/terms"
+  },
+  "description": {
+    "short": "Enterprise Q&A agent with file, email, database, and analytics access.",
+    "full": "Ask questions about your enterprise data — files, emails, OneDrive, SQL databases, company policies, analytics KPIs, and more. The AI agent routes your query through the appropriate systems and returns a synthesized response with rich data cards."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#EDB059",
+  "staticTabs": [
+    {
+      "entityId": "chat",
+      "name": "Chat",
+      "contentUrl": "https://demo.resiq.co",
+      "websiteUrl": "https://demo.resiq.co",
+      "scopes": ["personal"]
+    }
+  ],
+  "validDomains": [
+    "demo.resiq.co",
+    "orange-bush-054b9530f.7.azurestaticapps.net"
+  ],
+  "webApplicationInfo": {
+    "id": "c4bd759d-f585-431b-b604-9ab2933d5a58",
+    "resource": "api://demo.resiq.co/c4bd759d-f585-431b-b604-9ab2933d5a58"
+  }
+}

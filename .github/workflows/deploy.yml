@@ -1,0 +1,246 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "orchestrator/**"
+      - "mcp_servers/**"
+      - "web_ui/**"
+      - ".github/workflows/deploy.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  ACR_SERVER: aiagent2acrdev.azurecr.io
+  RESOURCE_GROUP: rg-aiagent2-dev
+
+jobs:
+  lint:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.11
+
+      - name: Ruff check
+        run: |
+          uv tool run --with ruff ruff check orchestrator/app mcp_servers/*/app
+
+      - name: Mypy orchestrator (strict)
+        run: |
+          pip install mypy fastapi pydantic httpx openai
+          mypy --strict orchestrator/app/
+
+      - name: Mypy MCP servers (lenient)
+        run: |
+          mypy --ignore-missing-imports mcp_servers/*/app/
+
+  changed:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      orchestrator: ${{ steps.filter.outputs.orchestrator }}
+      file_share: ${{ steps.filter.outputs.file_share }}
+      o365_mail: ${{ steps.filter.outputs.o365_mail }}
+      onedrive: ${{ steps.filter.outputs.onedrive }}
+      sql: ${{ steps.filter.outputs.sql }}
+      knowledge_base: ${{ steps.filter.outputs.knowledge_base }}
+      memory: ${{ steps.filter.outputs.memory }}
+      document_generation: ${{ steps.filter.outputs.document_generation }}
+      analytics: ${{ steps.filter.outputs.analytics }}
+      web_ui: ${{ steps.filter.outputs.web_ui }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            orchestrator:
+              - 'orchestrator/**'
+            file_share:
+              - 'mcp_servers/file_share/**'
+            o365_mail:
+              - 'mcp_servers/o365_mail/**'
+              - 'mcp_servers/common/**'
+            onedrive:
+              - 'mcp_servers/onedrive/**'
+              - 'mcp_servers/common/**'
+            sql:
+              - 'mcp_servers/sql/**'
+            knowledge_base:
+              - 'mcp_servers/knowledge_base/**'
+            memory:
+              - 'mcp_servers/memory/**'
+            document_generation:
+              - 'mcp_servers/document_generation/**'
+            analytics:
+              - 'mcp_servers/analytics/**'
+            web_ui:
+              - 'web_ui/**'
+
+  build-push:
+    name: Build & Push
+    needs: changed
+    if: |
+      needs.changed.outputs.orchestrator == 'true' ||
+      needs.changed.outputs.file_share == 'true' ||
+      needs.changed.outputs.o365_mail == 'true' ||
+      needs.changed.outputs.onedrive == 'true' ||
+      needs.changed.outputs.sql == 'true' ||
+      needs.changed.outputs.knowledge_base == 'true' ||
+      needs.changed.outputs.memory == 'true' ||
+      needs.changed.outputs.document_generation == 'true' ||
+      needs.changed.outputs.analytics == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: orchestrator
+            path: orchestrator
+            context: .
+            dockerfile: orchestrator/Dockerfile
+            changed: ${{ needs.changed.outputs.orchestrator }}
+          - name: file-share
+            path: mcp_servers/file_share
+            context: .
+            dockerfile: mcp_servers/file_share/Dockerfile
+            changed: ${{ needs.changed.outputs.file_share }}
+          - name: mail
+            path: mcp_servers/o365_mail
+            context: .
+            dockerfile: mcp_servers/o365_mail/Dockerfile
+            changed: ${{ needs.changed.outputs.o365_mail }}
+          - name: onedrive
+            path: mcp_servers/onedrive
+            context: .
+            dockerfile: mcp_servers/onedrive/Dockerfile
+            changed: ${{ needs.changed.outputs.onedrive }}
+          - name: sql
+            path: mcp_servers/sql
+            context: mcp_servers/sql
+            dockerfile: Dockerfile
+            changed: ${{ needs.changed.outputs.sql }}
+          - name: kb
+            path: mcp_servers/knowledge_base
+            context: mcp_servers/knowledge_base
+            dockerfile: Dockerfile
+            changed: ${{ needs.changed.outputs.knowledge_base }}
+          - name: memory
+            path: mcp_servers/memory
+            context: mcp_servers/memory
+            dockerfile: Dockerfile
+            changed: ${{ needs.changed.outputs.memory }}
+          - name: doc
+            path: mcp_servers/document_generation
+            context: mcp_servers/document_generation
+            dockerfile: Dockerfile
+            changed: ${{ needs.changed.outputs.document_generation }}
+          - name: analytics
+            path: mcp_servers/analytics
+            context: mcp_servers/analytics
+            dockerfile: Dockerfile
+            changed: ${{ needs.changed.outputs.analytics }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Azure
+        if: matrix.changed == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to ACR
+        if: matrix.changed == 'true'
+        run: az acr login --name aiagent2acrdev
+
+      - name: Build and push
+        if: matrix.changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.ACR_SERVER }}/${{ matrix.name }}:latest
+            ${{ env.ACR_SERVER }}/${{ matrix.name }}:${{ github.sha }}
+
+  update-apps:
+    name: Update Container Apps
+    needs: build-push
+    if: always() && needs.build-push.result != 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Restart orchestrator
+        run: |
+          az containerapp update \
+            --name aiagent2-orchestrator-dev \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_SERVER }}/orchestrator:latest
+
+      - name: Restart MCP servers
+        run: |
+          declare -A CA_NAMES=(
+            ["file-share"]="files"
+            ["mail"]="mail"
+            ["onedrive"]="onedrive"
+            ["sql"]="sql"
+            ["kb"]="kb"
+            ["memory"]="memory"
+            ["doc"]="doc"
+            ["analytics"]="analytics"
+          )
+          for svc in "${!CA_NAMES[@]}"; do
+            az containerapp update \
+              --name "aiagent2-mcp-${CA_NAMES[$svc]}-dev" \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --image "${{ env.ACR_SERVER }}/${svc}:latest" &
+          done
+          wait
+
+  deploy-ui:
+    name: Deploy Web UI
+    needs: changed
+    if: needs.changed.outputs.web_ui == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build
+        working-directory: web_ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy to SWA
+        uses: azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.SWA_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          skip_app_build: true
+          app_location: web_ui/dist

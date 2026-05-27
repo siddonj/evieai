@@ -1,0 +1,42 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "b7f3a5f9-ccd1-4c79-86fb-24d83dd8d6d3",
+  "developer": {
+    "name": "ResIQ",
+    "websiteUrl": "https://demo.resiq.co",
+    "privacyUrl": "https://demo.resiq.co/privacy",
+    "termsOfUseUrl": "https://demo.resiq.co/terms"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "name": {
+    "short": "AI Agentic Q&A",
+    "full": "AI-Powered Agentic Q&A Console"
+  },
+  "description": {
+    "short": "Ask about mail, OneDrive, files, and SQL in natural language.",
+    "full": "A single chat interface that routes to Outlook, OneDrive, file shares, and SQL databases via AI tool-calling. Ask naturally and get synthesized answers."
+  },
+  "accentColor": "#7B83EB",
+  "staticTabs": [
+    {
+      "entityId": "aiagenticqa",
+      "name": "Chat",
+      "contentUrl": "https://demo.resiq.co",
+      "websiteUrl": "https://demo.resiq.co",
+      "scopes": ["personal"]
+    }
+  ],
+  "validDomains": [
+    "demo.resiq.co",
+    "api.resiq.co"
+  ],
+  "webApplicationInfo": {
+    "id": "00000000-0000-0000-0000-000000000000",
+    "resource": "https://demo.resiq.co"
+  }
+}

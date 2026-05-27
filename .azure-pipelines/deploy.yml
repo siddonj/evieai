@@ -1,0 +1,228 @@
+# Build & Deploy — triggered on push to main
+# Requires:
+#   - Azure Resource Manager service connection named "azure-sc"
+#   - Docker Registry service connection named "acr-sc" (aiagent2acrdev.azurecr.io)
+#   - Variable group "aiagent2-secrets" or pipeline variables: ACR_SERVER, SWA_TOKEN
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - orchestrator/**
+      - mcp_servers/**
+      - web_ui/**
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - group: aiagent2-secrets
+  - name: ACR_SERVER
+    value: aiagent2acrdev.azurecr.io
+  - name: RESOURCE_GROUP
+    value: rg-aiagent2-dev
+  - name: DOCKER_BUILDKIT
+    value: "1"
+
+stages:
+  - stage: lint
+    displayName: Lint & Typecheck
+    jobs:
+      - job: lint
+        displayName: Code quality
+        steps:
+          - checkout: self
+
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "3.11"
+
+          - script: |
+              pip install ruff mypy fastapi pydantic httpx openai msal
+            displayName: Install tools
+
+          - script: ruff check orchestrator/app mcp_servers/*/app
+            displayName: Ruff check
+
+          - script: mypy --ignore-missing-imports mcp_servers/*/app/
+            displayName: Mypy MCP servers
+
+          - script: |
+              mypy --strict orchestrator/app/ 2>&1 || true
+            displayName: Mypy orchestrator (warn only)
+
+  - stage: build
+    displayName: Build & Push
+    dependsOn: lint
+    condition: succeededOrFailed()
+    jobs:
+      - job: docker_build
+        displayName: Build and push images
+        steps:
+          - checkout: self
+
+          - task: Docker@2
+            displayName: Login to ACR
+            inputs:
+              command: login
+              containerRegistry: acr-sc
+
+          - task: Docker@2
+            displayName: Build orchestrator
+            inputs:
+              command: buildAndPush
+              repository: orchestrator
+              dockerfile: orchestrator/Dockerfile
+              containerRegistry: acr-sc
+              tags: |
+                latest
+                $(Build.BuildId)
+
+          - task: Docker@2
+            displayName: Build file-share MCP
+            inputs:
+              command: buildAndPush
+              repository: file-share
+              dockerfile: mcp_servers/file_share/Dockerfile
+              containerRegistry: acr-sc
+              tags: |
+                latest
+                $(Build.BuildId)
+
+          - task: Docker@2
+            displayName: Build mail MCP
+            inputs:
+              command: buildAndPush
+              repository: mail
+              dockerfile: mcp_servers/o365_mail/Dockerfile
+              containerRegistry: acr-sc
+              tags: |
+                latest
+                $(Build.BuildId)
+
+          - task: Docker@2
+            displayName: Build onedrive MCP
+            inputs:
+              command: buildAndPush
+              repository: onedrive
+              dockerfile: mcp_servers/onedrive/Dockerfile
+              containerRegistry: acr-sc
+              tags: |
+                latest
+                $(Build.BuildId)
+
+          - task: Docker@2
+            displayName: Build sql MCP
+            inputs:
+              command: buildAndPush
+              repository: sql
+              dockerfile: Dockerfile
+              buildContext: mcp_servers/sql
+              containerRegistry: acr-sc
+              tags: |
+                latest
+                $(Build.BuildId)
+
+          - task: Docker@2
+            displayName: Build kb MCP
+            inputs:
+              command: buildAndPush
+              repository: kb
+              dockerfile: Dockerfile
+              buildContext: mcp_servers/knowledge_base
+              containerRegistry: acr-sc
+              tags: |
+                latest
+                $(Build.BuildId)
+
+          - task: Docker@2
+            displayName: Build memory MCP
+            inputs:
+              command: buildAndPush
+              repository: memory
+              dockerfile: Dockerfile
+              buildContext: mcp_servers/memory
+              containerRegistry: acr-sc
+              tags: |
+                latest
+                $(Build.BuildId)
+
+          - task: Docker@2
+            displayName: Build doc MCP
+            inputs:
+              command: buildAndPush
+              repository: doc
+              dockerfile: Dockerfile
+              buildContext: mcp_servers/document_generation
+              containerRegistry: acr-sc
+              tags: |
+                latest
+                $(Build.BuildId)
+
+          - task: Docker@2
+            displayName: Build analytics MCP
+            inputs:
+              command: buildAndPush
+              repository: analytics
+              dockerfile: Dockerfile
+              buildContext: mcp_servers/analytics
+              containerRegistry: acr-sc
+              tags: |
+                latest
+                $(Build.BuildId)
+
+  - stage: deploy
+    displayName: Deploy to Azure
+    dependsOn: build
+    jobs:
+      - job: update_apps
+        displayName: Update Container Apps + SWA
+        steps:
+          - checkout: self
+
+          - task: AzureCLI@2
+            displayName: Update orchestrator
+            inputs:
+              azureSubscription: azure-sc
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az containerapp update \
+                  --name aiagent2-orchestrator-dev \
+                  --resource-group $(RESOURCE_GROUP) \
+                  --image $(ACR_SERVER)/orchestrator:latest
+
+          - task: AzureCLI@2
+            displayName: Update MCP servers
+            inputs:
+              azureSubscription: azure-sc
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                declare -A CA_NAMES=(
+                  ["file-share"]="files"
+                  ["mail"]="mail"
+                  ["onedrive"]="onedrive"
+                  ["sql"]="sql"
+                  ["kb"]="kb"
+                  ["memory"]="memory"
+                  ["doc"]="doc"
+                  ["analytics"]="analytics"
+                )
+                for svc in "${!CA_NAMES[@]}"; do
+                  az containerapp update \
+                    --name "aiagent2-mcp-${CA_NAMES[$svc]}-dev" \
+                    --resource-group $(RESOURCE_GROUP) \
+                    --image "$(ACR_SERVER)/${svc}:latest" &
+                done
+                wait
+
+          - task: AzureStaticWebApp@0
+            displayName: Deploy Web UI
+            inputs:
+              workingDirectory: web_ui
+              app_location: dist
+              azure_static_web_apps_api_token: $(SWA_TOKEN)
+              skip_app_build: true

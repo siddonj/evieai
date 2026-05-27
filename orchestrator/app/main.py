@@ -1,0 +1,736 @@
+from __future__ import annotations
+
+import json
+import logging
+import os
+import urllib.parse
+from typing import Any, AsyncGenerator
+
+import httpx
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from openai import AsyncAzureOpenAI
+from pydantic import BaseModel
+from starlette.responses import StreamingResponse
+
+from app.security import _limiter, validate_and_sanitize
+try:
+    from app.auth import get_obo_exchange, TEAMS_SSO_ENABLED
+except ImportError:
+    TEAMS_SSO_ENABLED = False
+    def get_obo_exchange():
+        return None
+from app.cache import get as cache_get, set as cache_set
+
+logger = logging.getLogger("orchestrator")
+
+app = FastAPI(title="orchestrator", version="0.4.0")
+
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+MCP_SQL_URL = os.getenv("MCP_SQL_URL", "http://localhost:5000/mcp")
+MCP_FILES_URL = os.getenv("MCP_FILES_URL", "http://localhost:8001/mcp")
+MCP_MAIL_URL = os.getenv("MCP_MAIL_URL", "http://localhost:8002/mcp")
+MCP_ONEDRIVE_URL = os.getenv("MCP_ONEDRIVE_URL", "http://localhost:8003/mcp")
+MCP_MEMORY_URL = os.getenv("MCP_MEMORY_URL", "http://localhost:8004/mcp")
+MCP_KB_URL = os.getenv("MCP_KB_URL", "http://localhost:8005/mcp")
+MCP_DOC_URL = os.getenv("MCP_DOC_URL", "http://localhost:8006/mcp")
+MCP_ANALYTICS_URL = os.getenv("MCP_ANALYTICS_URL", "http://localhost:8007/mcp")
+MCP_DASHBOARD_URL = os.getenv("MCP_DASHBOARD_URL", "http://localhost:8009/mcp")
+
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
+AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
+AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
+
+
+def _base(url: str) -> str:
+    return url.rsplit("/mcp", 1)[0] if url.endswith("/mcp") else url
+
+
+MCP_ENDPOINTS = {
+    "sql": MCP_SQL_URL,
+    "files": MCP_FILES_URL,
+    "mail": MCP_MAIL_URL,
+    "onedrive": MCP_ONEDRIVE_URL,
+    "memory": MCP_MEMORY_URL,
+    "knowledge_base": MCP_KB_URL,
+    "document_generation": MCP_DOC_URL,
+    "analytics": MCP_ANALYTICS_URL,
+    "dashboard": MCP_DASHBOARD_URL,
+}
+
+# ─── Runtime Admin Config ─────────────────────────────────────────────
+MCP_ENABLED: dict[str, bool] = {name: True for name in MCP_ENDPOINTS}
+_MCP_DISABLED_AT: dict[str, float] = {}  # Timestamp when auto-disabled (for auto-recovery)
+MCP_COOLDOWN_SECONDS = 30  # Auto-re-enable after this many seconds
+
+_TOOL_NAME_TO_KEY: dict[str, str] = {
+    "query_files": "files",
+    "query_mail": "mail",
+    "query_onedrive": "onedrive",
+    "query_sql": "sql",
+    "query_knowledge_base": "knowledge_base",
+    "query_memory": "memory",
+    "query_document_generation": "document_generation",
+    "query_analytics": "analytics",
+    "query_dashboard": "dashboard",
+}
+
+_TOOL_LABELS: dict[str, str] = {
+    "query_files": "Files → File Share",
+    "query_mail": "Mail → Outlook",
+    "query_onedrive": "OneDrive → Documents",
+    "query_sql": "SQL → Property Database",
+    "query_knowledge_base": "Knowledge Base → Policies",
+    "query_memory": "Memory → User Context",
+    "query_document_generation": "Docs → Report Generation",
+    "query_analytics": "Analytics → MF KPIs & Trends",
+    "query_dashboard": "Dashboard → Portfolio Views",
+}
+
+# Tool schemas presented to the Azure OpenAI model
+TOOLS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "query_files",
+            "description": "Search or list files from the local file share / Azure Files storage.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query describing what files to find."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_mail",
+            "description": "Search or retrieve emails from the Office 365 Outlook mailbox.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Email search query, e.g. sender, subject, or topic."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_onedrive",
+            "description": "Search or list files and documents stored in OneDrive.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query for OneDrive files or documents."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_sql",
+            "description": "Query the SQL database for multifamily properties, contacts, deals, and brokerage activities.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural language query for the SQL database."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_knowledge_base",
+            "description": "Search the company knowledge base for SOPs (Standard Operating Procedures), employee handbook policies, and governance documents. ALWAYS use this tool when the user asks about company rules, procedures, HR policies, IT security, workplace conduct, expense reimbursement, vacation, onboarding, or any official company documentation. Do NOT use query_files or query_onedrive for policies, SOPs, or handbook topics.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural language query about company policies, SOPs, or handbook topics."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_memory",
+            "description": "Retrieve the user's personal context, profile, preferences, recent topics, bookmarks, and role-based defaults from the Memory MCP. Use this when the user asks about 'my' information, their role, preferences, bookmarks, recent history, or when you need to personalize a response based on who they are.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural language query about the user's profile, preferences, bookmarks, or recent history."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_document_generation",
+            "description": "Generate structured documents, reports, executive summaries, board briefings, sales reports, and security assessments. Use this when the user asks to create, generate, draft, or write a document, report, summary, briefing, or any formatted content. Returns pre-built document templates with sections, metrics, and action items.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural language query describing the document or report to generate, e.g. 'executive summary', 'board briefing', 'sales report', 'security assessment'."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_analytics",
+            "description": "Retrieve multifamily and brokerage analytics — portfolio KPIs, deal pipeline metrics, market trends, and agent performance. Use this when the user asks about occupancy, cap rates, NOI, deal stages, commissions, or market data.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural language query for analytics, e.g. 'portfolio performance', 'deal pipeline KPIs', 'Memphis market trends', 'commission tracker'."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_dashboard",
+            "description": "Returns structured dashboard views for multifamily brokerage \u2014 portfolio overview, deal pipeline funnel, market analytics, and upcoming activities. Use this when the user asks for a dashboard view, summary, or snapshot of the business.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural language query for dashboard view, e.g. 'portfolio dashboard', 'pipeline summary', 'market view', 'my activities'."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+]
+
+_TOOL_TO_ROUTE: dict[str, str] = {
+    "query_files": "files",
+    "query_mail": "mail",
+    "query_onedrive": "onedrive",
+    "query_sql": "sql",
+    "query_knowledge_base": "knowledge_base",
+    "query_memory": "memory",
+    "query_document_generation": "document_generation",
+    "query_analytics": "analytics",
+    "query_dashboard": "dashboard",
+}
+
+
+class ChatRequest(BaseModel):
+    message: str
+    user_id: str | None = None
+    history: list[dict[str, Any]] | None = None
+    teams_token: str | None = None
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    tool_calls: list[dict[str, Any]] = []
+    mcp_results: list[dict[str, Any]] = []
+
+
+# ─── SSE Helpers ──────────────────────────────────────────────────────
+
+def _sse(data: dict[str, Any]) -> str:
+    return f"data: {json.dumps(data)}\n\n"
+
+
+def _summarize_mcp_result(result: dict[str, Any]) -> str:
+    """Produce a short human-readable summary of an MCP tool result."""
+    if result.get("error"):
+        return f"Error: {result['error'][:80]}"
+    if "files" in result and isinstance(result["files"], list):
+        return f"Found {len(result['files'])} file(s)"
+    if "messages" in result and isinstance(result["messages"], list):
+        return f"Found {len(result['messages'])} email(s)"
+    if "companies" in result and isinstance(result["companies"], list):
+        return f"Found {len(result['companies'])} companies, {len(result.get('contacts', []))} contacts"
+    if "documents" in result and isinstance(result["documents"], list):
+        return f"Found {len(result['documents'])} policy document(s)"
+    if "generated_documents" in result and isinstance(result["generated_documents"], list):
+        docs = result["generated_documents"]
+        titles = ", ".join(d.get("title", "?") for d in docs[:3])
+        return f"Generated {len(docs)} doc(s): {titles}"
+    if "kpi_cards" in result and isinstance(result["kpi_cards"], list):
+        return f"Loaded {len(result['kpi_cards'])} KPI(s)"
+    if "profile" in result:
+        return f"Loaded profile for {result['profile'].get('name', 'user')}"
+    summary = result.get("summary", "")
+    return str(summary)[:120] if summary else "Data retrieved"
+
+
+# ─── MCP Calling ──────────────────────────────────────────────────────
+
+async def _call_mcp(tool_name: str, query: str, user_id: str | None = None) -> dict[str, Any]:
+    route = _TOOL_TO_ROUTE[tool_name]
+
+    # Auto-recovery: re-enable after cooldown
+    if not MCP_ENABLED.get(route, True):
+        import time
+        disabled_at = _MCP_DISABLED_AT.get(route, 0)
+        if time.time() - disabled_at >= MCP_COOLDOWN_SECONDS:
+            MCP_ENABLED[route] = True
+            _MCP_DISABLED_AT.pop(route, None)
+            logger.info("MCP %s auto-recovered — re-enabled after cooldown", route)
+        else:
+            remaining = int(MCP_COOLDOWN_SECONDS - (time.time() - disabled_at))
+            return {"error": f"MCP {route} temporarily unavailable — retrying in ~{remaining}s."}
+
+    cache_key = (query, user_id or "")
+    cached = cache_get("mcp", route, *cache_key)
+    if cached is not None:
+        return cached
+
+    endpoint = f"{_base(MCP_ENDPOINTS[route])}/mcp/query"
+    payload: dict[str, Any] = {"query": query}
+    if user_id:
+        payload["user_id"] = user_id
+
+    result: dict[str, Any]
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=False) as client:
+            resp = await client.post(endpoint, json=payload)
+            if resp.status_code in (301, 302, 307, 308) and "location" in resp.headers:
+                resp = await client.post(resp.headers["location"], json=payload)
+            if resp.status_code >= 400:
+                raise MCPError(f"MCP {route} returned {resp.status_code}: {resp.text[:200]}")
+            if not resp.content:
+                raise MCPError(f"MCP {route} returned empty body")
+            result = resp.json()
+    except (httpx.ConnectError, httpx.TimeoutException) as exc:
+        import time
+        MCP_ENABLED[route] = False
+        _MCP_DISABLED_AT[route] = time.time()
+        logger.warning("MCP %s unreachable — auto-disabling for %ss: %s", route, MCP_COOLDOWN_SECONDS, exc)
+        return {"error": f"MCP {route} unreachable — auto-disabled for {MCP_COOLDOWN_SECONDS}s. {exc!s}"}
+    except MCPError as exc:
+        import time
+        MCP_ENABLED[route] = False
+        _MCP_DISABLED_AT[route] = time.time()
+        logger.warning("MCP %s error — auto-disabling for %ss: %s", route, MCP_COOLDOWN_SECONDS, exc)
+        return {"error": f"MCP {route} error — auto-disabled for {MCP_COOLDOWN_SECONDS}s. {exc!s}"}
+    except Exception as exc:
+        return {"error": f"MCP {route} request failed: {type(exc).__name__}: {exc!s}"}
+
+    if "error" not in result:
+        cache_set("mcp", result, 60, route, *cache_key)
+    return result
+
+
+class MCPError(Exception):
+    """HTTP or protocol error from an MCP server."""
+
+
+# ─── Streaming Chat ───────────────────────────────────────────────────
+
+async def _stream_chat_response(
+    payload: ChatRequest,
+    rate_key: str,
+) -> AsyncGenerator[str, None]:
+    """Core streaming chat logic: SSE generator yielding events."""
+    # --- Auto-fetch memory context ---
+    memory_context = ""
+    if payload.user_id and MCP_MEMORY_URL and MCP_ENABLED.get("memory", True):
+        try:
+            mem_result = await _call_mcp("query_memory", payload.message, payload.user_id)
+            if "error" not in mem_result:
+                profile = mem_result.get("profile", {})
+                prefs = mem_result.get("preferences", {})
+                snippets = mem_result.get("relevant_snippets", [])
+                parts: list[str] = []
+                if profile.get("name"):
+                    parts.append(f"User: {profile['name']} ({profile.get('role', 'User')})")
+                if profile.get("department"):
+                    parts.append(f"Department: {profile['department']}")
+                focus = prefs.get("data_focus", [])
+                if focus:
+                    parts.append(f"Focus areas: {', '.join(focus)}")
+                style = prefs.get("communication_style", "")
+                if style:
+                    parts.append(f"Communication preference: {style}")
+                if snippets:
+                    parts.append("Recent context: " + "; ".join(
+                        s["content"] if isinstance(s.get("content"), str) else s.get("content", {}).get("reason", "")
+                        for s in snippets[:3]
+                    ))
+                memory_context = "\n".join(parts)
+        except Exception as exc:
+            logger.warning("Memory context fetch failed: %s", exc)
+
+    user_hint = f" The current user is {payload.user_id}." if payload.user_id else ""
+    system_content = (
+        "You are a helpful enterprise Q&A assistant."
+        + user_hint
+        + (f"\n\nUser Context (for personalization only — NOT a substitute for data retrieval):\n{memory_context}" if memory_context else "")
+        + "\n\nIMPORTANT: When the user asks for files, documents, emails, contacts, companies, "
+        "analytics, KPIs, pipeline data, metrics, SQL data, or any factual business information, "
+        "you MUST call the appropriate tool to retrieve real data. Never answer a data query from "
+        "memory context alone — the context is for personalization only. "
+        "Always use the available tools to fetch actual data before answering: "
+        "query_files for file listings, query_mail for emails, query_onedrive for OneDrive files, "
+        "query_sql for CRM/contacts/companies/pipeline/metrics, "
+        "query_knowledge_base for SOPs/policies/handbook, "
+        "query_analytics for KPIs/trends/insights, "
+        "query_document_generation for creating reports/documents, "
+        "query_memory for user profile/bookmarks (auto-provided)."
+    )
+
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system_content}]
+    if payload.history:
+        for h in payload.history:
+            content = h.get("content") or h.get("text", "")
+            role = h.get("role", "user")
+            if role in ("user", "assistant", "system"):
+                messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": payload.message})
+
+    if not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_API_KEY:
+        yield _sse({"type": "error", "message": "Azure OpenAI not configured. Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY."})
+        return
+
+    openai_client = AsyncAzureOpenAI(
+        azure_endpoint=AZURE_OPENAI_ENDPOINT,
+        api_key=AZURE_OPENAI_API_KEY,
+        api_version="2024-02-01",
+    )
+
+    yield _sse({"type": "start"})
+
+    tool_calls_log: list[dict[str, Any]] = []
+    mcp_results_log: list[dict[str, Any]] = []
+    full_reply = ""
+    max_turns = 5
+
+    for _turn in range(max_turns):
+        accumulated_tool_calls: list[dict[str, Any]] = []
+        streamed_any = False
+
+        try:
+            stream = await openai_client.chat.completions.create(
+                model=AZURE_OPENAI_DEPLOYMENT,
+                messages=messages,
+                tools=_active_tools(),
+                tool_choice="auto",
+                stream=True,
+                stream_options={"include_usage": False},
+            )
+        except Exception as exc:
+            yield _sse({"type": "error", "message": f"OpenAI API error: {exc!s}"})
+            return
+
+        async for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if not delta:
+                continue
+
+            # Stream content tokens
+            if delta.content:
+                streamed_any = True
+                full_reply += delta.content
+                yield _sse({"type": "token", "content": delta.content})
+
+            # Accumulate tool call deltas
+            if delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index if tc_delta.index is not None else 0
+                    while len(accumulated_tool_calls) <= idx:
+                        accumulated_tool_calls.append({
+                            "id": "",
+                            "type": "function",
+                            "function": {"name": "", "arguments": ""},
+                        })
+                    ac = accumulated_tool_calls[idx]
+                    if tc_delta.id:
+                        ac["id"] = tc_delta.id
+                    if tc_delta.function:
+                        if tc_delta.function.name:
+                            ac["function"]["name"] = tc_delta.function.name
+                        if tc_delta.function.arguments:
+                            ac["function"]["arguments"] += tc_delta.function.arguments
+
+        # After stream: check for tool calls
+        if accumulated_tool_calls:
+            # Build assistant message with accumulated tool calls
+            assistant_msg: dict[str, Any] = {"role": "assistant"}
+            if full_reply:
+                assistant_msg["content"] = full_reply
+            assistant_msg["tool_calls"] = accumulated_tool_calls
+            messages.append(assistant_msg)
+
+            for tc in accumulated_tool_calls:
+                name = tc["function"]["name"]
+                try:
+                    args = json.loads(tc["function"]["arguments"])
+                except json.JSONDecodeError:
+                    args = {}
+                query = args.get("query", "")
+
+                label = _TOOL_LABELS.get(name, name)
+                yield _sse({"type": "tool", "name": name, "label": label, "status": "calling"})
+
+                mcp_result = await _call_mcp(name, query, payload.user_id)
+                route = _TOOL_TO_ROUTE.get(name, "")
+                mcp_result = _augment_files_with_urls(mcp_result, route)
+
+                summary = _summarize_mcp_result(mcp_result)
+                yield _sse({"type": "tool", "name": name, "label": label, "status": "done", "summary": summary})
+
+                tool_calls_log.append({"name": name, "args": args})
+                if route != "memory":
+                    mcp_results_log.append(mcp_result)
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": json.dumps(mcp_result),
+                })
+
+            # Reset reply text — model will continue answering after tool results
+            full_reply = ""
+            continue  # Next turn — model processes tool results
+
+        # No tool calls — final answer
+        yield _sse({"type": "done", "reply": full_reply, "tool_calls": tool_calls_log, "mcp_results": mcp_results_log})
+        return
+
+    # Max turns exhausted
+    yield _sse({"type": "done", "reply": full_reply or "I wasn't able to fully answer after multiple rounds. Please try rephrasing.", "tool_calls": tool_calls_log, "mcp_results": mcp_results_log})
+
+
+async def _collect_batch(generator: AsyncGenerator[str, None]) -> ChatResponse:
+    """Consume the SSE stream and produce a single ChatResponse."""
+    reply = ""
+    tool_calls: list[dict[str, Any]] = []
+    mcp_results: list[dict[str, Any]] = []
+    async for event_str in generator:
+        for line in event_str.strip().split("\n"):
+            if not line.startswith("data: "):
+                continue
+            try:
+                event = json.loads(line[6:])
+            except json.JSONDecodeError:
+                continue
+            if event.get("type") == "done":
+                reply = event.get("reply", reply)
+                tool_calls = event.get("tool_calls", [])
+                mcp_results = event.get("mcp_results", [])
+            elif event.get("type") == "error":
+                reply = f"Error: {event.get('message', 'Unknown error')}"
+    return ChatResponse(reply=reply or "No response", tool_calls=tool_calls, mcp_results=mcp_results)
+
+
+# ─── Routes ───────────────────────────────────────────────────────────
+
+@app.get("/")
+def root() -> dict[str, str]:
+    return {"service": "orchestrator", "status": "ok", "mode": "openai-tool-calling-sse"}
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "healthy"}
+
+
+@app.get("/ready")
+async def ready() -> dict[str, Any]:
+    status: dict[str, Any] = {}
+    async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+        for name, mcp_url in MCP_ENDPOINTS.items():
+            health_url = f"{_base(mcp_url)}/health"
+            try:
+                resp = await client.get(health_url)
+                entry: dict[str, Any] = {
+                    "reachable": resp.status_code == 200,
+                    "url": health_url,
+                    "status_code": resp.status_code,
+                }
+                if resp.status_code != 200:
+                    entry["body_preview"] = resp.text[:200]
+                status[name] = entry
+            except Exception as exc:
+                status[name] = {"reachable": False, "url": health_url, "error": str(exc)}
+    return {"status": "ready", "dependencies": status}
+
+
+def _augment_files_with_urls(result: dict[str, Any], service: str) -> dict[str, Any]:
+    """Inject download URLs into files/items arrays so the frontend can download them."""
+    for key in ("files", "items"):
+        entries = result.get(key)
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if isinstance(entry, dict) and "name" in entry and "url" not in entry:
+                entry["url"] = f"/download/{service}/{urllib.parse.quote(entry['name'], safe='')}"
+            elif isinstance(entry, str) and key == "items":
+                result[key] = [
+                    {"name": e, "url": f"/download/{service}/{urllib.parse.quote(e, safe='')}"}
+                    for e in entries
+                ]
+                break
+    return result
+
+
+@app.post("/chat")
+async def chat(payload: ChatRequest, request: Request) -> StreamingResponse:
+    """Streaming chat endpoint — returns SSE text/event-stream."""
+    rate_key = payload.user_id or (request.client.host if request.client else "unknown")
+    if not _limiter.is_allowed(rate_key):
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit reached. {_limiter.remaining(rate_key)} requests remaining.",
+        )
+
+    payload.message = validate_and_sanitize(payload.message, payload.user_id)
+    return StreamingResponse(
+        _stream_chat_response(payload, rate_key),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/chat/batch")
+async def chat_batch(payload: ChatRequest, request: Request) -> ChatResponse:
+    """Batch chat endpoint — returns full JSON response after LLM completes."""
+    rate_key = payload.user_id or (request.client.host if request.client else "unknown")
+    if not _limiter.is_allowed(rate_key):
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit reached. {_limiter.remaining(rate_key)} requests remaining.",
+        )
+    payload.message = validate_and_sanitize(payload.message, payload.user_id)
+    return await _collect_batch(_stream_chat_response(payload, rate_key))
+
+
+# ─── File Download Proxy ──────────────────────────────────────────────
+
+@app.get("/download/{service}/{file_name:path}")
+async def download_file(service: str, file_name: str) -> Response:
+    if service not in MCP_ENDPOINTS:
+        raise HTTPException(status_code=404, detail=f"Unknown service: {service}")
+    mcp_base = _base(MCP_ENDPOINTS[service])
+    download_url = f"{mcp_base}/mcp/files/{urllib.parse.quote(file_name, safe='')}/download"
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        resp = await client.get(download_url)
+        if resp.status_code >= 400:
+            raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
+        content_type = resp.headers.get("content-type", "application/octet-stream")
+        disposition = resp.headers.get("content-disposition", "")
+        headers: dict[str, str] = {}
+        if disposition:
+            headers["Content-Disposition"] = disposition
+        return Response(content=resp.content, media_type=content_type, headers=headers)
+
+
+# ─── Teams SSO / OBO ─────────────────────────────────────────────────
+
+class TeamsTokenRequest(BaseModel):
+    token: str
+
+
+@app.post("/auth/teams-token")
+def exchange_teams_token(payload: TeamsTokenRequest) -> dict[str, Any]:
+    if not TEAMS_SSO_ENABLED:
+        return {"error": "Teams SSO is not enabled. Set ENABLE_TEAMS_SSO=true.", "enabled": False}
+    exchange = get_obo_exchange()
+    if exchange is None or not exchange.configured:
+        return {"error": "OBO exchange not configured.", "configured": False}
+    graph_token = exchange.acquire_graph_token(payload.token)
+    if graph_token is None:
+        return {"error": "OBO token exchange failed.", "exchanged": False}
+    return {"exchanged": True, "token_type": "Bearer", "scope": "Mail.Read Files.Read User.Read"}
+
+
+# ─── Admin Endpoints ──────────────────────────────────────────────────
+
+def _active_tools() -> list[dict[str, Any]]:
+    """Return only tools whose MCP server is currently enabled."""
+    return [t for t in TOOLS if MCP_ENABLED.get(_TOOL_NAME_TO_KEY.get(t["function"]["name"], ""), True)]
+
+
+@app.get("/admin/mcp-config")
+def admin_mcp_config() -> dict[str, Any]:
+    """Return current MCP server configuration and enabled status."""
+    return {
+        "servers": [
+            {
+                "key": key,
+                "name": key.replace("_", " ").title(),
+                "enabled": MCP_ENABLED.get(key, True),
+                "url": url,
+                "has_admin_data": key in ("knowledge_base", "memory", "files", "document_generation", "analytics"),
+            }
+            for key, url in MCP_ENDPOINTS.items()
+        ]
+    }
+
+
+class McpToggleRequest(BaseModel):
+    key: str
+    enabled: bool
+
+
+@app.post("/admin/mcp-config")
+def admin_toggle_mcp(payload: McpToggleRequest) -> dict[str, Any]:
+    """Enable or disable an MCP server."""
+    if payload.key not in MCP_ENDPOINTS:
+        return {"error": f"Unknown MCP server: {payload.key}"}
+    MCP_ENABLED[payload.key] = payload.enabled
+    return {"key": payload.key, "enabled": payload.enabled}
+
+
+@app.get("/admin/mcp-data/{service}")
+async def admin_get_mcp_data(service: str) -> dict[str, Any]:
+    """Fetch a sample of data from an MCP server's /admin/data endpoint."""
+    if service not in MCP_ENDPOINTS:
+        return {"error": f"Unknown service: {service}"}
+    base = _base(MCP_ENDPOINTS[service])
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        try:
+            resp = await client.get(f"{base}/admin/data")
+            if resp.status_code == 200:
+                return resp.json()
+            return {"error": f"MCP returned {resp.status_code}", "body": resp.text[:200]}
+        except Exception as exc:
+            return {"error": str(exc)}
+
+
+@app.post("/admin/mcp-data/{service}")
+async def admin_post_mcp_data(service: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Add data to an MCP server's /admin/data endpoint."""
+    if service not in MCP_ENDPOINTS:
+        return {"error": f"Unknown service: {service}"}
+    base = _base(MCP_ENDPOINTS[service])
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        try:
+            resp = await client.post(f"{base}/admin/data", json=payload)
+            if resp.status_code in (200, 201):
+                return resp.json()
+            return {"error": f"MCP returned {resp.status_code}", "body": resp.text[:200]}
+        except Exception as exc:
+            return {"error": str(exc)}

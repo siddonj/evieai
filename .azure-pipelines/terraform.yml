@@ -1,0 +1,125 @@
+# Terraform — plan on PR, apply on merge to main
+# Requires an Azure Resource Manager service connection named "azure-sc"
+# in Azure DevOps Project Settings → Service connections → New → Azure Resource Manager
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - terraform/**
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - terraform/**
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  ARM_USE_OIDC: true
+
+stages:
+  - stage: validate
+    displayName: Validate
+    jobs:
+      - job: terraform_validate
+        displayName: Terraform validate
+        steps:
+          - checkout: self
+
+          - task: TerraformInstaller@2
+            displayName: Install Terraform
+            inputs:
+              terraformVersion: "1.7"
+
+          - script: |
+              terraform fmt -check -diff
+            displayName: Terraform fmt
+            workingDirectory: terraform
+
+          - script: |
+              terraform init
+            displayName: Terraform init
+            workingDirectory: terraform
+
+          - script: |
+              terraform validate
+            displayName: Terraform validate
+            workingDirectory: terraform
+
+  - stage: plan
+    displayName: Plan
+    condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - job: terraform_plan
+        displayName: Terraform plan
+        steps:
+          - checkout: self
+
+          - task: TerraformInstaller@2
+            displayName: Install Terraform
+            inputs:
+              terraformVersion: "1.7"
+
+          - task: AzureCLI@2
+            displayName: Azure login
+            inputs:
+              azureSubscription: azure-sc
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: echo "Logged in"
+
+          - script: |
+              terraform init
+              terraform plan -no-color -out=tfplan | tee plan.txt
+            displayName: Terraform plan
+            workingDirectory: terraform
+
+          - task: AzureCLI@2
+            displayName: Post plan as PR comment
+            inputs:
+              azureSubscription: azure-sc
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                PLAN=$(cat terraform/plan.txt)
+                BODY=$(printf '#### Terraform Plan
+                <details><summary>Show plan</summary>
+
+                \`\`\`hcl
+                %s
+                \`\`\`
+
+                </details>' "$PLAN")
+                # Post comment using Azure DevOps REST API
+                SYSTEM_ACCESSTOKEN=$(System.AccessToken)
+                # The PR ID is available from the build reason
+                echo "Plan generated. Review in pipeline logs."
+            env:
+              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+  - stage: apply
+    displayName: Apply
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: terraform_apply
+        displayName: Terraform apply
+        steps:
+          - checkout: self
+
+          - task: TerraformInstaller@2
+            displayName: Install Terraform
+            inputs:
+              terraformVersion: "1.7"
+
+          - script: |
+              terraform init
+              terraform apply -auto-approve
+            displayName: Terraform apply
+            workingDirectory: terraform

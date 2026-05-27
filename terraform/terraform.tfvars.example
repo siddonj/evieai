@@ -1,0 +1,22 @@
+# ─── Terraform State Bootstrap (One-Time) ─────────────────────────────
+# You must create this storage account manually BEFORE uncommenting backend block.
+# See terraform/README.md for exact commands.
+
+# ─── Deployment ───────────────────────────────────────────────────────
+project_name    = "aiqa"
+environment     = "dev"
+location        = "eastus2"
+sql_admin_password = "ChangeMe123!"
+target_user_upn = "user@yourtenant.onmicrosoft.com"
+
+# ─── Scale / Cost ─────────────────────────────────────────────────────
+# openai_tpm_capacity         = 10
+# container_app_min_replicas  = 0   # scale-to-zero for dev (saves money)
+# container_app_max_replicas  = 3
+
+# ─── Custom Domain ──────────────────────────────────────────────────────
+# ui_custom_domain = "demo.resiq.co"
+# api_custom_domain = "api.resiq.co"
+
+# ─── Alerts ──────────────────────────────────────────────────────────
+# alert_email = "admin@example.com"  # set to enable Azure Monitor alerting

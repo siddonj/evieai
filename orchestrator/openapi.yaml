@@ -1,0 +1,271 @@
+openapi: "3.1.0"
+info:
+  title: AI-Powered Agentic Q&A Orchestrator
+  version: "0.3.0"
+  description: >
+    Accepts chat messages from the React UI, routes to Azure OpenAI with
+    function/tool calling, proxies MCP server requests, augments responses
+    with download URLs, and serves file downloads.  Also exposes admin
+    endpoints for MCP server configuration and data inspection.
+
+servers:
+  - url: http://localhost:8000
+    description: Local dev (docker compose)
+  - url: https://api.resiq.co
+    description: Production (Azure Container Apps)
+
+paths:
+
+  /:
+    get:
+      operationId: root
+      summary: Service info
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                    example: orchestrator
+                  status:
+                    type: string
+                    example: ok
+                  mode:
+                    type: string
+                    example: openai-tool-calling
+
+  /health:
+    get:
+      operationId: health
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+
+  /ready:
+    get:
+      operationId: ready
+      summary: Readiness probe (checks all MCP servers)
+      responses:
+        "200":
+          description: Ready with dependency status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  dependencies:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        reachable:
+                          type: boolean
+                        url:
+                          type: string
+                        status_code:
+                          type: integer
+
+  /chat:
+    post:
+      operationId: chat
+      summary: Send a chat message and get an AI response with tool-call results
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+                  maxLength: 4000
+                  description: The user's chat message
+                  example: Show me the Q2 revenue report
+                user_id:
+                  type: string
+                  nullable: true
+                  description: Optional user identifier for personalization and rate limiting
+                  example: alice.chen
+                history:
+                  type: array
+                  nullable: true
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                        enum: [user, assistant, system]
+                      content:
+                        type: string
+      responses:
+        "200":
+          description: Chat response with tool calls and MCP results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reply:
+                    type: string
+                    description: Markdown-formatted AI response
+                  tool_calls:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          example: query_sql
+                        args:
+                          type: object
+                  mcp_results:
+                    type: array
+                    items:
+                      type: object
+                      description: >
+                        MCP server result. Contains service-specific keys:
+                        files, items (file_share), messages (o365_mail),
+                        contacts/companies/metrics (sql),
+                        documents (knowledge_base/document_generation),
+                        kpi_cards/trends/insights (analytics),
+                        profile/preferences/bookmarks (memory)
+        "400":
+          description: Invalid input (empty message or exceeds max length)
+        "429":
+          description: Rate limit exceeded (20 req/min per user)
+
+  /download/{service}/{file_name}:
+    get:
+      operationId: download_file
+      summary: Proxy a file download from an MCP server
+      parameters:
+        - name: service
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [files, mail, onedrive, sql, knowledge_base, memory, document_generation, analytics]
+          description: MCP service key
+        - name: file_name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: URL-encoded file name
+      responses:
+        "200":
+          description: File content with Content-Disposition attachment header
+        "404":
+          description: Unknown service or file not found
+
+  /admin/mcp-config:
+    get:
+      operationId: get_mcp_config
+      summary: List all MCP servers and their enabled status
+      responses:
+        "200":
+          description: MCP server configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  servers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key:
+                          type: string
+                        name:
+                          type: string
+                        enabled:
+                          type: boolean
+                        url:
+                          type: string
+                        has_admin_data:
+                          type: boolean
+    post:
+      operationId: toggle_mcp
+      summary: Enable or disable an MCP server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, enabled]
+              properties:
+                key:
+                  type: string
+                  example: "sql"
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated status
+
+  /admin/mcp-data/{service}:
+    get:
+      operationId: get_mcp_data
+      summary: Fetch sample data from an MCP server
+      parameters:
+        - name: service
+          in: path
+          required: true
+          schema:
+            type: string
+    post:
+      operationId: add_mcp_data
+      summary: Add data to an MCP server
+      parameters:
+        - name: service
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+
+components:
+  schemas:
+    ChatMessage:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        user_id:
+          type: string
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/HistoryEntry"
+    HistoryEntry:
+      type: object
+      properties:
+        role:
+          type: string
+        content:
+          type: string
