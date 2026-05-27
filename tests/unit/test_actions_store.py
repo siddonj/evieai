@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.actions_store import ActionsStore
+from app.actions_store import ActionsStore, compute_action_metrics
 
 
 def test_action_store_create_and_queue(tmp_path: Path):
@@ -85,3 +85,64 @@ def test_action_store_audit_hash_chain(tmp_path: Path):
     latest = events[0]
     previous = events[1]
     assert latest["prev_hash"] == previous["row_hash"]
+
+
+def test_action_metrics_snapshot(tmp_path: Path):
+    store = ActionsStore(str(tmp_path / "actions.db"))
+
+    store.create_action_request(
+        action_id="a-success",
+        source_id="propexo",
+        entity_type="property",
+        payload={"id": "p1"},
+        idempotency_key="idem-success",
+        risk_level="low",
+        policy_version="v1",
+        policy_decision={"requires_approval": False},
+        requires_approval=False,
+        requested_by="josh",
+    )
+    store.update_action_result(
+        action_id="a-success",
+        status="completed",
+        result={"success": True},
+    )
+
+    store.create_action_request(
+        action_id="a-failed",
+        source_id="propexo",
+        entity_type="property",
+        payload={"id": "p2"},
+        idempotency_key="idem-fail",
+        risk_level="low",
+        policy_version="v1",
+        policy_decision={"requires_approval": False},
+        requires_approval=False,
+        requested_by="josh",
+    )
+    store.update_action_result(
+        action_id="a-failed",
+        status="failed",
+        result={"success": False},
+    )
+
+    store.create_action_request(
+        action_id="a-pending",
+        source_id="propexo",
+        entity_type="lease",
+        payload={"id": "l1", "amount": 15000},
+        idempotency_key="idem-pending",
+        risk_level="high",
+        policy_version="v1",
+        policy_decision={"requires_approval": True, "reason": "risk"},
+        requires_approval=True,
+        requested_by="josh",
+    )
+
+    metrics = compute_action_metrics(store)
+    assert metrics["actions_total"] == 3
+    assert metrics["actions_completed"] == 1
+    assert metrics["actions_failed"] == 1
+    assert metrics["actions_pending_approval"] == 1
+    assert metrics["action_success_rate"] == 0.5
+    assert metrics["write_failures"] == 1

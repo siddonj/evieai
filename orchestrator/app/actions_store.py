@@ -536,3 +536,37 @@ class ActionsStore:
 def get_actions_store() -> ActionsStore:
     db_path = os.getenv("ACTIONS_DB_PATH", "/tmp/evieai_actions.db")
     return ActionsStore(db_path=db_path)
+
+
+def compute_action_metrics(store: ActionsStore) -> dict[str, Any]:
+    """Return lightweight action reliability metrics for gates/dashboards."""
+    with store._connect() as conn:  # noqa: SLF001 - internal helper for metrics snapshot
+        total_row = conn.execute(
+            "SELECT COUNT(1) AS cnt FROM action_request"
+        ).fetchone()
+        completed_row = conn.execute(
+            "SELECT COUNT(1) AS cnt FROM action_request WHERE status = 'completed'"
+        ).fetchone()
+        failed_row = conn.execute(
+            "SELECT COUNT(1) AS cnt FROM action_request WHERE status = 'failed'"
+        ).fetchone()
+        pending_approval_row = conn.execute(
+            "SELECT COUNT(1) AS cnt FROM approval_queue WHERE status = 'pending'"
+        ).fetchone()
+
+    total = int(total_row["cnt"] if total_row else 0)
+    completed = int(completed_row["cnt"] if completed_row else 0)
+    failed = int(failed_row["cnt"] if failed_row else 0)
+    pending_approval = int(pending_approval_row["cnt"] if pending_approval_row else 0)
+
+    resolved = completed + failed
+    success_rate = (completed / resolved) if resolved else 1.0
+
+    return {
+        "actions_total": total,
+        "actions_completed": completed,
+        "actions_failed": failed,
+        "actions_pending_approval": pending_approval,
+        "action_success_rate": round(success_rate, 6),
+        "write_failures": failed,
+    }

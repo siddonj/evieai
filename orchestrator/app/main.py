@@ -27,7 +27,7 @@ except ImportError:
         return None
 from app.cache import get as cache_get, set as cache_set
 from app.actions_service import ActionsService
-from app.actions_store import get_actions_store
+from app.actions_store import compute_action_metrics, get_actions_store
 from app.bitemporal_store import get_bitemporal_store
 from app.connector_runtime import (
     build_connector_registry,
@@ -1514,6 +1514,25 @@ def connector_sync_reliability() -> dict[str, Any]:
 
     return {
         "pass": gate_pass,
+        "checks": checks,
+        "thresholds": thresholds,
+        "current": current,
+    }
+
+
+@app.get("/actions/reliability")
+def actions_reliability() -> dict[str, Any]:
+    thresholds = {
+        "min_action_success_rate": float(os.getenv("SLO_MIN_ACTION_SUCCESS_RATE", "0.95")),
+        "max_write_failures": int(os.getenv("SLO_MAX_WRITE_FAILURES", "5")),
+    }
+    current = compute_action_metrics(ACTION_STORE)
+    checks = {
+        "action_success_rate_ok": current["action_success_rate"] >= thresholds["min_action_success_rate"],
+        "write_failures_ok": current["write_failures"] <= thresholds["max_write_failures"],
+    }
+    return {
+        "pass": all(checks.values()),
         "checks": checks,
         "thresholds": thresholds,
         "current": current,

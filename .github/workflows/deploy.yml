@@ -38,7 +38,9 @@ jobs:
           pytest -q \
             tests/unit/test_propexo_contract.py \
             tests/unit/test_connector_sync_store.py \
-            tests/unit/test_connector_reliability_metrics.py
+            tests/unit/test_connector_reliability_metrics.py \
+            tests/unit/test_actions_store.py \
+            tests/unit/test_actions_service.py
 
       - name: Reliability threshold gate
         run: |

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import os
-import sys
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -77,10 +77,85 @@ def _evaluate(metrics: dict[str, Any]) -> tuple[bool, list[str], dict[str, Any]]
             "hallucination_rate": hallucination,
             "citation_accuracy": citation_accuracy,
             "write_failures": write_failures,
+            "actions_total": _to_int(current.get("actions_total", 0), 0),
+            "actions_completed": _to_int(current.get("actions_completed", 0), 0),
+            "actions_failed": _to_int(current.get("actions_failed", 0), 0),
+            "actions_pending_approval": _to_int(current.get("actions_pending_approval", 0), 0),
         },
         "failures": failures,
     }
     return len(failures) == 0, failures, summary
+
+
+def _collect_action_metrics_from_db(actions_db_path: Path) -> dict[str, Any]:
+    if not actions_db_path.exists():
+        return {
+            "actions_total": 0,
+            "actions_completed": 0,
+            "actions_failed": 0,
+            "actions_pending_approval": 0,
+            "action_success_rate": 1.0,
+            "write_failures": 0,
+        }
+
+    with sqlite3.connect(str(actions_db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+
+        def _count(query: str) -> int:
+            row = conn.execute(query).fetchone()
+            if row is None:
+                return 0
+            return int(row[0])
+
+        total = _count("SELECT COUNT(1) FROM action_request")
+        completed = _count("SELECT COUNT(1) FROM action_request WHERE status = 'completed'")
+        failed = _count("SELECT COUNT(1) FROM action_request WHERE status = 'failed'")
+        pending_approval = _count("SELECT COUNT(1) FROM approval_queue WHERE status = 'pending'")
+
+    resolved = completed + failed
+    success_rate = (completed / resolved) if resolved else 1.0
+    return {
+        "actions_total": total,
+        "actions_completed": completed,
+        "actions_failed": failed,
+        "actions_pending_approval": pending_approval,
+        "action_success_rate": round(success_rate, 6),
+        "write_failures": failed,
+    }
+
+
+def _inject_live_action_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
+    merged = json.loads(json.dumps(metrics))
+    current = merged.setdefault("current", {})
+    thresholds = merged.setdefault("thresholds", {})
+
+    actions_db_path = Path(os.getenv("ACTIONS_DB_PATH", "./data/evieai_actions.db"))
+    live = _collect_action_metrics_from_db(actions_db_path)
+
+    current["actions_total"] = live["actions_total"]
+    current["actions_completed"] = live["actions_completed"]
+    current["actions_failed"] = live["actions_failed"]
+    current["actions_pending_approval"] = live["actions_pending_approval"]
+
+    current["action_success_rate"] = _to_float(
+        os.getenv("EVIEAI_ACTION_SUCCESS_RATE", live["action_success_rate"]),
+        live["action_success_rate"],
+    )
+    current["write_failures"] = _to_int(
+        os.getenv("EVIEAI_WRITE_FAILURES", live["write_failures"]),
+        live["write_failures"],
+    )
+
+    thresholds["min_action_success_rate"] = _to_float(
+        os.getenv("SLO_MIN_ACTION_SUCCESS_RATE", thresholds.get("min_action_success_rate", 0.95)),
+        0.95,
+    )
+    thresholds["max_write_failures"] = _to_int(
+        os.getenv("SLO_MAX_WRITE_FAILURES", thresholds.get("max_write_failures", 5)),
+        5,
+    )
+
+    return merged
 
 
 def main() -> int:
@@ -88,7 +163,7 @@ def main() -> int:
     summary_out = Path(os.getenv("EVIEAI_RELIABILITY_SUMMARY_FILE", "scripts/evals/reliability_summary.json"))
 
     try:
-        metrics = _load_json(metrics_file)
+        metrics = _inject_live_action_metrics(_load_json(metrics_file))
         ok, failures, summary = _evaluate(metrics)
     except Exception as exc:  # noqa: BLE001
         print(f"[reliability-gate] ERROR: {exc}")
