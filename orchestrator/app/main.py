@@ -26,6 +26,8 @@ except ImportError:
     def get_obo_exchange():
         return None
 from app.cache import get as cache_get, set as cache_set
+from app.actions_service import ActionsService
+from app.actions_store import get_actions_store
 from app.bitemporal_store import get_bitemporal_store
 from app.connector_runtime import (
     build_connector_registry,
@@ -45,6 +47,8 @@ CONNECTOR_RUNTIME = connector_runtime_summary(CONNECTOR_REGISTRY, CONNECTOR_CONF
 BITEMPORAL_STORE = get_bitemporal_store()
 CONNECTOR_SYNC_STORE = get_connector_sync_store()
 EVENT_SIGNAL_STORE = get_event_signal_store()
+ACTION_STORE = get_actions_store()
+ACTION_SERVICE = ActionsService(store=ACTION_STORE, registry=CONNECTOR_REGISTRY)
 WEBHOOK_SOURCE_SECRET_ENV = os.getenv("WEBHOOK_SOURCE_SECRET_ENV", "WEBHOOK_SHARED_SECRET")
 WEBHOOK_ADAPTER = WebhookAdapter(source_id="webhook")
 
@@ -1129,6 +1133,30 @@ class BitemporalDiffQuery(BaseModel):
     limit: int = 100
 
 
+class ActionWriteRequest(BaseModel):
+    source_id: str
+    entity_type: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    idempotency_key: str
+    requested_by: str | None = None
+
+
+class ActionDecisionRequest(BaseModel):
+    action_id: str
+    decided_by: str
+    reason: str | None = None
+
+
+class ActionExecuteRequest(BaseModel):
+    action_id: str
+
+
+class ConnectorCircuitRequest(BaseModel):
+    source_id: str
+    state: Literal["open", "closed"]
+    reason: str | None = None
+
+
 @app.post("/auth/teams-token")
 def exchange_teams_token(payload: TeamsTokenRequest) -> dict[str, Any]:
     if not TEAMS_SSO_ENABLED:
@@ -1282,6 +1310,69 @@ def tool_diff_between(payload: BitemporalDiffQuery) -> dict[str, Any]:
         entity_type=payload.entity_type,
         limit=payload.limit,
     )
+
+
+@app.post("/actions/write")
+def request_write_action(payload: ActionWriteRequest) -> dict[str, Any]:
+    return ACTION_SERVICE.request_action(
+        source_id=payload.source_id,
+        entity_type=payload.entity_type,
+        payload=payload.payload,
+        idempotency_key=payload.idempotency_key,
+        requested_by=payload.requested_by,
+    )
+
+
+@app.post("/actions/approve")
+def approve_write_action(payload: ActionDecisionRequest) -> dict[str, Any]:
+    return ACTION_SERVICE.approve_action(action_id=payload.action_id, approved_by=payload.decided_by)
+
+
+@app.post("/actions/reject")
+def reject_write_action(payload: ActionDecisionRequest) -> dict[str, Any]:
+    return ACTION_SERVICE.reject_action(
+        action_id=payload.action_id,
+        rejected_by=payload.decided_by,
+        reason=payload.reason,
+    )
+
+
+@app.post("/actions/execute")
+def execute_write_action(payload: ActionExecuteRequest) -> dict[str, Any]:
+    return ACTION_SERVICE.execute_action(action_id=payload.action_id)
+
+
+@app.get("/actions")
+def list_write_actions(status: str | None = None, source_id: str | None = None, limit: int = 100) -> dict[str, Any]:
+    rows = ACTION_STORE.list_actions(status=status, source_id=source_id, limit=limit)
+    return {"count": len(rows), "actions": rows}
+
+
+@app.get("/actions/approvals")
+def list_pending_approvals(status: str = "pending", limit: int = 100) -> dict[str, Any]:
+    rows = ACTION_STORE.list_approval_queue(status=status, limit=limit)
+    return {"count": len(rows), "approvals": rows}
+
+
+@app.post("/actions/circuit")
+def set_connector_circuit(payload: ConnectorCircuitRequest) -> dict[str, Any]:
+    if not CONNECTOR_REGISTRY.has(payload.source_id):
+        raise HTTPException(status_code=404, detail=f"Unknown connector '{payload.source_id}'.")
+    state = ACTION_STORE.set_circuit_state(source_id=payload.source_id, state=payload.state, reason=payload.reason)
+    return state
+
+
+@app.get("/actions/circuit")
+def get_connector_circuit(source_id: str) -> dict[str, Any]:
+    if not CONNECTOR_REGISTRY.has(source_id):
+        raise HTTPException(status_code=404, detail=f"Unknown connector '{source_id}'.")
+    return ACTION_STORE.get_circuit_state(source_id)
+
+
+@app.get("/actions/audit")
+def list_action_audit(limit: int = 100, action_id: str | None = None) -> dict[str, Any]:
+    rows = ACTION_STORE.list_audit_events(limit=limit, action_id=action_id)
+    return {"count": len(rows), "events": rows}
 
 
 @app.post("/connectors/{source_id}/enable")
