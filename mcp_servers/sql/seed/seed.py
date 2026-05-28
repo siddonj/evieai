@@ -841,18 +841,14 @@ insert_batch(
 
 cursor.execute("SELECT TOP (?) id, site_code FROM r1_sites ORDER BY id", TARGET_R1_SITES)
 site_rows = cursor.fetchall()
-site_map = {row[1]: row[0] for row in site_rows}
-
-site_codes_ordered = [site[0] for site in R1_SITES]
 models = ("R750", "R760", "T350", "H550")
 zones = ("Lobby", "Amenities", "Hallway", "Parking", "Pool", "Office")
 firmware_cycle = ("5.2.1", "5.2.2", "5.2.3", "5.2.4")
 
 r1_devices: list[tuple[object, ...]] = []
-for site_idx, site_code in enumerate(site_codes_ordered):
-    site_id = site_map.get(site_code)
-    if site_id is None:
-        continue
+for site_idx, row in enumerate(site_rows):
+    site_id = int(row[0])
+    site_code = str(row[1])
     for dev_num in range(1, 21):
         r1_devices.append(
             (
