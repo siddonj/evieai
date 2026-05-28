@@ -72,6 +72,16 @@ variable "container_app_max_replicas" {
   default     = 3
 }
 
+variable "orchestrator_image_digest" {
+  description = "Digest for orchestrator image in ACR (sha256:...). Update this when promoting a new orchestrator build via Terraform."
+  type        = string
+  default     = "sha256:89297011a36540eaf86f5e2b0764d06a5d8b835a45d321e68508df6b0b3a3cf3"
+  validation {
+    condition     = can(regex("^sha256:[0-9a-f]{64}$", var.orchestrator_image_digest))
+    error_message = "orchestrator_image_digest must be in the format sha256:<64 lowercase hex chars>."
+  }
+}
+
 variable "ui_custom_domain" {
   description = "Custom domain for the React chat UI (Static Web App), e.g. demo.resiq.co. Leave null to use the Azure default hostname only."
   type        = string

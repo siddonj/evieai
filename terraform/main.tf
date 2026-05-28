@@ -753,7 +753,7 @@ resource "azurerm_container_app" "orchestrator" {
   template {
     container {
       name   = "orchestrator"
-      image  = "${azurerm_container_registry.main.login_server}/orchestrator@sha256:c362d6dc2207e6ae21e3c7e00078c0833d5b2eb6b3e56e9bc94de36ddce9d3bf"
+      image  = "${azurerm_container_registry.main.login_server}/orchestrator@${var.orchestrator_image_digest}"
       cpu    = 1.0
       memory = "2.0Gi"
       env {

@@ -116,6 +116,30 @@ Terraform outputs the following values. Save them — you will need them for loc
 - `openai_endpoint` — Azure OpenAI base URL
 - `sql_connection_string` — ADO.NET connection string for DAB
 
+## Day-2 Deployments (Terraform-First)
+
+For client environments, treat Terraform as the source of truth for runtime image versioning.
+
+### Promote a new orchestrator build
+
+1. Build and push a new image to ACR:
+  ```bash
+  az acr build -r <acr-name> -t orchestrator:latest -f orchestrator/Dockerfile .
+  ```
+2. Capture the pushed digest from build output (`sha256:...`).
+3. Update `orchestrator_image_digest` in `terraform.tfvars`.
+4. Apply with Terraform:
+  ```bash
+  terraform plan
+  terraform apply
+  ```
+
+This prevents configuration drift from manual `az containerapp update` commands.
+
+### Static Web App note
+
+Terraform provisions the Static Web App resource, but app content deployment still happens via CI/CD or SWA deployment tooling. Keep that deployment step in your release pipeline, and keep infrastructure changes in Terraform.
+
 ### Authenticating the Graph API App (One-Time Manual Step)
 
 Terraform creates the Entra ID app registration, but **admin consent for Microsoft Graph permissions must be granted in the Azure portal** by a Global Administrator:

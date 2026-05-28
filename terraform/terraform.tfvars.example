@@ -13,6 +13,7 @@ target_user_upn = "user@yourtenant.onmicrosoft.com"
 # openai_tpm_capacity         = 10
 # container_app_min_replicas  = 0   # scale-to-zero for dev (saves money)
 # container_app_max_replicas  = 3
+# orchestrator_image_digest   = "sha256:89297011a36540eaf86f5e2b0764d06a5d8b835a45d321e68508df6b0b3a3cf3"
 
 # ─── Custom Domain ──────────────────────────────────────────────────────
 # ui_custom_domain = "demo.resiq.co"
