@@ -851,6 +851,13 @@ async def _stream_chat_response(
                 messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": payload.message})
 
+    # Force a real SQL telemetry fetch for network/R1 prompts so responses are data-grounded.
+    network_keywords = (
+        "network", "wifi", "wireless", "ruckus", "r1", "latency",
+        "packet loss", "throughput", "access point", "incident", "uptime",
+    )
+    network_intent = any(k in payload.message.lower() for k in network_keywords)
+
     if not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_API_KEY:
         yield _sse({"type": "error", "message": "Azure OpenAI not configured. Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY."})
         return
@@ -867,6 +874,36 @@ async def _stream_chat_response(
     mcp_results_log: list[dict[str, Any]] = []
     full_reply = ""
     max_turns = 5
+
+    if network_intent:
+        forced_name = "query_sql"
+        forced_query = (
+            "R1 network performance summary including sites, devices, events, daily metrics, "
+            "uptime, latency, packet loss, throughput, incidents, and open event pressure"
+        )
+        forced_label = _TOOL_LABELS.get(forced_name, forced_name)
+        yield _sse({"type": "tool", "name": forced_name, "label": forced_label, "status": "calling"})
+        forced_result = await _call_mcp(forced_name, forced_query, payload.user_id)
+        forced_result = _augment_files_with_urls(forced_result, _TOOL_TO_ROUTE.get(forced_name, ""))
+        forced_summary = _summarize_mcp_result(forced_result)
+        yield _sse({"type": "tool", "name": forced_name, "label": forced_label, "status": "done", "summary": forced_summary})
+
+        tool_calls_log.append({"name": forced_name, "args": {"query": forced_query, "forced": True}})
+        mcp_results_log.append(forced_result)
+        messages.append({
+            "role": "assistant",
+            "content": "I retrieved live R1 network telemetry from SQL and will summarize it.",
+            "tool_calls": [{
+                "id": "forced_query_sql_r1",
+                "type": "function",
+                "function": {"name": forced_name, "arguments": json.dumps({"query": forced_query})},
+            }],
+        })
+        messages.append({
+            "role": "tool",
+            "tool_call_id": "forced_query_sql_r1",
+            "content": json.dumps(forced_result),
+        })
 
     for _turn in range(max_turns):
         accumulated_tool_calls: list[dict[str, Any]] = []
