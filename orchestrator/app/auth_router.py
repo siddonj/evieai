@@ -10,14 +10,14 @@ from __future__ import annotations
 import os
 import sqlite3
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
 import bcrypt
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -69,7 +69,7 @@ def _verify_password(password: str, hashed: str) -> bool:
 def _create_access_token(user_id: str, email: str, role: str) -> str:
     if not JWT_SECRET:
         raise RuntimeError("JWT_SECRET environment variable is not set")
-    expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)
+    expire = datetime.now(UTC) + timedelta(hours=JWT_EXPIRE_HOURS)
     payload = {
         "sub": user_id,
         "email": email,
@@ -166,9 +166,9 @@ async def me(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends
     try:
         payload = _decode_token(credentials.credentials)
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired") from None
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from None
 
     with _connect() as conn:
         row = conn.execute("SELECT id, email, role FROM users WHERE id = ?", (payload["sub"],)).fetchone()
@@ -184,9 +184,9 @@ async def require_auth(credentials: Annotated[HTTPAuthorizationCredentials | Non
     try:
         payload = _decode_token(credentials.credentials)
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired") from None
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from None
     return payload
 
 

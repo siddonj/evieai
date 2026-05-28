@@ -6,9 +6,10 @@ import logging
 import os
 import urllib.parse
 import uuid
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime
-from typing import Any, AsyncGenerator, Literal
+from typing import Any, Literal
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -18,17 +19,20 @@ from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
 from app.security import _limiter, validate_and_sanitize
+
 try:
-    from app.auth import get_obo_exchange, TEAMS_SSO_ENABLED
+    from app.auth import TEAMS_SSO_ENABLED, get_obo_exchange
 except ImportError:
     TEAMS_SSO_ENABLED = False
 
     def get_obo_exchange():
         return None
-from app.cache import get as cache_get, set as cache_set
 from app.actions_service import ActionsService
 from app.actions_store import compute_action_metrics, get_actions_store
+from app.auth_router import router as auth_router
 from app.bitemporal_store import get_bitemporal_store
+from app.cache import get as cache_get
+from app.cache import set as cache_set
 from app.connector_runtime import (
     build_connector_registry,
     connector_runtime_summary,
@@ -36,11 +40,9 @@ from app.connector_runtime import (
 )
 from app.connector_sync_store import get_connector_sync_store
 from app.event_signal_store import get_event_signal_store
-from app.auth_router import router as auth_router
 from connectors.adapters.webhook_adapter import WebhookAdapter, WebhookEnvelope
 from connectors.registry import ConnectorRegistry
 from connectors.types import Capability, SyncCursor
-
 
 CONNECTOR_CONFIG = load_connector_config()
 CONNECTOR_REGISTRY: ConnectorRegistry = build_connector_registry(CONNECTOR_CONFIG)
@@ -326,7 +328,7 @@ MCP_ENDPOINTS = {
 }
 
 # ─── Runtime Admin Config ─────────────────────────────────────────────
-MCP_ENABLED: dict[str, bool] = {name: True for name in MCP_ENDPOINTS}
+MCP_ENABLED: dict[str, bool] = dict.fromkeys(MCP_ENDPOINTS, True)
 _MCP_DISABLED_AT: dict[str, float] = {}  # Timestamp when auto-disabled (for auto-recovery)
 MCP_COOLDOWN_SECONDS = 30  # Auto-re-enable after this many seconds
 
@@ -827,7 +829,6 @@ async def _stream_chat_response(
 
     for _turn in range(max_turns):
         accumulated_tool_calls: list[dict[str, Any]] = []
-        streamed_any = False
 
         try:
             stream = await openai_client.chat.completions.create(
@@ -849,7 +850,6 @@ async def _stream_chat_response(
 
             # Stream content tokens
             if delta.content:
-                streamed_any = True
                 full_reply += delta.content
                 yield _sse({"type": "token", "content": delta.content})
 
