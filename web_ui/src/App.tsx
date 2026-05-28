@@ -6,7 +6,7 @@ import { SettingsPage } from './SettingsPage'
 import type { ChatResponse } from './Cards'
 import { ResultDeck, ToolBadge, LiveToolBadge } from './Cards'
 
-type View = 'chat' | 'settings' | 'performance' | 'r1'
+type View = 'chat' | 'settings' | 'performance' | 'network'
 
 type PerformanceData = {
   generated_at: string
@@ -35,7 +35,7 @@ type PerformanceData = {
   top_properties_by_noi: Array<{ name: string; city: string; noi: number; value: number; cap: number }>
 }
 
-type R1Data = {
+type NetworkData = {
   generated_at: string
   summary: {
     sites: number
@@ -283,21 +283,21 @@ function PerformanceDashboardView({ userId, onBack }: { userId?: string; onBack:
   )
 }
 
-function R1DashboardView({ userId, onBack }: { userId?: string; onBack: () => void }) {
+function NetworkDashboardView({ userId, onBack }: { userId?: string; onBack: () => void }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [data, setData] = useState<R1Data | null>(null)
+  const [data, setData] = useState<NetworkData | null>(null)
 
   async function loadDashboard() {
     setLoading(true)
     setError('')
     try {
-      const url = `${ORCHESTRATOR_URL}/dashboard/r1${userId ? `?user_id=${encodeURIComponent(userId)}` : ''}`
+      const url = `${ORCHESTRATOR_URL}/dashboard/network${userId ? `?user_id=${encodeURIComponent(userId)}` : ''}`
       const res = await fetch(url)
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`)
       }
-      const payload = (await res.json()) as R1Data
+      const payload = (await res.json()) as NetworkData
       setData(payload)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
@@ -622,8 +622,8 @@ function ChatView() {
     return <PerformanceDashboardView userId={user?.email} onBack={() => setView('chat')} />
   }
 
-  if (view === 'r1') {
-    return <R1DashboardView userId={user?.email} onBack={() => setView('chat')} />
+  if (view === 'network') {
+    return <NetworkDashboardView userId={user?.email} onBack={() => setView('chat')} />
   }
 
   const hasConversation = messages.length > 1
@@ -670,7 +670,7 @@ function ChatView() {
             <button className="status-btn" onClick={() => setView('performance')} title="Performance Dashboard">
               📊 Dashboard
             </button>
-              <button className="status-btn" onClick={() => setView('r1')} title="Network Dashboard">
+              <button className="status-btn" onClick={() => setView('network')} title="Network Dashboard">
                 📡 Network Dashboard
             </button>
             {hasConversation && (

@@ -626,7 +626,7 @@ class PerformanceDashboardResponse(BaseModel):
     top_properties_by_noi: list[dict[str, Any]]
 
 
-class R1DashboardResponse(BaseModel):
+class NetworkDashboardResponse(BaseModel):
     generated_at: str
     summary: dict[str, Any]
     severity_distribution: list[dict[str, Any]]
@@ -853,7 +853,7 @@ async def _stream_chat_response(
 
     # Force a real SQL telemetry fetch for network prompts so responses are data-grounded.
     network_keywords = (
-        "network", "wifi", "wireless", "ruckus", "r1", "latency",
+        "network", "wifi", "wireless", "latency",
         "packet loss", "throughput", "access point", "incident", "uptime",
     )
     network_intent = any(k in payload.message.lower() for k in network_keywords)
@@ -902,14 +902,14 @@ async def _stream_chat_response(
             "role": "assistant",
             "content": "I retrieved live network telemetry from SQL and will summarize it.",
             "tool_calls": [{
-                "id": "forced_query_sql_r1",
+                "id": "forced_query_sql_network",
                 "type": "function",
                 "function": {"name": forced_name, "arguments": json.dumps({"query": forced_query})},
             }],
         })
         messages.append({
             "role": "tool",
-            "tool_call_id": "forced_query_sql_r1",
+            "tool_call_id": "forced_query_sql_network",
             "content": json.dumps(forced_result),
         })
 
@@ -1146,11 +1146,11 @@ def _to_int(value: Any, fallback: int = 0) -> int:
         return fallback
 
 
-@app.get("/dashboard/r1", response_model=R1DashboardResponse)
-async def r1_dashboard(user_id: str | None = None) -> dict[str, Any]:
+@app.get("/dashboard/network", response_model=NetworkDashboardResponse)
+async def network_dashboard(user_id: str | None = None) -> dict[str, Any]:
     r1_result = await _call_mcp(
         "query_sql",
-        "R1 dashboard metrics ruckus sites devices events daily metrics latency packet loss throughput incidents",
+        "Network dashboard metrics sites devices events daily metrics latency packet loss throughput incidents",
         user_id,
     )
 
@@ -1343,6 +1343,12 @@ async def r1_dashboard(user_id: str | None = None) -> dict[str, Any]:
         "site_snapshot_30d": site_snapshot,
         "monthly_trend": monthly_trend,
     }
+
+
+@app.get("/dashboard/r1", response_model=NetworkDashboardResponse)
+async def r1_dashboard_compat(user_id: str | None = None) -> dict[str, Any]:
+    """Backward-compatible alias for older clients still calling /dashboard/r1."""
+    return await network_dashboard(user_id=user_id)
 
 
 def _augment_files_with_urls(result: dict[str, Any], service: str) -> dict[str, Any]:
