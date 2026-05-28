@@ -64,6 +64,7 @@ type Tab = 'data_sources' | 'approvals'
 export function SettingsPage() {
   const { logout, user: currentUser } = useAuth()
   const [tab, setTab] = useState<Tab>('data_sources')
+  const [userMessage, setUserMessage] = useState('')
 
   // ─── Data Sources State ─────────────────────────────────────────────
   const [servers, setServers] = useState<McpServer[]>([])
@@ -324,6 +325,7 @@ export function SettingsPage() {
 
         {tab === 'data_sources' && (
           <>
+            {userMessage && <section className="settings-section"><div className="settings-message">{userMessage}</div></section>}
             <section className="settings-section">
               <h2>MCP Server Status</h2>
               <p className="settings-hint">Toggle MCP servers on or off. Disabled servers will not be available to the AI agent.</p>
