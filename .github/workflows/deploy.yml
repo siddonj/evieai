@@ -3,17 +3,10 @@
 
 name: Deploy EvieAI
 
-on:
-  push:
-    branches: [main]
-    paths:
-      - orchestrator/**
-      - mcp_servers/**
-      - web_ui/**
-      - .github/workflows/deploy.yml
 
-  workflow_dispatch:
-
+permissions:
+  contents: read
+  id-token: write
 env:
   ACR_SERVER: aiagent2acrdev.azurecr.io
   RESOURCE_GROUP: rg-aiagent2-dev
