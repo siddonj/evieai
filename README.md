@@ -60,6 +60,7 @@ docker compose up --build
 - Document Generation MCP: `8006`
 - Analytics MCP: `8007`
 - SQL MCP wrapper: `8008`
+- PostgreSQL MCP: `8010`
 - Dashboard MCP: `8009`
 - Web UI (Vite): `5173`
 

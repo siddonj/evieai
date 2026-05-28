@@ -297,6 +297,7 @@ app.add_middleware(
 )
 
 MCP_SQL_URL = os.getenv("MCP_SQL_URL", "http://localhost:5000/mcp")
+MCP_POSTGRESQL_URL = os.getenv("MCP_POSTGRESQL_URL", "")
 MCP_FILES_URL = os.getenv("MCP_FILES_URL", "http://localhost:8001/mcp")
 MCP_MAIL_URL = os.getenv("MCP_MAIL_URL", "http://localhost:8002/mcp")
 MCP_ONEDRIVE_URL = os.getenv("MCP_ONEDRIVE_URL", "http://localhost:8003/mcp")
@@ -325,6 +326,8 @@ MCP_ENDPOINTS = {
     "document_generation": MCP_DOC_URL,
     "analytics": MCP_ANALYTICS_URL,
 }
+if MCP_POSTGRESQL_URL:
+    MCP_ENDPOINTS["postgresql"] = MCP_POSTGRESQL_URL
 if MCP_DASHBOARD_URL:
     MCP_ENDPOINTS["dashboard"] = MCP_DASHBOARD_URL
 
@@ -338,6 +341,7 @@ _TOOL_NAME_TO_KEY: dict[str, str] = {
     "query_mail": "mail",
     "query_onedrive": "onedrive",
     "query_sql": "sql",
+    "query_postgresql": "postgresql",
     "query_knowledge_base": "knowledge_base",
     "query_memory": "memory",
     "query_document_generation": "document_generation",
@@ -355,6 +359,7 @@ _TOOL_LABELS: dict[str, str] = {
     "query_mail": "Mail → Outlook",
     "query_onedrive": "OneDrive → Documents",
     "query_sql": "SQL → Property Database",
+    "query_postgresql": "PostgreSQL → Operational DB",
     "query_knowledge_base": "Knowledge Base → Policies",
     "query_memory": "Memory → User Context",
     "query_document_generation": "Docs → Report Generation",
@@ -420,6 +425,20 @@ TOOLS: list[dict[str, Any]] = [
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Natural language query for the SQL database."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_postgresql",
+            "description": "Query a PostgreSQL database for relational operational data and schema/table insights.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural language query for PostgreSQL, or prefix with 'sql:' for read-only SQL."},
                 },
                 "required": ["query"],
             },
@@ -572,6 +591,7 @@ _TOOL_TO_ROUTE: dict[str, str] = {
     "query_mail": "mail",
     "query_onedrive": "onedrive",
     "query_sql": "sql",
+    "query_postgresql": "postgresql",
     "query_knowledge_base": "knowledge_base",
     "query_memory": "memory",
     "query_document_generation": "document_generation",
@@ -795,6 +815,7 @@ async def _stream_chat_response(
         "Always use the available tools to fetch actual data before answering: "
         "query_files for file listings, query_mail for emails, query_onedrive for OneDrive files, "
         "query_sql for CRM/contacts/companies/pipeline/metrics, "
+        "query_postgresql for PostgreSQL operational tables and read-only SQL, "
         "query_knowledge_base for SOPs/policies/handbook, "
         "query_analytics for KPIs/trends/insights, "
         "query_document_generation for creating reports/documents, "
