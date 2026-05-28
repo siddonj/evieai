@@ -1,4 +1,4 @@
-# AI-Powered Agentic Q&A — Architecture Overview
+# EvieAI — Architecture Overview
 
 ## High-Level Architecture
 

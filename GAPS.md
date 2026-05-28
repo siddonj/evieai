@@ -39,7 +39,7 @@ This document captures what is missing, underspecified, or could be improved in 
 - **Proposed Fix:** Standardize on **Poetry** for all Python services. This gives us:
   - `poetry.lock` for reproducible builds
   - `pyproject.toml` for metadata and tool configuration (Ruff, mypy, pytest)
-  - Single command: `poetry install && poetry run pytest`
+  - Single command: `pip install -r tests/requirements.txt && python -m pytest`
 - **Impact:** Eliminates "works on my machine" issues between local and container builds.
 
 ### Gap: No Linting / Formatting / Typecheck Toolchain

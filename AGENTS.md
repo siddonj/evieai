@@ -1,22 +1,42 @@
-# AGENTS.md — AI-Powered Agentic Q&A App
+# AGENTS.md — EvieAI
 
-> Hard-won context for OpenCode sessions. If a fact is obvious from filenames, it is not here.
+> Hard-won context for agent sessions. If a fact is obvious from filenames, it is not here.
 
 ---
 
 ## Repo Layout
 
 ```
-terraform/          # Azure landing zone — provision everything first
-orchestrator/       # FastAPI + OpenAI client + MCP client (port 8000)
-mcp_servers/
-  file_share/       # fastmcp server — local files + Azure Files (port 8001)
-  o365_mail/        # fastmcp server — Graph API Outlook (port 8002)
-  onedrive/         # fastmcp server — Graph API OneDrive (port 8003)
-web_ui/             # React + Vite chat interface (build → Static Web App)
-.github/workflows/  # CI/CD pipelines
-PLAN.md             # Phased implementation plan
-GAPS.md             # Known gaps and improvement proposals
+terraform/              # Azure landing zone — provision everything first
+orchestrator/           # FastAPI core — chat, tool-calling, connectors, approvals (port 8000)
+  app/                  #   FastAPI routers, services, middleware
+  auth/                 #   Teams SSO / OBO token exchange
+connectors/             # Connector runtime — protocol, registry, adapter stubs
+  adapters/             #   PropexoAdapter, WebhookAdapter, etc.
+mcp_servers/            # Data/tool services (streamable HTTP, ports 8001–8009)
+  file_share/           #   Local files + Azure Files (port 8001)
+  o365_mail/            #   Graph API Outlook (port 8002)
+  onedrive/             #   Graph API OneDrive (port 8003)
+  memory/               #   Profiles, bookmarks, user context (port 8004)
+  knowledge_base/       #   SOPs, policy, structured KB (port 8005)
+  document_generation/  #   Template-based report generation (port 8006)
+  analytics/            #   Demo KPIs, trends (port 8007)
+  dashboard/            #   Metrics aggregation (port 8009)
+  sql/                  #   DAB config + SQL wrapper (port 8008)
+  common/               #   Shared graph_client, auth helpers
+web_ui/                 # React + Vite admin/chat frontend (port 5173)
+db/migrations/          # Bitemporal schema + seed data
+tests/                  # Unit, integration, and smoke tests
+scripts/evals/          # Evaluation harness + reliability gate scripts
+docs/                   # Architecture, deployment, API reference, DR, support, install
+teams_app/              # Teams app manifest and verification
+.azure-pipelines/       # Azure DevOps CI/CD pipelines
+.github/workflows/      # GitHub Actions CI/CD (alternative)
+.env.example            # Local environment variable template
+docker-compose.yml      # Local full-stack orchestration
+pyproject.toml          # Python toolchain config (Ruff, mypy, pytest)
+PLAN.md                 # Phased implementation plan
+GAPS.md                 # Known gaps and improvement proposals
 ```
 
 **Rule of thumb:** If Terraform has not been applied yet, do not write application code. The landing zone must exist first.
@@ -133,7 +153,7 @@ Goal: `docker compose up` from repo root brings up the full stack.
 
 The deploy pipeline `YAML` already references this group — no manual linking needed.
 
-**3. Create the pipelines** (Pipelines → New Pipeline → Azure Repos Git → `aigent2` → Existing YAML):
+**3. Create the pipelines** (Pipelines → New Pipeline → Azure Repos Git → `evieai` → Existing YAML):
 
 - Select `/.azure-pipelines/terraform.yml` → Save as `Terraform`
 - Select `/.azure-pipelines/deploy.yml` → Save as `Build & Deploy`
@@ -171,8 +191,8 @@ The `.github/workflows/` directory contains equivalent workflows if you prefer G
 
 | Context | Command |
 |---------|---------|
-| Local unit tests | `poetry run pytest tests/unit -v` |
-| Local integration | `docker compose up` then `poetry run pytest tests/integration -v --base-url http://localhost:8000` |
+| Local unit tests | `python -m pytest tests/unit -v` |
+| Local integration | `docker compose up` then `python -m pytest tests/integration -v --base-url http://localhost:8000` |
 | Deployed smoke tests | `pytest tests/smoke -v --base-url $(terraform output -raw orchestrator_url)` |
 | Terraform validation | `terraform fmt -check && terraform validate` |
 
