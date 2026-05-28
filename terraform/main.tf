@@ -709,6 +709,50 @@ resource "azurerm_container_app" "analytics_mcp" {
   }
 }
 
+# ─── Dashboard MCP Server ───────────────────────────────────────────────
+resource "azurerm_container_app" "dashboard_mcp" {
+  name                         = "${var.project_name}-mcp-dashboard-${var.environment}"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  resource_group_name          = azurerm_resource_group.main.name
+  revision_mode                = "Single"
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  ingress {
+    external_enabled = false
+    target_port      = 8009
+    transport        = "http"
+    traffic_weight {
+      latest_revision = true
+      percentage      = 100
+    }
+  }
+
+  registry {
+    server               = azurerm_container_registry.main.login_server
+    username             = azurerm_container_registry.main.admin_username
+    password_secret_name = "acr-password"
+  }
+
+  secret {
+    name  = "acr-password"
+    value = azurerm_container_registry.main.admin_password
+  }
+
+  template {
+    container {
+      name   = "dashboard"
+      image  = "${azurerm_container_registry.main.login_server}/mcp-dashboard:latest"
+      cpu    = 0.25
+      memory = "0.5Gi"
+    }
+    min_replicas = var.container_app_min_replicas
+    max_replicas = var.container_app_max_replicas
+  }
+}
+
 # ─── Orchestrator (Public-Facing) ─────────────────────────────────────
 resource "azurerm_container_app" "orchestrator" {
   name                         = "${var.project_name}-orchestrator-${var.environment}"
@@ -799,6 +843,10 @@ resource "azurerm_container_app" "orchestrator" {
       env {
         name  = "MCP_ANALYTICS_URL"
         value = "http://${azurerm_container_app.analytics_mcp.ingress[0].fqdn}/mcp"
+      }
+      env {
+        name  = "MCP_DASHBOARD_URL"
+        value = "http://${azurerm_container_app.dashboard_mcp.ingress[0].fqdn}/mcp"
       }
       env {
         name  = "REPORT_OUTPUT_DIR"

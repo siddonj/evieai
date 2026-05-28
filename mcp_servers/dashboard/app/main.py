@@ -63,6 +63,13 @@ def _compute_overview() -> dict[str, Any]:
     total_units = sum(p["units"] for p in _PROPERTIES)
     occupied = sum(p["occupied"] for p in _PROPERTIES)
     active_deals = [d for d in _DEALS if d["status"] == "Active"]
+    stage_counts: dict[str, dict[str, int]] = {}
+    for deal in active_deals:
+        stage = deal.get("stage", "Unknown")
+        bucket = stage_counts.setdefault(stage, {"count": 0, "value": 0, "commission": 0})
+        bucket["count"] += 1
+        bucket["value"] += int(deal.get("value", 0) or 0)
+        bucket["commission"] += int(deal.get("commission", 0) or 0)
     total_noi = sum(p["noi"] for p in _PROPERTIES)
     total_value = sum(p["value"] for p in _PROPERTIES)
     pipeline_value = sum(d["value"] for d in active_deals)
@@ -77,6 +84,10 @@ def _compute_overview() -> dict[str, Any]:
         "total_noi": total_noi,
         "pipeline_value": pipeline_value,
         "pipeline_commission": pipeline_comm,
+        # Compatibility aliases consumed by orchestrator dashboard aggregation.
+        "pipeline_total": pipeline_value,
+        "commission_pipeline": pipeline_comm,
+        "by_stage": stage_counts,
         "active_deals": len(active_deals),
         "closed_ytd": closed_ytd,
         "properties_count": len(_PROPERTIES),
@@ -199,10 +210,6 @@ def mcp_info() -> dict[str, str]:
 def mcp_query(payload: QueryRequest) -> dict[str, Any]:
     q = payload.query.lower()
 
-    if any(w in q for w in ("overview", "home", "dashboard", "summary")):
-        data = _compute_overview()
-        return {"service": "dashboard", "view": "overview", "data": data}
-
     if any(w in q for w in ("portfolio", "property", "properties", "asset")):
         return {"service": "dashboard", "view": "portfolio", "data": _portfolio_dashboard()}
 
@@ -214,6 +221,10 @@ def mcp_query(payload: QueryRequest) -> dict[str, Any]:
 
     if any(w in q for w in ("activity", "activities", "upcoming", "task", "tour", "calendar")):
         return {"service": "dashboard", "view": "activities", "data": _activities_dashboard()}
+
+    if any(w in q for w in ("overview", "home", "dashboard", "summary")):
+        data = _compute_overview()
+        return {"service": "dashboard", "view": "overview", "data": data}
 
     # Default: return overview
     return {"service": "dashboard", "view": "overview", "data": _compute_overview()}

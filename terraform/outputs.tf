@@ -100,6 +100,11 @@ output "analytics_mcp_internal_url" {
   value       = "http://${azurerm_container_app.analytics_mcp.ingress[0].fqdn}/mcp"
 }
 
+output "dashboard_mcp_internal_url" {
+  description = "Internal URL of the Dashboard MCP server."
+  value       = "http://${azurerm_container_app.dashboard_mcp.ingress[0].fqdn}/mcp"
+}
+
 output "ui_default_hostname" {
   description = "Default hostname of the Static Web App (chat UI)."
   value       = azurerm_static_web_app.ui.default_host_name

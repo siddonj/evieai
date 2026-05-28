@@ -11,7 +11,7 @@ This directory contains all Azure infrastructure for the AI Q&A app. It is desig
 5. **Azure OpenAI** — GPT-4o deployment
 6. **Azure SQL Server + Database** — serverless tier for relational data
 7. **Azure Storage Account + File Share** — cloud file storage for File Share MCP
-8. **Azure Container Apps Environment + 5 Apps** — orchestrator (public) + 4 MCP servers (internal)
+8. **Azure Container Apps Environment + MCP Apps** — orchestrator (public) + MCP servers (internal), including dashboard views
 9. **Azure Static Web App** — hosts the React chat UI
 
 ## Prerequisites
