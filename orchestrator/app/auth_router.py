@@ -18,7 +18,7 @@ import bcrypt
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -36,13 +36,13 @@ security = HTTPBearer(auto_error=False)
 
 
 class UserCreate(BaseModel):
-    email: EmailStr
+    email: str
     password: str = Field(..., min_length=4)
     role: str = Field(default="user", pattern="^(admin|user)$")
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 
@@ -64,6 +64,13 @@ def _hash_password(password: str) -> str:
 
 def _verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
+
+
+def _normalize_email(email: str) -> str:
+    normalized = (email or "").strip().lower()
+    if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid email format")
+    return normalized
 
 
 def _create_access_token(user_id: str, email: str, role: str) -> str:
@@ -125,20 +132,21 @@ def _seed_default_admin() -> None:
 async def register(body: UserCreate) -> TokenResponse:
     _ensure_schema()
     _seed_default_admin()
+    email = _normalize_email(body.email)
     with _connect() as conn:
-        existing = conn.execute("SELECT id FROM users WHERE email = ?", (body.email,)).fetchone()
+        existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
         if existing:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
         user_id = str(uuid.uuid4())
         conn.execute(
             "INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, ?)",
-            (user_id, body.email, _hash_password(body.password), body.role),
+            (user_id, email, _hash_password(body.password), body.role),
         )
         conn.commit()
-    token = _create_access_token(user_id, body.email, body.role)
+    token = _create_access_token(user_id, email, body.role)
     return TokenResponse(
         access_token=token,
-        user={"id": user_id, "email": body.email, "role": body.role},
+        user={"id": user_id, "email": email, "role": body.role},
     )
 
 
@@ -146,9 +154,10 @@ async def register(body: UserCreate) -> TokenResponse:
 async def login(body: UserLogin) -> TokenResponse:
     _ensure_schema()
     _seed_default_admin()
+    email = _normalize_email(body.email)
     with _connect() as conn:
         row = conn.execute(
-            "SELECT id, email, password_hash, role FROM users WHERE email = ?", (body.email,)
+            "SELECT id, email, password_hash, role FROM users WHERE email = ?", (email,)
         ).fetchone()
     if not row or not _verify_password(body.password, row["password_hash"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
