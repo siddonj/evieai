@@ -851,7 +851,7 @@ async def _stream_chat_response(
                 messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": payload.message})
 
-    # Force a real SQL telemetry fetch for network/R1 prompts so responses are data-grounded.
+    # Force a real SQL telemetry fetch for network prompts so responses are data-grounded.
     network_keywords = (
         "network", "wifi", "wireless", "ruckus", "r1", "latency",
         "packet loss", "throughput", "access point", "incident", "uptime",
@@ -862,7 +862,7 @@ async def _stream_chat_response(
     if network_intent:
         messages[0]["content"] += (
             "\n\nNetwork telemetry mode is active for this request. "
-            "Use query_sql for R1/network telemetry facts. "
+            "Use query_sql for network telemetry facts. "
             "Do NOT call query_analytics or query_dashboard for this response."
         )
 
@@ -886,7 +886,7 @@ async def _stream_chat_response(
     if network_intent:
         forced_name = "query_sql"
         forced_query = (
-            "R1 network performance summary including sites, devices, events, daily metrics, "
+            "Network performance summary including sites, devices, events, daily metrics, "
             "uptime, latency, packet loss, throughput, incidents, and open event pressure"
         )
         forced_label = _TOOL_LABELS.get(forced_name, forced_name)
@@ -900,7 +900,7 @@ async def _stream_chat_response(
         mcp_results_log.append(forced_result)
         messages.append({
             "role": "assistant",
-            "content": "I retrieved live R1 network telemetry from SQL and will summarize it.",
+            "content": "I retrieved live network telemetry from SQL and will summarize it.",
             "tool_calls": [{
                 "id": "forced_query_sql_r1",
                 "type": "function",
@@ -1155,8 +1155,8 @@ async def r1_dashboard(user_id: str | None = None) -> dict[str, Any]:
     )
 
     if not isinstance(r1_result, dict) or r1_result.get("error"):
-        detail = r1_result.get("error") if isinstance(r1_result, dict) else "R1 dataset unavailable"
-        raise HTTPException(status_code=502, detail=f"Could not load R1 dashboard data: {detail}")
+        detail = r1_result.get("error") if isinstance(r1_result, dict) else "Network dataset unavailable"
+        raise HTTPException(status_code=502, detail=f"Could not load network dashboard data: {detail}")
 
     sites = r1_result.get("r1_sites") if isinstance(r1_result.get("r1_sites"), list) else []
     devices = r1_result.get("r1_devices") if isinstance(r1_result.get("r1_devices"), list) else []
@@ -1164,7 +1164,7 @@ async def r1_dashboard(user_id: str | None = None) -> dict[str, Any]:
     metrics = r1_result.get("r1_device_daily_metrics") if isinstance(r1_result.get("r1_device_daily_metrics"), list) else []
 
     if not sites or not devices or not metrics:
-        raise HTTPException(status_code=502, detail="R1 dataset returned empty response from SQL MCP")
+        raise HTTPException(status_code=502, detail="Network dataset returned empty response from SQL MCP")
 
     device_to_site: dict[int, int] = {
         _to_int(d.get("id")): _to_int(d.get("site_id"))

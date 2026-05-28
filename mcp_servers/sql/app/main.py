@@ -341,7 +341,7 @@ def _demo_response(payload: QueryRequest) -> dict[str, Any]:
         results["r1_device_events"] = _DEMO_R1_DEVICE_EVENTS
         results["r1_device_daily_metrics"] = _DEMO_R1_DEVICE_DAILY_METRICS
         results["r1_summary"] = (
-            "Demo R1 fallback data returned because SQL DAB endpoints are unavailable."
+            "Demo network fallback data returned because SQL DAB endpoints are unavailable."
         )
 
     return results
@@ -519,7 +519,7 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
                 if resp.status_code == 200:
                     data = resp.json()
                     results["r1_sites"] = data.get("value", data)
-                    results["r1_sites_summary"] = f"Found {len(results['r1_sites'])} R1 sites"
+                    results["r1_sites_summary"] = f"Found {len(results['r1_sites'])} network sites"
                     dab_available = True
             except Exception as exc:
                 results["r1_sites_error"] = str(exc)
@@ -529,7 +529,7 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
                 if resp.status_code == 200:
                     data = resp.json()
                     results["r1_devices"] = data.get("value", data)
-                    results["r1_devices_summary"] = f"Found {len(results['r1_devices'])} R1 devices"
+                    results["r1_devices_summary"] = f"Found {len(results['r1_devices'])} network devices"
                     dab_available = True
             except Exception as exc:
                 results["r1_devices_error"] = str(exc)
@@ -539,7 +539,7 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
                 if resp.status_code == 200:
                     data = resp.json()
                     results["r1_device_events"] = data.get("value", data)
-                    results["r1_device_events_summary"] = f"Found {len(results['r1_device_events'])} R1 device events"
+                    results["r1_device_events_summary"] = f"Found {len(results['r1_device_events'])} network device events"
                     dab_available = True
             except Exception as exc:
                 results["r1_device_events_error"] = str(exc)
@@ -549,7 +549,7 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
                 if resp.status_code == 200:
                     data = resp.json()
                     results["r1_device_daily_metrics"] = data.get("value", data)
-                    results["r1_device_daily_metrics_summary"] = f"Found {len(results['r1_device_daily_metrics'])} R1 daily metrics"
+                    results["r1_device_daily_metrics_summary"] = f"Found {len(results['r1_device_daily_metrics'])} network daily metrics"
                     dab_available = True
             except Exception as exc:
                 results["r1_device_daily_metrics_error"] = str(exc)

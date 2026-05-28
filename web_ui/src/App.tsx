@@ -301,7 +301,7 @@ function R1DashboardView({ userId, onBack }: { userId?: string; onBack: () => vo
       setData(payload)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
-      setError(`Could not load R1 dashboard: ${message}`)
+      setError(`Could not load network dashboard: ${message}`)
     } finally {
       setLoading(false)
     }
@@ -316,8 +316,8 @@ function R1DashboardView({ userId, onBack }: { userId?: string; onBack: () => vo
       <div className="bg-grid" aria-hidden="true" />
       <header className="hero">
         <p className="eyebrow">Network Operations</p>
-        <h1>Ruckus R1 Dashboard</h1>
-        <p className="subtitle">Wireless reliability, event pressure, and site-level performance for the R1 estate.</p>
+        <h1>Network Dashboard</h1>
+        <p className="subtitle">Wireless reliability, event pressure, and site-level performance across provider sources.</p>
       </header>
 
       <div className="dashboard-shell">
@@ -327,7 +327,7 @@ function R1DashboardView({ userId, onBack }: { userId?: string; onBack: () => vo
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
-        {loading && !data && <div className="dashboard-loading">Loading R1 dashboard...</div>}
+        {loading && !data && <div className="dashboard-loading">Loading network dashboard...</div>}
 
         {data && (
           <>
@@ -371,7 +371,7 @@ function R1DashboardView({ userId, onBack }: { userId?: string; onBack: () => vo
             </div>
 
             <section className="dashboard-panel">
-              <h3>Site Snapshot (Last 30 Days)</h3>
+                <h3>Network Site Snapshot (Last 30 Days)</h3>
               <div className="table-wrap">
                 <table className="perf-table">
                   <thead>
@@ -670,8 +670,8 @@ function ChatView() {
             <button className="status-btn" onClick={() => setView('performance')} title="Performance Dashboard">
               📊 Dashboard
             </button>
-            <button className="status-btn" onClick={() => setView('r1')} title="R1 Network Dashboard">
-              📡 R1 Dashboard
+              <button className="status-btn" onClick={() => setView('r1')} title="Network Dashboard">
+                📡 Network Dashboard
             </button>
             {hasConversation && (
               <button className="status-btn" onClick={clearChat} title="Clear conversation">
