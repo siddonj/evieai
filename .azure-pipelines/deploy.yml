@@ -189,10 +189,21 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
+                EXISTING_JWT=$(az containerapp show \
+                  --name aiagent2-orchestrator-dev \
+                  --resource-group $(RESOURCE_GROUP) \
+                  --query "properties.template.containers[0].env[?name=='JWT_SECRET'].value" \
+                  -o tsv 2>/dev/null || echo "")
+                JWT_SECRET="${EXISTING_JWT:-$(openssl rand -hex 32)}"
                 az containerapp update \
                   --name aiagent2-orchestrator-dev \
                   --resource-group $(RESOURCE_GROUP) \
-                  --image $(ACR_SERVER)/orchestrator:latest
+                  --image $(ACR_SERVER)/orchestrator:latest \
+                  --set-env-vars \
+                    "JWT_SECRET=$JWT_SECRET" \
+                    "AUTH_DB_PATH=/tmp/evieai_auth.db" \
+                    "DEFAULT_ADMIN_EMAIL=admin@evieai.local" \
+                    "DEFAULT_ADMIN_PASSWORD=admin"
 
           - task: AzureCLI@2
             displayName: Update MCP servers

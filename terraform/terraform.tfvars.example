@@ -20,3 +20,8 @@ target_user_upn = "user@yourtenant.onmicrosoft.com"
 
 # ─── Alerts ──────────────────────────────────────────────────────────
 # alert_email = "admin@example.com"  # set to enable Azure Monitor alerting
+
+# ─── Web UI Auth ──────────────────────────────────────────────────────
+# jwt_secret = ""  # required; generate with: openssl rand -hex 32
+# default_admin_email    = "admin@evieai.local"
+# default_admin_password = "admin"

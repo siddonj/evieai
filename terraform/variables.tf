@@ -90,3 +90,23 @@ variable "alert_email" {
   default     = null
   sensitive   = true
 }
+
+# ─── Web UI Auth ─────────────────────────────────────────
+variable "jwt_secret" {
+  description = "HS256 secret for signing web UI JWT tokens. Generate with: openssl rand -hex 32"
+  type        = string
+  sensitive   = true
+}
+
+variable "default_admin_email" {
+  description = "Email for the default admin account seeded on first startup."
+  type        = string
+  default     = "admin@evieai.local"
+}
+
+variable "default_admin_password" {
+  description = "Password for the default admin account. Change after first login."
+  type        = string
+  default     = "admin"
+  sensitive   = true
+}

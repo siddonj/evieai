@@ -820,6 +820,22 @@ resource "azurerm_container_app" "orchestrator" {
         name  = "AZURE_STORAGE_KEY"
         value = azurerm_storage_account.main.primary_access_key
       }
+      env {
+        name  = "JWT_SECRET"
+        value = var.jwt_secret
+      }
+      env {
+        name  = "AUTH_DB_PATH"
+        value = "/tmp/evieai_auth.db"
+      }
+      env {
+        name  = "DEFAULT_ADMIN_EMAIL"
+        value = var.default_admin_email
+      }
+      env {
+        name  = "DEFAULT_ADMIN_PASSWORD"
+        value = var.default_admin_password
+      }
     }
     min_replicas = 1
     max_replicas = var.container_app_max_replicas
