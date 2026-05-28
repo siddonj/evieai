@@ -15,6 +15,14 @@ type ChatMessage = {
   data?: ChatResponse
 }
 
+type LegacyChatMessage = {
+  id?: unknown
+  role?: unknown
+  text?: unknown
+  content?: unknown
+  data?: unknown
+}
+
 type LiveTool = {
   name: string
   label: string
@@ -40,9 +48,41 @@ const SUGGESTED_PROMPTS = [
 function loadHistory(): ChatMessage[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
+    if (!raw) return []
+
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+
+    const normalized: ChatMessage[] = []
+    for (const item of parsed as LegacyChatMessage[]) {
+      const role = item?.role === 'user' || item?.role === 'assistant' ? item.role : null
+      if (!role) continue
+
+      const text = typeof item?.text === 'string'
+        ? item.text
+        : typeof item?.content === 'string'
+          ? item.content
+          : ''
+
+      normalized.push({
+        id: typeof item?.id === 'string' && item.id.trim().length > 0 ? item.id : nextId(),
+        role,
+        text,
+        data: (item?.data as ChatResponse | undefined),
+      })
+    }
+
+    return normalized
   } catch {
     return []
+  }
+}
+
+function renderMarkdown(text: string): string {
+  try {
+    return marked.parse(text || '', { breaks: true }) as string
+  } catch {
+    return text || ''
   }
 }
 
@@ -315,7 +355,7 @@ function ChatView() {
               <div className="label">{msg.role === 'user' ? 'You' : 'Agent'}</div>
               <div
                 className="text prose"
-                dangerouslySetInnerHTML={{ __html: marked.parse(msg.text, { breaks: true }) as string }}
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }}
               />
               {msg.data?.tool_calls && msg.data.tool_calls.length > 0 && (
                 <div className="tool-bar">
@@ -365,7 +405,7 @@ function ChatView() {
               {streamingText ? (
                 <div
                   className="text prose"
-                  dangerouslySetInnerHTML={{ __html: marked.parse(streamingText, { breaks: true }) as string }}
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(streamingText) }}
                 />
               ) : (
                 !activeTools.length && !completedTools.length && (
