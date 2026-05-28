@@ -67,6 +67,14 @@ CREATE TABLE properties (
 )
 """)
 cursor.execute("""
+IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'contacts')
+   AND NOT EXISTS (
+       SELECT 1 FROM sys.columns
+       WHERE object_id = OBJECT_ID('contacts') AND name = 'role'
+   )
+DROP TABLE contacts
+""")
+cursor.execute("""
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'contacts')
 CREATE TABLE contacts (
     id INT IDENTITY(1,1) PRIMARY KEY,
@@ -75,6 +83,14 @@ CREATE TABLE contacts (
     role NVARCHAR(50) DEFAULT 'Owner', property_id INT, notes NVARCHAR(MAX),
     created_at DATETIME DEFAULT GETDATE()
 )
+""")
+cursor.execute("""
+IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'deals')
+   AND NOT EXISTS (
+       SELECT 1 FROM sys.columns
+       WHERE object_id = OBJECT_ID('deals') AND name = 'deal_type'
+   )
+DROP TABLE deals
 """)
 cursor.execute("""
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'deals')
@@ -89,6 +105,14 @@ CREATE TABLE deals (
     status NVARCHAR(20) DEFAULT 'Active', notes NVARCHAR(MAX),
     created_at DATETIME DEFAULT GETDATE(), updated_at DATETIME DEFAULT GETDATE()
 )
+""")
+cursor.execute("""
+IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'activities')
+   AND NOT EXISTS (
+       SELECT 1 FROM sys.columns
+       WHERE object_id = OBJECT_ID('activities') AND name = 'activity_type'
+   )
+DROP TABLE activities
 """)
 cursor.execute("""
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'activities')
@@ -182,15 +206,20 @@ print("Tables ready.")
 
 
 def insert_batch(table, columns, rows, target):
+    if isinstance(columns, str):
+        col_list = [c.strip() for c in columns.split(",") if c.strip()]
+    else:
+        col_list = list(columns)
+
     cursor.execute(f"SELECT COUNT(*) FROM {table}")
     existing = cursor.fetchone()[0]
     if existing >= target:
         print(f"  {table}: {existing} records (target {target}) — skipping")
         return
     to_insert = rows[:target - existing]
-    placeholders = ",".join("?" for _ in columns)
+    placeholders = ",".join("?" for _ in col_list)
     cursor.executemany(
-        f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})",
+        f"INSERT INTO {table} ({','.join(col_list)}) VALUES ({placeholders})",
         to_insert,
     )
     conn.commit()
