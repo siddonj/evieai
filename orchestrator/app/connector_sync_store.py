@@ -5,10 +5,9 @@ import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
-
-SyncRunSummary = Dict[str, Any]
+SyncRunSummary = dict[str, Any]
 
 
 def _utcnow_iso() -> str:

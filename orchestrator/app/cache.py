@@ -13,7 +13,6 @@ import os
 import time
 from typing import Any
 
-
 REDIS_URL = os.getenv("REDIS_URL", "")
 
 _redis_client: Any = None

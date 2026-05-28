@@ -93,7 +93,7 @@ def _portfolio_dashboard() -> dict[str, Any]:
                 "units": sum(p["units"] for p in _PROPERTIES if p["type"] == ptype),
                 "occupied": sum(p["occupied"] for p in _PROPERTIES if p["type"] == ptype),
             }
-            for ptype in set(p["type"] for p in _PROPERTIES)
+            for ptype in {p["type"] for p in _PROPERTIES}
         },
         "top_by_noi": sorted(_PROPERTIES, key=lambda p: p["noi"], reverse=True)[:3],
         "overall_occupancy": round(occupied / total_units * 100, 1) if total_units else 0,
@@ -157,7 +157,6 @@ def _market_dashboard() -> dict[str, Any]:
 
 
 def _activities_dashboard() -> dict[str, Any]:
-    now = "2026-05-19"
     upcoming = [a for a in _ACTIVITIES if a["status"] == "Open"]
     completed = [a for a in _ACTIVITIES if a["status"] == "Completed"]
     this_week = [a for a in upcoming if a.get("due", "") <= "2026-05-25"]
@@ -168,7 +167,7 @@ def _activities_dashboard() -> dict[str, Any]:
         "upcoming": sorted(upcoming, key=lambda a: a.get("due", ""))[:8],
         "by_type": {
             atype: len([a for a in upcoming if a["type"] == atype])
-            for atype in set(a["type"] for a in upcoming)
+            for atype in {a["type"] for a in upcoming}
         },
     }
 

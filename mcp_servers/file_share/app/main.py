@@ -8,7 +8,6 @@ from typing import Any
 from fastapi import FastAPI, Response
 from pydantic import BaseModel
 
-
 app = FastAPI(title="mcp-file-share", version="0.2.0")
 DEFAULT_ROOT = Path(os.getenv("LOCAL_SHARE_ROOT", "/tmp"))
 

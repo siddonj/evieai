@@ -8,7 +8,6 @@ from pydantic import BaseModel
 
 from mcp_servers.common.graph_client import GraphClient
 
-
 app = FastAPI(title="mcp-onedrive", version="0.2.0")
 graph_client = GraphClient.from_env()
 

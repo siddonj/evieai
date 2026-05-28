@@ -1,7 +1,6 @@
 """Memory / Personal Context MCP Server — Per-user context, preferences, and history."""
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from fastapi import FastAPI

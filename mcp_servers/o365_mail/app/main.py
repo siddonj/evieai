@@ -7,7 +7,6 @@ from pydantic import BaseModel
 
 from mcp_servers.common.graph_client import GraphClient
 
-
 app = FastAPI(title="mcp-o365-mail", version="0.2.0")
 graph_client = GraphClient.from_env()
 

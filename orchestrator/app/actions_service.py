@@ -9,7 +9,6 @@ from fastapi import HTTPException
 from app.actions_store import ActionsStore
 from connectors.registry import ConnectorRegistry
 
-
 HIGH_RISK_ENTITY_TYPES = {
     "lease",
     "resident",

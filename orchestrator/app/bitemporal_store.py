@@ -7,12 +7,12 @@ import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger("orchestrator.bitemporal")
 
 
-PersistResult = Dict[str, Any]
+PersistResult = dict[str, Any]
 
 
 def _utcnow_iso() -> str:

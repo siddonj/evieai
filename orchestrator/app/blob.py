@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 STORAGE_ACCOUNT = os.getenv("AZURE_STORAGE_ACCOUNT", "")
@@ -15,7 +15,7 @@ def _get_client() -> Any | None:
     if not STORAGE_ACCOUNT or not STORAGE_KEY:
         return None
     try:
-        from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+        from azure.storage.blob import BlobSasPermissions, BlobServiceClient, generate_blob_sas
 
         return (BlobServiceClient(
             account_url=f"https://{STORAGE_ACCOUNT}.blob.core.windows.net",
@@ -41,7 +41,7 @@ def upload_report(name: str, content: bytes, content_type: str = "text/html") ->
             container_name=CONTAINER,
             blob_name=name,
             permission=perms(read=True),
-            expiry=datetime.now(timezone.utc) + timedelta(days=30),
+            expiry=datetime.now(UTC) + timedelta(days=30),
         )
         return f"https://{STORAGE_ACCOUNT}.blob.core.windows.net/{CONTAINER}/{name}?{sas}"
     except Exception:
