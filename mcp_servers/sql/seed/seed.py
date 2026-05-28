@@ -11,19 +11,19 @@ import pyodbc
 
 raw = os.environ["DATABASE_CONNECTION_STRING"]
 
-TARGET_PROPERTIES = 12
-TARGET_CONTACTS = 20
-TARGET_DEALS = 12
-TARGET_ACTIVITIES = 24
-TARGET_UNITS = 24
-TARGET_RESIDENTS = 18
-TARGET_LEASES = 18
-TARGET_WORK_ORDERS = 20
-TARGET_CHARGES = 36
-TARGET_R1_SITES = 8
-TARGET_R1_DEVICES = 96
-TARGET_R1_DEVICE_EVENTS = 12000
-TARGET_R1_DAILY_METRICS = 35040
+TARGET_PROPERTIES = 24
+TARGET_CONTACTS = 80
+TARGET_DEALS = 96
+TARGET_ACTIVITIES = 720
+TARGET_UNITS = 480
+TARGET_RESIDENTS = 420
+TARGET_LEASES = 420
+TARGET_WORK_ORDERS = 3600
+TARGET_CHARGES = 7200
+TARGET_R1_SITES = 16
+TARGET_R1_DEVICES = 320
+TARGET_R1_DEVICE_EVENTS = 57600
+TARGET_R1_DAILY_METRICS = 116800
 
 
 def _extract(pattern: str, s: str) -> str:
@@ -293,6 +293,25 @@ def insert_batch(table, columns, rows, target):
     print(f"  {table}: inserted {len(to_insert)} (now {existing + len(to_insert)}/{target})")
 
 
+def _name_seed(i: int) -> tuple[str, str]:
+    first = (
+        "Alex", "Jordan", "Taylor", "Morgan", "Cameron", "Riley", "Casey", "Avery",
+        "Parker", "Skyler", "Quinn", "Reese", "Rowan", "Harper", "Kai", "Logan",
+    )
+    last = (
+        "Bennett", "Cole", "Diaz", "Foster", "Garcia", "Hayes", "Iverson", "Jackson",
+        "Kim", "Lopez", "Miller", "Nguyen", "Owens", "Patel", "Reed", "Santos",
+    )
+    return first[i % len(first)], last[(i * 3) % len(last)]
+
+
+def _append_until(rows: list[tuple[object, ...]], target: int, factory):
+    i = 0
+    while len(rows) < target:
+        rows.append(factory(i))
+        i += 1
+
+
 # ─── Properties ───────────────────────────────────────────────────────
 
 PROPERTIES = [
@@ -335,6 +354,46 @@ PROPERTIES = [
      '["Pool","Fitness Center","Clubhouse","Playground","Walking Trails","Garage Parking"]',
      "Garden-style suburban asset in growing Cordova submarket. 92% occupied. Family-oriented with good schools. Stable cash flow with 3% annual rent growth."),
 ]
+
+def _property_factory(i: int) -> tuple[object, ...]:
+    market = [
+        ("Nashville", "TN", "37203", "Midtown"),
+        ("Nashville", "TN", "37211", "South"),
+        ("Knoxville", "TN", "37919", "West"),
+        ("Atlanta", "GA", "30309", "Midtown"),
+        ("Dallas", "TX", "75204", "Uptown"),
+    ]
+    city, state, zip_code, submarket = market[i % len(market)]
+    units = 96 + (i % 12) * 12
+    occupied = units - (i % 10 + 3)
+    avg_rent = 1025 + (i % 9) * 95
+    noi = units * avg_rent * 12 * 0.58
+    cap_rate = 5.2 + (i % 6) * 0.35
+    est_value = round(noi / (cap_rate / 100), 2)
+    return (
+        f"{submarket} Network Residences {i + 1}",
+        f"{100 + i} Market St",
+        city,
+        state,
+        zip_code,
+        "Multifamily",
+        units,
+        1998 + (i % 20),
+        units * 850,
+        round(2.5 + (i % 7) * 0.6, 2),
+        occupied,
+        avg_rent,
+        round(noi, 2),
+        round(cap_rate, 2),
+        est_value,
+        f"{submarket} Capital Partners",
+        "Pinnacle Property Management",
+        "Active" if i % 8 else "Under Contract",
+        '["Pool","Fitness Center","Clubhouse","Package Room","Smart Access"]',
+        f"Synthetic expansion asset for {submarket} with diversified tenant and network demand profile.",
+    )
+
+_append_until(PROPERTIES, TARGET_PROPERTIES, _property_factory)
 insert_batch("properties", "name,address,city,state,zip,property_type,total_units,year_built,building_size_sqft,lot_size_acres,units_occupied,average_rent,noi,cap_rate,estimated_value,owner,property_manager,status,amenities,notes", PROPERTIES, TARGET_PROPERTIES)
 
 # ─── Contacts ─────────────────────────────────────────────────────────
@@ -363,6 +422,24 @@ CONTACTS = [
     ("Chris", "Walker", "cwalker@walkerinspections.com", "901-555-0119", "Walker Property Inspections", "Owner", "Inspector", None, "Licensed home inspector. Performed all Phase I and property condition assessments for our listings. 1,200+ inspections."),
     ("Jonathan", "Reed", "jreed@jll.com", "901-555-0120", "JLL Capital Markets", "Managing Director", "Broker", None, "Competing broker for institutional MF mandates. Known Blackstone and Invesco relationships. Co-broke The Emerson with Linda."),
 ]
+
+def _contact_factory(i: int) -> tuple[object, ...]:
+    first, last = _name_seed(i)
+    roles = ("Owner", "Investor", "Broker", "Property Manager", "Lender", "Contractor", "Attorney", "Operator")
+    role = roles[i % len(roles)]
+    return (
+        first,
+        last,
+        f"{first.lower()}.{last.lower()}.{i + 1}@examplecorp.com",
+        f"901-555-{2000 + i:04d}",
+        f"{role} Group {(i % 15) + 1}",
+        f"Senior {role}",
+        role,
+        (i % TARGET_PROPERTIES) + 1 if i % 3 else None,
+        f"Synthetic contact {i + 1} mapped to portfolio/network operations collaboration.",
+    )
+
+_append_until(CONTACTS, TARGET_CONTACTS, _contact_factory)
 insert_batch("contacts", "first_name,last_name,email,phone,company,job_title,role,property_id,notes", CONTACTS, TARGET_CONTACTS)
 
 # ─── Deals ─────────────────────────────────────────────────────────────
@@ -383,6 +460,42 @@ DEALS = [
     (None, "Sale", "LOI", "Pinnacle Development Group", "Germantown Land Trust", "Thomas Garrett", "Linda Thornton", 3200000, None, 3800000, 60, "2026-05-12", "2026-07-15", "2026-10-01", 3.5, 112000, "Active", "8.2-acre development parcel on Germantown Rd. Entitled for 120-unit MF. Seller motivated — carrying cost high."),
     (None, "Sale", "LOI", "BlueSky Capital Partners", "Various Sellers", "Linda Thornton", "Thomas Garrett", 14500000, 7.0, 16000000, 14, "2026-05-18", "2026-07-01", "2026-09-30", 2.5, 362500, "Active", "Two-property portfolio: Southgate Village + Highland Ridge. Combined 192 units, $864K NOI. Buyer pursuing portfolio discount."),
 ]
+
+def _deal_factory(i: int) -> tuple[object, ...]:
+    stages = ("LOI", "Underwriting", "Due Diligence", "Closing")
+    status = "Active" if i % 6 else "Closed"
+    deal_type = ("Sale", "Refinance", "Portfolio Sale", "Debt Placement")[i % 4]
+    property_id = (i % TARGET_PROPERTIES) + 1
+    offer = 4_500_000 + (i % 30) * 1_150_000
+    list_price = int(offer * 1.06)
+    cap = round(5.0 + (i % 10) * 0.22, 2)
+    loa = date(2025, 1, 1) + timedelta(days=i * 5)
+    dd = loa + timedelta(days=45)
+    close = dd + timedelta(days=75)
+    commission_pct = round(1.5 + (i % 6) * 0.35, 2)
+    commission_total = round(offer * (commission_pct / 100), 2)
+    return (
+        property_id,
+        deal_type,
+        stages[i % len(stages)],
+        f"Buyer Consortium {(i % 20) + 1}",
+        f"Seller Group {(i % 20) + 1}",
+        "Linda Thornton",
+        "Thomas Garrett",
+        offer,
+        cap,
+        list_price,
+        10 + (i % 120),
+        loa.isoformat(),
+        dd.isoformat(),
+        close.isoformat(),
+        commission_pct,
+        commission_total,
+        status,
+        "Synthetic pipeline deal for cross-source portfolio and network impact analysis.",
+    )
+
+_append_until(DEALS, TARGET_DEALS, _deal_factory)
 insert_batch("deals", "property_id,deal_type,stage,buyer,seller,buyer_agent,seller_agent,offer_price,proposed_cap_rate,list_price,days_on_market,loa_date,due_diligence_deadline,closing_target_date,commission_percentage,commission_total,status,notes", DEALS, TARGET_DEALS)
 
 # ─── Activities ────────────────────────────────────────────────────────
@@ -415,6 +528,25 @@ ACTIVITIES = [
     (None, None, "Tour", "Rachel Bennett — Harbor Group property tour", "Harbor Group's Director of Acquisitions in town. Touring The Emerson and The Vue. High-priority prospect.", "2026-06-12", None, "Linda Thornton", "Open"),
     (None, 4, "Meeting", "Weekly deal pipeline review", "Standard Monday pipeline review. 12 active deals, $197M total pipeline. Reviewing Q3 targets.", "2026-05-19", "2026-05-19T09:00:00", "Linda Thornton", "Completed"),
 ]
+
+def _activity_factory(i: int) -> tuple[object, ...]:
+    activity_types = ("Meeting", "Call", "Inspection", "Tour", "Appraisal", "Underwriting")
+    status = "Completed" if i % 4 == 0 else "Open"
+    act_date = date(2025, 1, 1) + timedelta(days=i)
+    completed = f"{act_date.isoformat()}T10:00:00" if status == "Completed" else None
+    return (
+        (i % TARGET_DEALS) + 1,
+        (i % TARGET_CONTACTS) + 1,
+        activity_types[i % len(activity_types)],
+        f"Synthetic activity {i + 1}",
+        "Generated operational activity for richer timeline and cross-source orchestration demos.",
+        act_date.isoformat(),
+        completed,
+        "Ops Coordinator",
+        status,
+    )
+
+_append_until(ACTIVITIES, TARGET_ACTIVITIES, _activity_factory)
 insert_batch("activities", "deal_id,contact_id,activity_type,subject,description,due_date,completed_at,assigned_to,status", ACTIVITIES, TARGET_ACTIVITIES)
 
 # ─── Property Operations (Entrata/Yardi-style, synthetic) ───────────
@@ -445,6 +577,27 @@ UNITS = [
     (11, "CS-4B", "Loft-1BR", 1, 1.0, 810, 1625, "Occupied"),
     (12, "C-27", "2BR-Garden", 2, 2.0, 1035, 1285, "Occupied"),
 ]
+
+def _unit_factory(i: int) -> tuple[object, ...]:
+    property_id = (i % TARGET_PROPERTIES) + 1
+    beds = 1 + (i % 3)
+    baths = 1.0 if beds == 1 else (1.5 if beds == 2 else 2.0)
+    floor_plan = f"{beds}BR-SYN-{(i % 5) + 1}"
+    sqft = 620 + beds * 230 + (i % 8) * 22
+    rent = 880 + beds * 260 + (i % 10) * 55
+    status = ("Occupied", "Occupied", "Occupied", "Notice", "Vacant")[i % 5]
+    return (
+        property_id,
+        f"S-{property_id:02d}-{(i % 80) + 1:03d}",
+        floor_plan,
+        beds,
+        baths,
+        sqft,
+        rent,
+        status,
+    )
+
+_append_until(UNITS, TARGET_UNITS, _unit_factory)
 insert_batch("units", "property_id,unit_number,floor_plan,beds,baths,square_feet,market_rent,status", UNITS, TARGET_UNITS)
 
 RESIDENTS = [
@@ -467,6 +620,21 @@ RESIDENTS = [
     ("Skyler", "Howard", "skyler.howard@example.com", "901-555-1017", "Active", "B"),
     ("Logan", "Barnes", "logan.barnes@example.com", "901-555-1018", "Active", "A"),
 ]
+
+def _resident_factory(i: int) -> tuple[object, ...]:
+    first, last = _name_seed(100 + i)
+    status = ("Active", "Active", "Active", "Notice", "Delinquent")[i % 5]
+    credit_band = ("A", "A", "B", "B", "C")[i % 5]
+    return (
+        first,
+        last,
+        f"resident.{i + 1}@example.com",
+        f"901-556-{3000 + i:04d}",
+        status,
+        credit_band,
+    )
+
+_append_until(RESIDENTS, TARGET_RESIDENTS, _resident_factory)
 insert_batch("residents", "first_name,last_name,email,phone,status,credit_band", RESIDENTS, TARGET_RESIDENTS)
 
 LEASES = [
@@ -489,6 +657,29 @@ LEASES = [
     (10, 22, 17, "2025-06-01", "2026-05-31", 2090, 1000, "Renewal", 1),
     (12, 24, 18, "2025-11-15", "2026-11-14", 1285, 650, "Current", 0),
 ]
+
+def _lease_factory(i: int) -> tuple[object, ...]:
+    unit_id = (i % TARGET_UNITS) + 1
+    resident_id = (i % TARGET_RESIDENTS) + 1
+    property_id = (i % TARGET_PROPERTIES) + 1
+    start = date(2024, 1, 1) + timedelta(days=i * 3)
+    end = start + timedelta(days=365)
+    rent = 910 + (i % 40) * 34
+    dep = round(rent * 0.5, 2)
+    status = ("Current", "Current", "Current", "Renewal", "Month-to-Month", "Delinquent")[i % 6]
+    return (
+        property_id,
+        unit_id,
+        resident_id,
+        start.isoformat(),
+        end.isoformat(),
+        rent,
+        dep,
+        status,
+        1 if i % 3 == 0 else 0,
+    )
+
+_append_until(LEASES, TARGET_LEASES, _lease_factory)
 insert_batch("leases", "property_id,unit_id,resident_id,lease_start,lease_end,monthly_rent,security_deposit,lease_status,renewal_offer_sent", LEASES, TARGET_LEASES)
 
 WORK_ORDERS = [
@@ -513,6 +704,34 @@ WORK_ORDERS = [
     (12, 24, 18, "Plumbing", "Medium", "Completed", "Toilet tank replacement", "2026-05-09", "2026-05-10T14:00:00", "Memphis Plumbing Co", 140, 138),
     (12, None, None, "Grounds", "Low", "Open", "Parking lot striping touch-up", "2026-05-28", None, "LotMark Services", 950, None),
 ]
+
+def _work_order_factory(i: int) -> tuple[object, ...]:
+    submitted = date(2024, 1, 1) + timedelta(days=i % 880)
+    completed = (
+        f"{(submitted + timedelta(days=(i % 6) + 1)).isoformat()}T15:20:00"
+        if i % 3 == 0
+        else None
+    )
+    categories = ("HVAC", "Plumbing", "Electrical", "Grounds", "Appliance", "Turn", "Safety", "Pest")
+    priorities = ("Low", "Medium", "High", "High")
+    statuses = ("Open", "In Progress", "Completed", "Completed")
+    est = 85 + (i % 45) * 37
+    return (
+        (i % TARGET_PROPERTIES) + 1,
+        (i % TARGET_UNITS) + 1 if i % 5 else None,
+        (i % TARGET_RESIDENTS) + 1 if i % 7 else None,
+        categories[i % len(categories)],
+        priorities[i % len(priorities)],
+        statuses[i % len(statuses)],
+        "Synthetic work order generated for historical maintenance trend and vendor performance analysis.",
+        submitted.isoformat(),
+        completed,
+        f"Vendor Group {(i % 25) + 1}",
+        round(est, 2),
+        round(est * (0.85 + (i % 20) / 100), 2) if completed else None,
+    )
+
+_append_until(WORK_ORDERS, TARGET_WORK_ORDERS, _work_order_factory)
 insert_batch("work_orders", "property_id,unit_id,resident_id,category,priority,status,description,submitted_at,completed_at,assigned_vendor,estimated_cost,actual_cost", WORK_ORDERS, TARGET_WORK_ORDERS)
 
 CHARGES = [
@@ -553,6 +772,24 @@ CHARGES = [
     (18, "2026-05-01", "Rent", 1285, "Paid", "2026-05-06T14:10:00"),
     (18, "2026-06-01", "Rent", 1285, "Pending", None),
 ]
+
+def _charge_factory(i: int) -> tuple[object, ...]:
+    lease_id = (i % TARGET_LEASES) + 1
+    month_date = date(2023, 1, 1) + timedelta(days=(i % 36) * 30)
+    charge_type = ("Rent", "Utility", "Parking", "LateFee", "Pet")[i % 5]
+    amount = 40 + (i % 60) * 33 if charge_type != "Rent" else 850 + (i % 55) * 29
+    status = ("Paid", "Paid", "Pending", "Partial", "Delinquent")[i % 5]
+    paid_at = f"{month_date.isoformat()}T10:30:00" if status == "Paid" else None
+    return (
+        lease_id,
+        month_date.replace(day=1).isoformat(),
+        charge_type,
+        round(amount, 2),
+        status,
+        paid_at,
+    )
+
+_append_until(CHARGES, TARGET_CHARGES, _charge_factory)
 insert_batch("charges", "lease_id,charge_month,charge_type,amount,payment_status,paid_at", CHARGES, TARGET_CHARGES)
 
 # ─── Ruckus R1 Operational History (synthetic, high volume) ─────────
@@ -566,7 +803,35 @@ R1_SITES = [
     ("R1-NAS-CEN", "R1 Nashville Central", "Nashville", "TN", "Mid-South", "2017-05-09", "Market Expansion", "Active"),
     ("R1-ATL-MID", "R1 Atlanta Midtown", "Atlanta", "GA", "Southeast", "2020-02-14", "Market Expansion", "Active"),
     ("R1-DAL-NT", "R1 Dallas NorthTech", "Dallas", "TX", "Southwest", "2021-09-30", "National Growth", "Active"),
+    ("R1-AUS-CEN", "R1 Austin Central", "Austin", "TX", "Southwest", "2022-02-11", "National Growth", "Active"),
+    ("R1-CLT-UPT", "R1 Charlotte Uptown", "Charlotte", "NC", "Southeast", "2021-07-19", "Market Expansion", "Active"),
+    ("R1-ORL-E", "R1 Orlando East", "Orlando", "FL", "Southeast", "2020-10-03", "Market Expansion", "Active"),
+    ("R1-RDU-W", "R1 Raleigh West", "Raleigh", "NC", "Southeast", "2022-06-27", "Growth", "Active"),
+    ("R1-STL-M", "R1 St Louis Metro", "St Louis", "MO", "Central", "2019-12-12", "Regional Core", "Active"),
+    ("R1-PHX-N", "R1 Phoenix North", "Phoenix", "AZ", "Southwest", "2023-03-09", "National Growth", "Active"),
+    ("R1-DEN-C", "R1 Denver Central", "Denver", "CO", "Mountain", "2022-09-14", "National Growth", "Active"),
 ]
+
+def _r1_site_factory(i: int) -> tuple[object, ...]:
+    markets = (
+        ("SEA", "Seattle", "WA", "Northwest"),
+        ("CHI", "Chicago", "IL", "Midwest"),
+        ("BOS", "Boston", "MA", "Northeast"),
+        ("MIA", "Miami", "FL", "Southeast"),
+    )
+    code, city, state, region = markets[i % len(markets)]
+    return (
+        f"R1-{code}-{i + 1:02d}",
+        f"R1 {city} Regional {i + 1}",
+        city,
+        state,
+        region,
+        (date(2020, 1, 1) + timedelta(days=i * 37)).isoformat(),
+        "National Growth",
+        "Active",
+    )
+
+_append_until(R1_SITES, TARGET_R1_SITES, _r1_site_factory)
 insert_batch(
     "r1_sites",
     "site_code,site_name,city,state,region,opened_on,portfolio,status",
@@ -588,7 +853,7 @@ for site_idx, site_code in enumerate(site_codes_ordered):
     site_id = site_map.get(site_code)
     if site_id is None:
         continue
-    for dev_num in range(1, 13):
+    for dev_num in range(1, 21):
         r1_devices.append(
             (
                 site_id,
@@ -626,7 +891,7 @@ r1_events: list[tuple[object, ...]] = []
 for device_idx, row in enumerate(device_rows):
     device_id = int(row[0])
     site_id = int(row[1])
-    for event_idx in range(125):
+    for event_idx in range(180):
         event_date = date(2023, 1, 1) + timedelta(days=(event_idx * 7 + device_idx) % 1080)
         event_hour = (event_idx * 3 + device_idx) % 24
         severity = severities[(event_idx + device_idx) % len(severities)]
@@ -653,7 +918,7 @@ insert_batch(
 )
 
 r1_daily_metrics: list[tuple[object, ...]] = []
-window_start = date(2023, 1, 1)
+window_start = date(2025, 1, 1)
 for device_idx, row in enumerate(device_rows):
     device_id = int(row[0])
     for day_idx in range(365):
