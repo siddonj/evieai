@@ -329,7 +329,7 @@ if MCP_DASHBOARD_URL:
     MCP_ENDPOINTS["dashboard"] = MCP_DASHBOARD_URL
 
 # ─── Runtime Admin Config ─────────────────────────────────────────────
-MCP_ENABLED: dict[str, bool] = {name: True for name in MCP_ENDPOINTS}
+MCP_ENABLED: dict[str, bool] = dict.fromkeys(MCP_ENDPOINTS, True)
 _MCP_DISABLED_AT: dict[str, float] = {}  # Timestamp when auto-disabled (for auto-recovery)
 MCP_COOLDOWN_SECONDS = 30  # Auto-re-enable after this many seconds
 
