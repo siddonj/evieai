@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useAuth, type User } from './auth'
+import { useAuth } from './auth'
 
 const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:8000'
 
@@ -59,17 +59,11 @@ type CircuitState = {
   updated_at: string
 }
 
-type Tab = 'users' | 'data_sources' | 'approvals'
+type Tab = 'data_sources' | 'approvals'
 
 export function SettingsPage() {
-  const { users, addUser, removeUser, logout, user: currentUser } = useAuth()
-  const [tab, setTab] = useState<Tab>('users')
-
-  // ─── Users State ────────────────────────────────────────────────────
-  const [newUsername, setNewUsername] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [newRole, setNewRole] = useState<'admin' | 'user'>('user')
-  const [userMessage, setUserMessage] = useState('')
+  const { logout, user: currentUser } = useAuth()
+  const [tab, setTab] = useState<Tab>('data_sources')
 
   // ─── Data Sources State ─────────────────────────────────────────────
   const [servers, setServers] = useState<McpServer[]>([])
@@ -240,7 +234,7 @@ export function SettingsPage() {
       await fetchJson(`${ORCHESTRATOR_URL}/actions/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action_id: actionId, decided_by: currentUser?.username || 'admin' }),
+        body: JSON.stringify({ action_id: actionId, decided_by: currentUser?.email || 'admin' }),
       })
       setActionsMessage(`Approved ${actionId}`)
       await loadApprovalAdminData()
@@ -256,7 +250,7 @@ export function SettingsPage() {
       await fetchJson(`${ORCHESTRATOR_URL}/actions/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action_id: actionId, decided_by: currentUser?.username || 'admin', reason }),
+        body: JSON.stringify({ action_id: actionId, decided_by: currentUser?.email || 'admin', reason }),
       })
       setActionsMessage(`Rejected ${actionId}`)
       await loadApprovalAdminData()
@@ -301,31 +295,6 @@ export function SettingsPage() {
     }
   }
 
-  // ─── User Handlers ──────────────────────────────────────────────────
-  function handleAddUser(e: React.FormEvent) {
-    e.preventDefault()
-    setUserMessage('')
-    if (!newUsername.trim() || !newPassword.trim()) {
-      setUserMessage('Username and password are required.')
-      return
-    }
-    const ok = addUser(newUsername.trim(), newPassword.trim(), newRole)
-    if (ok) {
-      setUserMessage(`User ${newUsername} added.`)
-      setNewUsername('')
-      setNewPassword('')
-      setNewRole('user')
-    } else {
-      setUserMessage(`User ${newUsername} already exists.`)
-    }
-  }
-
-  function handleRemoveUser(username: string) {
-    setUserMessage('')
-    const ok = removeUser(username)
-    if (ok) setUserMessage(`User ${username} removed.`)
-  }
-
   const filteredActions = useMemo(() => {
     if (!actionStatusFilter.trim()) return actions
     return actions.filter((a) => a.status === actionStatusFilter)
@@ -338,16 +307,13 @@ export function SettingsPage() {
         <p className="eyebrow">Settings</p>
         <h1>Admin Console</h1>
         <p className="subtitle">
-          Manage users, data sources, and write-back safety controls.
+          Manage data sources and write-back safety controls.
         </p>
       </header>
 
       <main className="settings-shell">
         {/* Tab Navigation */}
         <div className="settings-tabs">
-          <button className={`settings-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
-            👤 Users
-          </button>
           <button className={`settings-tab ${tab === 'data_sources' ? 'active' : ''}`} onClick={() => setTab('data_sources')}>
             🗃️ Data Sources
           </button>
@@ -355,60 +321,6 @@ export function SettingsPage() {
             ✅ Approvals
           </button>
         </div>
-
-        {tab === 'users' && (
-          <>
-            <section className="settings-section">
-              <h2>Add New User</h2>
-              <form className="settings-form" onSubmit={handleAddUser}>
-                <div className="settings-row">
-                  <div className="settings-field">
-                    <label>Username</label>
-                    <input type="text" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="Username" />
-                  </div>
-                  <div className="settings-field">
-                    <label>Password</label>
-                    <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Password" />
-                  </div>
-                  <div className="settings-field">
-                    <label>Role</label>
-                    <select value={newRole} onChange={(e) => setNewRole(e.target.value as 'admin' | 'user')}>
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
-                </div>
-                <button type="submit">Add User</button>
-              </form>
-              {userMessage && <div className="settings-message">{userMessage}</div>}
-            </section>
-
-            <section className="settings-section">
-              <h2>Existing Users</h2>
-              <table className="users-table">
-                <thead>
-                  <tr><th>Username</th><th>Role</th><th>Action</th></tr>
-                </thead>
-                <tbody>
-                  {users.map((u: User) => (
-                    <tr key={u.username} className={u.username === currentUser?.username ? 'current' : ''}>
-                      <td>
-                        {u.username}
-                        {u.username === currentUser?.username && <span className="you-badge"> you</span>}
-                      </td>
-                      <td><span className={`role-badge role-${u.role}`}>{u.role}</span></td>
-                      <td>
-                        {u.username !== 'admin' && (
-                          <button className="btn-remove" onClick={() => handleRemoveUser(u.username)}>Remove</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          </>
-        )}
 
         {tab === 'data_sources' && (
           <>

@@ -1,100 +1,107 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 
 export type User = {
-  username: string
-  password: string
+  id: string
+  email: string
   role: 'admin' | 'user'
 }
 
-const DEFAULT_USERS: User[] = [
-  { username: 'admin', password: 'admin', role: 'admin' },
-]
+const API_BASE = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:8000'
 
-const STORAGE_KEY = 'aiagent_users'
-const SESSION_KEY = 'aiagent_session'
+const SESSION_KEY = 'evieai_session'
 
-function loadUsers(): User[] {
-  const raw = localStorage.getItem(STORAGE_KEY)
-  if (raw) {
-    try {
-      return JSON.parse(raw)
-    } catch {
-      return DEFAULT_USERS
-    }
+function loadSession(): { token: string; user: User } | null {
+  const raw = localStorage.getItem(SESSION_KEY)
+  if (!raw) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
   }
-  return DEFAULT_USERS
 }
 
-function saveUsers(users: User[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(users))
+function saveSession(token: string, user: User) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ token, user }))
 }
 
-function loadSession(): string | null {
-  return localStorage.getItem(SESSION_KEY)
-}
-
-function saveSession(username: string | null) {
-  if (username) localStorage.setItem(SESSION_KEY, username)
-  else localStorage.removeItem(SESSION_KEY)
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY)
 }
 
 type AuthCtx = {
   user: User | null
-  users: User[]
-  login: (username: string, password: string) => boolean
+  token: string | null
+  login: (email: string, password: string) => Promise<string | null>
   logout: () => void
-  addUser: (username: string, password: string, role: 'admin' | 'user') => boolean
-  removeUser: (username: string) => boolean
+  register: (email: string, password: string, role?: 'admin' | 'user') => Promise<string | null>
   isAdmin: boolean
+  isLoading: boolean
 }
 
 const AuthContext = createContext<AuthCtx | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [users, setUsers] = useState<User[]>(() => loadUsers())
-  const [session, setSession] = useState<string | null>(() => loadSession())
+  const [session, setSession] = useState<{ token: string; user: User } | null>(() => loadSession())
+  const [isLoading, setIsLoading] = useState(false)
 
-  const user = session ? users.find((u) => u.username === session) || null : null
+  const user = session?.user || null
+  const token = session?.token || null
   const isAdmin = user?.role === 'admin'
 
-  const login = useCallback((username: string, password: string): boolean => {
-    const found = users.find((u) => u.username === username && u.password === password)
-    if (found) {
-      setSession(found.username)
-      saveSession(found.username)
-      return true
+  const login = useCallback(async (email: string, password: string): Promise<string | null> => {
+    setIsLoading(true)
+    try {
+      const resp = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) {
+        return data.detail || 'Login failed'
+      }
+      saveSession(data.access_token, data.user)
+      setSession({ token: data.access_token, user: data.user })
+      return null
+    } catch (e) {
+      return 'Network error'
+    } finally {
+      setIsLoading(false)
     }
-    return false
-  }, [users])
-
-  const logout = useCallback(() => {
-    setSession(null)
-    saveSession(null)
   }, [])
 
-  const addUser = useCallback((username: string, password: string, role: 'admin' | 'user'): boolean => {
-    if (users.some((u) => u.username === username)) return false
-    const next = [...users, { username, password, role }]
-    setUsers(next)
-    saveUsers(next)
-    return true
-  }, [users])
+  const logout = useCallback(() => {
+    clearSession()
+    setSession(null)
+  }, [])
 
-  const removeUser = useCallback((username: string): boolean => {
-    if (username === 'admin') return false // protect default admin
-    const next = users.filter((u) => u.username !== username)
-    if (next.length === users.length) return false
-    setUsers(next)
-    saveUsers(next)
-    if (session === username) {
-      setSession(null)
-      saveSession(null)
-    }
-    return true
-  }, [users, session])
+  const register = useCallback(
+    async (email: string, password: string, role: 'admin' | 'user' = 'user'): Promise<string | null> => {
+      setIsLoading(true)
+      try {
+        const resp = await fetch(`${API_BASE}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, role }),
+        })
+        const data = await resp.json()
+        if (!resp.ok) {
+          return data.detail || 'Registration failed'
+        }
+        saveSession(data.access_token, data.user)
+        setSession({ token: data.access_token, user: data.user })
+        return null
+      } catch (e) {
+        return 'Network error'
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    []
+  )
 
   return (
-    <AuthContext.Provider value={{ user: user || null, users, login, logout, addUser, removeUser, isAdmin }}>
+    <AuthContext.Provider value={{ user, token, login, logout, register, isAdmin, isLoading }}>
       {children}
     </AuthContext.Provider>
   )
@@ -104,4 +111,10 @@ export function useAuth(): AuthCtx {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')
   return ctx
+}
+
+export function useAuthHeader(): string | undefined {
+  const ctx = useContext(AuthContext)
+  if (!ctx) return undefined
+  return ctx.token ? `Bearer ${ctx.token}` : undefined
 }

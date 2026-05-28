@@ -2,21 +2,23 @@ import { useState } from 'react'
 import { useAuth } from './auth'
 
 export function LoginPage() {
-  const { login } = useAuth()
-  const [username, setUsername] = useState('')
+  const { login, register, isLoading } = useAuth()
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [mode, setMode] = useState<'login' | 'register'>('login')
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    if (!username.trim() || !password.trim()) {
-      setError('Please enter both username and password.')
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter both email and password.')
       return
     }
-    const ok = login(username.trim(), password.trim())
-    if (!ok) {
-      setError('Invalid username or password.')
+    const fn = mode === 'login' ? login : register
+    const err = await fn(email.trim(), password.trim())
+    if (err) {
+      setError(err)
     }
   }
 
@@ -25,19 +27,20 @@ export function LoginPage() {
       <div className="bg-grid" aria-hidden="true" />
       <div className="login-card">
         <div className="login-brand">
-          <p className="eyebrow">AI-Powered Agentic Q&A</p>
-          <h1>Workspace Intelligence Console</h1>
+          <p className="eyebrow">EvieAI</p>
+          <h1>Intelligence Console</h1>
         </div>
         <form className="login-form" onSubmit={handleSubmit}>
           <div className="login-field">
-            <label htmlFor="username">Username</label>
+            <label htmlFor="email">Email</label>
             <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter username"
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
               autoFocus
+              required
             />
           </div>
           <div className="login-field">
@@ -48,13 +51,30 @@ export function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter password"
+              required
             />
           </div>
           {error && <div className="login-error">{error}</div>}
-          <button type="submit" className="login-btn">Sign In</button>
+          <button type="submit" className="login-btn" disabled={isLoading}>
+            {isLoading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+          </button>
         </form>
         <div className="login-hint">
-          Default admin: <strong>admin</strong> / <strong>admin</strong>
+          {mode === 'login' ? (
+            <span>
+              No account?{' '}
+              <button className="link-btn" onClick={() => setMode('register')}>
+                Register
+              </button>
+            </span>
+          ) : (
+            <span>
+              Already have an account?{' '}
+              <button className="link-btn" onClick={() => setMode('login')}>
+                Sign In
+              </button>
+            </span>
+          )}
         </div>
       </div>
     </div>

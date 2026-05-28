@@ -36,6 +36,7 @@ from app.connector_runtime import (
 )
 from app.connector_sync_store import get_connector_sync_store
 from app.event_signal_store import get_event_signal_store
+from app.auth_router import router as auth_router
 from connectors.adapters.webhook_adapter import WebhookAdapter, WebhookEnvelope
 from connectors.registry import ConnectorRegistry
 from connectors.types import Capability, SyncCursor
@@ -1636,3 +1637,6 @@ async def admin_post_mcp_data(service: str, payload: dict[str, Any]) -> dict[str
             return {"error": f"MCP returned {resp.status_code}", "body": resp.text[:200]}
         except Exception as exc:
             return {"error": str(exc)}
+
+
+app.include_router(auth_router)

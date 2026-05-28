@@ -70,7 +70,7 @@ function ChatView() {
       {
         id: nextId(),
         role: 'assistant',
-        text: `Welcome, ${user?.username || 'Guest'}. Ask about multifamily properties, deal pipeline, market analytics, or brokerage activities — I will route through the right systems and synthesize a comprehensive response.`,
+        text: `Welcome, ${user?.email || 'Guest'}. Ask about multifamily properties, deal pipeline, market analytics, or brokerage activities — I will route through the right systems and synthesize a comprehensive response.`,
       },
     ]
   })
@@ -112,14 +112,14 @@ function ChatView() {
       if (calling.length > 0) return `🔍 Querying: ${calling.map((t) => t.label.split(' → ')[0]).join(', ')}...`
       return 'Generating response...'
     }
-    return `Connected to ${ORCHESTRATOR_URL}  |  User: ${user?.username}  |  MF Brokerage`
+    return `Connected to ${ORCHESTRATOR_URL}  |  User: ${user?.email}  |  MF Brokerage`
   }, [loading, activeTools, user])
 
   function clearChat() {
     const welcome: ChatMessage = {
       id: nextId(),
       role: 'assistant',
-      text: `Chat cleared. How can I assist you, ${user?.username || 'Guest'}?`,
+      text: `Chat cleared. How can I assist you, ${user?.email || 'Guest'}?`,
     }
     setMessages([welcome])
     setShowPrompts(true)
@@ -152,7 +152,7 @@ function ChatView() {
           'Content-Type': 'application/json',
           'Accept': 'text/event-stream',
         },
-        body: JSON.stringify({ message: text, user_id: user?.username, history }),
+        body: JSON.stringify({ message: text, user_id: user?.email, history }),
       })
 
       if (!res.ok) {
