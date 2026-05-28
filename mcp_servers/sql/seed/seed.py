@@ -2,6 +2,7 @@
 Safe to re-run — only inserts additional records below target count."""
 from __future__ import annotations
 
+from datetime import date, timedelta
 import os
 import re
 import time
@@ -19,6 +20,10 @@ TARGET_RESIDENTS = 18
 TARGET_LEASES = 18
 TARGET_WORK_ORDERS = 20
 TARGET_CHARGES = 36
+TARGET_R1_SITES = 8
+TARGET_R1_DEVICES = 96
+TARGET_R1_DEVICE_EVENTS = 12000
+TARGET_R1_DAILY_METRICS = 35040
 
 
 def _extract(pattern: str, s: str) -> str:
@@ -201,6 +206,66 @@ CREATE TABLE charges (
     created_at DATETIME DEFAULT GETDATE()
 )
 """)
+cursor.execute("""
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'r1_sites')
+CREATE TABLE r1_sites (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    site_code NVARCHAR(30) NOT NULL,
+    site_name NVARCHAR(120) NOT NULL,
+    city NVARCHAR(60) NOT NULL,
+    state NVARCHAR(30) NOT NULL,
+    region NVARCHAR(40) NOT NULL,
+    opened_on DATE NOT NULL,
+    portfolio NVARCHAR(80) NOT NULL,
+    status NVARCHAR(30) DEFAULT 'Active',
+    created_at DATETIME2 DEFAULT SYSUTCDATETIME()
+)
+""")
+cursor.execute("""
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'r1_devices')
+CREATE TABLE r1_devices (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    site_id INT NOT NULL,
+    device_serial NVARCHAR(50) NOT NULL,
+    device_name NVARCHAR(120) NOT NULL,
+    model NVARCHAR(50) NOT NULL,
+    firmware_version NVARCHAR(30) NOT NULL,
+    zone NVARCHAR(50) NOT NULL,
+    installed_on DATE NOT NULL,
+    status NVARCHAR(30) DEFAULT 'Online',
+    vendor NVARCHAR(40) DEFAULT 'Ruckus',
+    created_at DATETIME2 DEFAULT SYSUTCDATETIME()
+)
+""")
+cursor.execute("""
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'r1_device_events')
+CREATE TABLE r1_device_events (
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    site_id INT NOT NULL,
+    device_id INT NOT NULL,
+    event_ts DATETIME2 NOT NULL,
+    severity NVARCHAR(20) NOT NULL,
+    event_type NVARCHAR(50) NOT NULL,
+    summary NVARCHAR(300) NOT NULL,
+    is_open BIT DEFAULT 0,
+    created_at DATETIME2 DEFAULT SYSUTCDATETIME()
+)
+""")
+cursor.execute("""
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'r1_device_daily_metrics')
+CREATE TABLE r1_device_daily_metrics (
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    device_id INT NOT NULL,
+    metric_date DATE NOT NULL,
+    uptime_pct DECIMAL(5,2) NOT NULL,
+    throughput_mbps DECIMAL(10,2) NOT NULL,
+    latency_ms DECIMAL(8,2) NOT NULL,
+    packet_loss_pct DECIMAL(5,2) NOT NULL,
+    client_sessions INT NOT NULL,
+    incidents INT NOT NULL,
+    created_at DATETIME2 DEFAULT SYSUTCDATETIME()
+)
+""")
 conn.commit()
 print("Tables ready.")
 
@@ -218,10 +283,12 @@ def insert_batch(table, columns, rows, target):
         return
     to_insert = rows[:target - existing]
     placeholders = ",".join("?" for _ in col_list)
-    cursor.executemany(
-        f"INSERT INTO {table} ({','.join(col_list)}) VALUES ({placeholders})",
-        to_insert,
-    )
+    for idx in range(0, len(to_insert), 1000):
+        chunk = to_insert[idx:idx + 1000]
+        cursor.executemany(
+            f"INSERT INTO {table} ({','.join(col_list)}) VALUES ({placeholders})",
+            chunk,
+        )
     conn.commit()
     print(f"  {table}: inserted {len(to_insert)} (now {existing + len(to_insert)}/{target})")
 
@@ -487,6 +554,135 @@ CHARGES = [
     (18, "2026-06-01", "Rent", 1285, "Pending", None),
 ]
 insert_batch("charges", "lease_id,charge_month,charge_type,amount,payment_status,paid_at", CHARGES, TARGET_CHARGES)
+
+# ─── Ruckus R1 Operational History (synthetic, high volume) ─────────
+
+R1_SITES = [
+    ("R1-MEM-DT", "R1 Downtown Memphis Hub", "Memphis", "TN", "South", "2019-03-15", "Core Urban", "Active"),
+    ("R1-MEM-EA", "R1 East Memphis Exchange", "Memphis", "TN", "South", "2020-06-10", "Core Urban", "Active"),
+    ("R1-MEM-MID", "R1 Midtown Operations", "Memphis", "TN", "South", "2021-01-22", "Regional Core", "Active"),
+    ("R1-GTN-N", "R1 Germantown North", "Germantown", "TN", "South", "2018-11-05", "Suburban Growth", "Active"),
+    ("R1-CDV-W", "R1 Cordova West", "Cordova", "TN", "South", "2019-08-28", "Suburban Growth", "Active"),
+    ("R1-NAS-CEN", "R1 Nashville Central", "Nashville", "TN", "Mid-South", "2017-05-09", "Market Expansion", "Active"),
+    ("R1-ATL-MID", "R1 Atlanta Midtown", "Atlanta", "GA", "Southeast", "2020-02-14", "Market Expansion", "Active"),
+    ("R1-DAL-NT", "R1 Dallas NorthTech", "Dallas", "TX", "Southwest", "2021-09-30", "National Growth", "Active"),
+]
+insert_batch(
+    "r1_sites",
+    "site_code,site_name,city,state,region,opened_on,portfolio,status",
+    R1_SITES,
+    TARGET_R1_SITES,
+)
+
+cursor.execute("SELECT TOP (?) id, site_code FROM r1_sites ORDER BY id", TARGET_R1_SITES)
+site_rows = cursor.fetchall()
+site_map = {row[1]: row[0] for row in site_rows}
+
+site_codes_ordered = [site[0] for site in R1_SITES]
+models = ("R750", "R760", "T350", "H550")
+zones = ("Lobby", "Amenities", "Hallway", "Parking", "Pool", "Office")
+firmware_cycle = ("5.2.1", "5.2.2", "5.2.3", "5.2.4")
+
+r1_devices: list[tuple[object, ...]] = []
+for site_idx, site_code in enumerate(site_codes_ordered):
+    site_id = site_map.get(site_code)
+    if site_id is None:
+        continue
+    for dev_num in range(1, 13):
+        r1_devices.append(
+            (
+                site_id,
+                f"R1-{site_code}-{dev_num:03d}",
+                f"{site_code}-AP-{dev_num:02d}",
+                models[(dev_num + site_idx) % len(models)],
+                firmware_cycle[(dev_num + 2 * site_idx) % len(firmware_cycle)],
+                zones[(dev_num + site_idx) % len(zones)],
+                (date(2022, 1, 1) + timedelta(days=site_idx * 45 + dev_num)).isoformat(),
+                "Online" if dev_num % 7 else "Degraded",
+                "Ruckus",
+            )
+        )
+
+insert_batch(
+    "r1_devices",
+    "site_id,device_serial,device_name,model,firmware_version,zone,installed_on,status,vendor",
+    r1_devices,
+    TARGET_R1_DEVICES,
+)
+
+cursor.execute("SELECT TOP (?) id, site_id FROM r1_devices ORDER BY id", TARGET_R1_DEVICES)
+device_rows = cursor.fetchall()
+
+event_types = (
+    "ClientReconnectSpike",
+    "APChannelInterference",
+    "FirmwareDrift",
+    "PowerCycleDetected",
+    "HighLatencyBurst",
+)
+severities = ("Low", "Medium", "High", "Critical")
+
+r1_events: list[tuple[object, ...]] = []
+for device_idx, row in enumerate(device_rows):
+    device_id = int(row[0])
+    site_id = int(row[1])
+    for event_idx in range(125):
+        event_date = date(2023, 1, 1) + timedelta(days=(event_idx * 7 + device_idx) % 1080)
+        event_hour = (event_idx * 3 + device_idx) % 24
+        severity = severities[(event_idx + device_idx) % len(severities)]
+        event_type = event_types[(event_idx + 2 * device_idx) % len(event_types)]
+        summary = f"{event_type} detected at {event_hour:02d}:00 UTC"
+        is_open = 1 if event_idx % 11 == 0 else 0
+        r1_events.append(
+            (
+                site_id,
+                device_id,
+                f"{event_date.isoformat()}T{event_hour:02d}:00:00",
+                severity,
+                event_type,
+                summary,
+                is_open,
+            )
+        )
+
+insert_batch(
+    "r1_device_events",
+    "site_id,device_id,event_ts,severity,event_type,summary,is_open",
+    r1_events,
+    TARGET_R1_DEVICE_EVENTS,
+)
+
+r1_daily_metrics: list[tuple[object, ...]] = []
+window_start = date(2023, 1, 1)
+for device_idx, row in enumerate(device_rows):
+    device_id = int(row[0])
+    for day_idx in range(365):
+        metric_date = window_start + timedelta(days=day_idx)
+        uptime = 97.2 + ((device_idx + day_idx) % 28) * 0.1
+        throughput = 210.0 + ((device_idx * 3 + day_idx) % 190)
+        latency = 11.5 + ((device_idx + day_idx * 2) % 26) * 0.4
+        packet_loss = 0.15 + ((device_idx + day_idx) % 14) * 0.05
+        sessions = 180 + ((device_idx * 5 + day_idx * 7) % 460)
+        incidents = (device_idx + day_idx) % 4
+        r1_daily_metrics.append(
+            (
+                device_id,
+                metric_date.isoformat(),
+                round(min(uptime, 99.95), 2),
+                round(throughput, 2),
+                round(latency, 2),
+                round(packet_loss, 2),
+                sessions,
+                incidents,
+            )
+        )
+
+insert_batch(
+    "r1_device_daily_metrics",
+    "device_id,metric_date,uptime_pct,throughput_mbps,latency_ms,packet_loss_pct,client_sessions,incidents",
+    r1_daily_metrics,
+    TARGET_R1_DAILY_METRICS,
+)
 
 print("Seed complete.")
 cursor.close()
