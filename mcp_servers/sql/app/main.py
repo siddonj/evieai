@@ -87,6 +87,36 @@ _DEMO_ACTIVITIES = [
     {"id": 17, "contact_id": 4, "activity_type": "Meeting", "subject": "Weekly deal pipeline review", "description": "12 active deals, $197M total pipeline. Reviewing Q3 targets.", "due_date": "2026-05-19", "completed_at": "2026-05-19T09:00:00", "assigned_to": "Linda Thornton", "status": "Completed"},
 ]
 
+_DEMO_R1_SITES = [
+    {"id": 1, "name": "HQ Campus", "region": "West", "city": "Memphis", "state": "TN"},
+    {"id": 2, "name": "Distribution North", "region": "Central", "city": "Nashville", "state": "TN"},
+    {"id": 3, "name": "Remote Branch East", "region": "East", "city": "Knoxville", "state": "TN"},
+]
+
+_DEMO_R1_DEVICES = [
+    {"id": 101, "site_id": 1, "name": "AP-HQ-01", "status": "online"},
+    {"id": 102, "site_id": 1, "name": "AP-HQ-02", "status": "online"},
+    {"id": 201, "site_id": 2, "name": "AP-DN-01", "status": "online"},
+    {"id": 301, "site_id": 3, "name": "AP-RB-01", "status": "degraded"},
+]
+
+_DEMO_R1_DEVICE_EVENTS = [
+    {"id": 5001, "device_id": 301, "severity": "high", "is_open": 1, "event_type": "packet_loss"},
+    {"id": 5002, "device_id": 201, "severity": "medium", "is_open": 0, "event_type": "latency_spike"},
+    {"id": 5003, "device_id": 102, "severity": "low", "is_open": 1, "event_type": "client_reauth"},
+]
+
+_DEMO_R1_DEVICE_DAILY_METRICS = [
+    {"id": 7001, "device_id": 101, "metric_date": "2026-05-25", "uptime_pct": 99.97, "latency_ms": 10.8, "packet_loss_pct": 0.11, "throughput_mbps": 422.5, "incidents": 0},
+    {"id": 7002, "device_id": 102, "metric_date": "2026-05-25", "uptime_pct": 99.92, "latency_ms": 12.1, "packet_loss_pct": 0.16, "throughput_mbps": 398.3, "incidents": 1},
+    {"id": 7003, "device_id": 201, "metric_date": "2026-05-25", "uptime_pct": 99.88, "latency_ms": 14.4, "packet_loss_pct": 0.22, "throughput_mbps": 361.7, "incidents": 1},
+    {"id": 7004, "device_id": 301, "metric_date": "2026-05-25", "uptime_pct": 98.75, "latency_ms": 21.6, "packet_loss_pct": 1.05, "throughput_mbps": 242.9, "incidents": 3},
+    {"id": 7005, "device_id": 101, "metric_date": "2026-05-26", "uptime_pct": 99.98, "latency_ms": 10.2, "packet_loss_pct": 0.08, "throughput_mbps": 436.1, "incidents": 0},
+    {"id": 7006, "device_id": 102, "metric_date": "2026-05-26", "uptime_pct": 99.90, "latency_ms": 12.7, "packet_loss_pct": 0.19, "throughput_mbps": 405.2, "incidents": 1},
+    {"id": 7007, "device_id": 201, "metric_date": "2026-05-26", "uptime_pct": 99.84, "latency_ms": 15.2, "packet_loss_pct": 0.27, "throughput_mbps": 352.8, "incidents": 1},
+    {"id": 7008, "device_id": 301, "metric_date": "2026-05-26", "uptime_pct": 98.58, "latency_ms": 23.4, "packet_loss_pct": 1.22, "throughput_mbps": 231.4, "incidents": 4},
+]
+
 # ─── Pre-computed analytics ───────────────────────────────────────────
 
 _TOTAL_PROPERTIES = len(_DEMO_PROPERTIES)
@@ -276,12 +306,13 @@ def _demo_response(payload: QueryRequest) -> dict[str, Any]:
         )
 
     if fetch_r1:
-        # Demo mode does not maintain a separate R1 dataset.
-        results["r1_sites"] = []
-        results["r1_devices"] = []
-        results["r1_device_events"] = []
-        results["r1_device_daily_metrics"] = []
-        results["r1_summary"] = "R1 dataset is only available when SQL DAB endpoints are reachable."
+        results["r1_sites"] = _DEMO_R1_SITES
+        results["r1_devices"] = _DEMO_R1_DEVICES
+        results["r1_device_events"] = _DEMO_R1_DEVICE_EVENTS
+        results["r1_device_daily_metrics"] = _DEMO_R1_DEVICE_DAILY_METRICS
+        results["r1_summary"] = (
+            "Demo R1 fallback data returned because SQL DAB endpoints are unavailable."
+        )
 
     return results
 
