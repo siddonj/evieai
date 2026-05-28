@@ -304,7 +304,7 @@ MCP_MEMORY_URL = os.getenv("MCP_MEMORY_URL", "http://localhost:8004/mcp")
 MCP_KB_URL = os.getenv("MCP_KB_URL", "http://localhost:8005/mcp")
 MCP_DOC_URL = os.getenv("MCP_DOC_URL", "http://localhost:8006/mcp")
 MCP_ANALYTICS_URL = os.getenv("MCP_ANALYTICS_URL", "http://localhost:8007/mcp")
-MCP_DASHBOARD_URL = os.getenv("MCP_DASHBOARD_URL", "http://localhost:8009/mcp")
+MCP_DASHBOARD_URL = os.getenv("MCP_DASHBOARD_URL", "")
 
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
 AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
@@ -324,11 +324,12 @@ MCP_ENDPOINTS = {
     "knowledge_base": MCP_KB_URL,
     "document_generation": MCP_DOC_URL,
     "analytics": MCP_ANALYTICS_URL,
-    "dashboard": MCP_DASHBOARD_URL,
 }
+if MCP_DASHBOARD_URL:
+    MCP_ENDPOINTS["dashboard"] = MCP_DASHBOARD_URL
 
 # ─── Runtime Admin Config ─────────────────────────────────────────────
-MCP_ENABLED: dict[str, bool] = dict.fromkeys(MCP_ENDPOINTS, True)
+MCP_ENABLED: dict[str, bool] = {name: True for name in MCP_ENDPOINTS}
 _MCP_DISABLED_AT: dict[str, float] = {}  # Timestamp when auto-disabled (for auto-recovery)
 MCP_COOLDOWN_SECONDS = 30  # Auto-re-enable after this many seconds
 
@@ -685,6 +686,9 @@ async def _call_mcp(tool_name: str, query: str, user_id: str | None = None) -> d
             return {"error": f"{tool_name} failed: {exc}"}
 
     route = _TOOL_TO_ROUTE[tool_name]
+
+    if route not in MCP_ENDPOINTS:
+        return {"error": f"MCP {route} is not configured."}
 
     # Auto-recovery: re-enable after cooldown
     if not MCP_ENABLED.get(route, True):
@@ -1573,7 +1577,14 @@ def replay_dead_letter(payload: ConnectorReplayRequest) -> dict[str, Any]:
 
 def _active_tools() -> list[dict[str, Any]]:
     """Return only tools whose MCP server is currently enabled."""
-    return [t for t in TOOLS if MCP_ENABLED.get(_TOOL_NAME_TO_KEY.get(t["function"]["name"], ""), True)]
+    active: list[dict[str, Any]] = []
+    for tool in TOOLS:
+        route = _TOOL_NAME_TO_KEY.get(tool["function"]["name"])
+        if not route or route not in MCP_ENDPOINTS:
+            continue
+        if MCP_ENABLED.get(route, True):
+            active.append(tool)
+    return active
 
 
 @app.get("/admin/mcp-config")
