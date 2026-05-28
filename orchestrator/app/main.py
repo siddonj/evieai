@@ -626,6 +626,14 @@ class PerformanceDashboardResponse(BaseModel):
     top_properties_by_noi: list[dict[str, Any]]
 
 
+class R1DashboardResponse(BaseModel):
+    generated_at: str
+    summary: dict[str, Any]
+    severity_distribution: list[dict[str, Any]]
+    site_snapshot_30d: list[dict[str, Any]]
+    monthly_trend: list[dict[str, Any]]
+
+
 # ─── SSE Helpers ──────────────────────────────────────────────────────
 
 def _sse(data: dict[str, Any]) -> str:
@@ -1062,6 +1070,173 @@ async def performance_dashboard(user_id: str | None = None) -> dict[str, Any]:
             "by_type": activities_data.get("by_type", {}),
         },
         "top_properties_by_noi": top_properties,
+    }
+
+
+def _to_float(value: Any, fallback: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _to_int(value: Any, fallback: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+@app.get("/dashboard/r1", response_model=R1DashboardResponse)
+async def r1_dashboard(user_id: str | None = None) -> dict[str, Any]:
+    r1_result = await _call_mcp(
+        "query_sql",
+        "R1 dashboard metrics ruckus sites devices events daily metrics latency packet loss throughput incidents",
+        user_id,
+    )
+
+    if not isinstance(r1_result, dict) or r1_result.get("error"):
+        detail = r1_result.get("error") if isinstance(r1_result, dict) else "R1 dataset unavailable"
+        raise HTTPException(status_code=502, detail=f"Could not load R1 dashboard data: {detail}")
+
+    sites = r1_result.get("r1_sites") if isinstance(r1_result.get("r1_sites"), list) else []
+    devices = r1_result.get("r1_devices") if isinstance(r1_result.get("r1_devices"), list) else []
+    events = r1_result.get("r1_device_events") if isinstance(r1_result.get("r1_device_events"), list) else []
+    metrics = r1_result.get("r1_device_daily_metrics") if isinstance(r1_result.get("r1_device_daily_metrics"), list) else []
+
+    if not sites or not devices or not metrics:
+        raise HTTPException(status_code=502, detail="R1 dataset returned empty response from SQL MCP")
+
+    device_to_site: dict[int, int] = {
+        _to_int(d.get("id")): _to_int(d.get("site_id"))
+        for d in devices
+        if isinstance(d, dict)
+    }
+    site_lookup: dict[int, dict[str, Any]] = {
+        _to_int(s.get("id")): s
+        for s in sites
+        if isinstance(s, dict)
+    }
+
+    total_uptime = 0.0
+    total_latency = 0.0
+    total_packet_loss = 0.0
+    total_throughput = 0.0
+    total_incidents = 0
+    max_metric_date = ""
+
+    severity_counts: dict[str, int] = {}
+    open_events = 0
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        sev = str(event.get("severity", "Unknown"))
+        severity_counts[sev] = severity_counts.get(sev, 0) + 1
+        if _to_int(event.get("is_open"), 0) == 1:
+            open_events += 1
+
+    monthly_rollup: dict[str, dict[str, float]] = {}
+    site_rollup: dict[int, dict[str, float]] = {}
+
+    for row in metrics:
+        if not isinstance(row, dict):
+            continue
+        metric_date = str(row.get("metric_date", ""))
+        if metric_date and metric_date > max_metric_date:
+            max_metric_date = metric_date
+
+        uptime = _to_float(row.get("uptime_pct"))
+        latency = _to_float(row.get("latency_ms"))
+        packet_loss = _to_float(row.get("packet_loss_pct"))
+        throughput = _to_float(row.get("throughput_mbps"))
+        incidents = _to_int(row.get("incidents"))
+
+        total_uptime += uptime
+        total_latency += latency
+        total_packet_loss += packet_loss
+        total_throughput += throughput
+        total_incidents += incidents
+
+        month_key = metric_date[:7] if len(metric_date) >= 7 else "unknown"
+        m = monthly_rollup.setdefault(month_key, {"count": 0.0, "uptime": 0.0, "latency": 0.0, "packet_loss": 0.0, "incidents": 0.0})
+        m["count"] += 1
+        m["uptime"] += uptime
+        m["latency"] += latency
+        m["packet_loss"] += packet_loss
+        m["incidents"] += incidents
+
+        dev_id = _to_int(row.get("device_id"))
+        site_id = device_to_site.get(dev_id)
+        if site_id is None:
+            continue
+        sroll = site_rollup.setdefault(site_id, {"count": 0.0, "uptime": 0.0, "latency": 0.0, "packet_loss": 0.0, "incidents": 0.0})
+        sroll["count"] += 1
+        sroll["uptime"] += uptime
+        sroll["latency"] += latency
+        sroll["packet_loss"] += packet_loss
+        sroll["incidents"] += incidents
+
+    metric_count = len(metrics)
+    summary = {
+        "sites": len(sites),
+        "devices": len(devices),
+        "events": len(events),
+        "daily_metrics": metric_count,
+        "avg_uptime_pct": round(total_uptime / metric_count, 2) if metric_count else 0,
+        "avg_latency_ms": round(total_latency / metric_count, 2) if metric_count else 0,
+        "avg_packet_loss_pct": round(total_packet_loss / metric_count, 2) if metric_count else 0,
+        "avg_throughput_mbps": round(total_throughput / metric_count, 2) if metric_count else 0,
+        "total_incidents": total_incidents,
+        "open_events": open_events,
+        "open_event_rate_pct": round((open_events / len(events)) * 100, 2) if events else 0,
+    }
+
+    severity_distribution = [
+        {
+            "severity": sev,
+            "count": count,
+            "pct_of_events": round((count / len(events)) * 100, 2) if events else 0,
+        }
+        for sev, count in sorted(severity_counts.items(), key=lambda x: x[1], reverse=True)
+    ]
+
+    site_snapshot = []
+    for site_id, agg in site_rollup.items():
+        meta = site_lookup.get(site_id, {})
+        count = agg["count"] or 1
+        site_snapshot.append(
+            {
+                "site_code": str(meta.get("site_code", f"site-{site_id}")),
+                "site_name": str(meta.get("site_name", f"Site {site_id}")),
+                "avg_uptime_pct": round(agg["uptime"] / count, 2),
+                "avg_latency_ms": round(agg["latency"] / count, 2),
+                "avg_packet_loss_pct": round(agg["packet_loss"] / count, 2),
+                "incidents": int(agg["incidents"]),
+            }
+        )
+    site_snapshot.sort(key=lambda x: (x["incidents"], x["avg_latency_ms"]), reverse=True)
+    site_snapshot = site_snapshot[:8]
+
+    monthly_trend = []
+    for month in sorted(monthly_rollup.keys(), reverse=True)[:12]:
+        agg = monthly_rollup[month]
+        count = agg["count"] or 1
+        monthly_trend.append(
+            {
+                "month": month,
+                "avg_uptime_pct": round(agg["uptime"] / count, 2),
+                "avg_latency_ms": round(agg["latency"] / count, 2),
+                "avg_packet_loss_pct": round(agg["packet_loss"] / count, 2),
+                "incidents": int(agg["incidents"]),
+            }
+        )
+
+    return {
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "summary": summary,
+        "severity_distribution": severity_distribution,
+        "site_snapshot_30d": site_snapshot,
+        "monthly_trend": monthly_trend,
     }
 
 

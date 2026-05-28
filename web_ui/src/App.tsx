@@ -6,7 +6,7 @@ import { SettingsPage } from './SettingsPage'
 import type { ChatResponse } from './Cards'
 import { ResultDeck, ToolBadge, LiveToolBadge } from './Cards'
 
-type View = 'chat' | 'settings' | 'performance'
+type View = 'chat' | 'settings' | 'performance' | 'r1'
 
 type PerformanceData = {
   generated_at: string
@@ -33,6 +33,39 @@ type PerformanceData = {
     by_type: Record<string, number>
   }
   top_properties_by_noi: Array<{ name: string; city: string; noi: number; value: number; cap: number }>
+}
+
+type R1Data = {
+  generated_at: string
+  summary: {
+    sites: number
+    devices: number
+    events: number
+    daily_metrics: number
+    avg_uptime_pct: number
+    avg_latency_ms: number
+    avg_packet_loss_pct: number
+    avg_throughput_mbps: number
+    total_incidents: number
+    open_events: number
+    open_event_rate_pct: number
+  }
+  severity_distribution: Array<{ severity: string; count: number; pct_of_events: number }>
+  site_snapshot_30d: Array<{
+    site_code: string
+    site_name: string
+    avg_uptime_pct: number
+    avg_latency_ms: number
+    avg_packet_loss_pct: number
+    incidents: number
+  }>
+  monthly_trend: Array<{
+    month: string
+    avg_uptime_pct: number
+    avg_latency_ms: number
+    avg_packet_loss_pct: number
+    incidents: number
+  }>
 }
 
 type ChatMessage = {
@@ -115,6 +148,10 @@ function renderMarkdown(text: string): string {
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('en-US').format(value)
 }
 
 function PerformanceDashboardView({ userId, onBack }: { userId?: string; onBack: () => void }) {
@@ -223,6 +260,123 @@ function PerformanceDashboardView({ userId, onBack }: { userId?: string; onBack:
                         <td>{formatCurrency(p.noi)}</td>
                         <td>{formatCurrency(p.value)}</td>
                         <td>{p.cap}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function R1DashboardView({ userId, onBack }: { userId?: string; onBack: () => void }) {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [data, setData] = useState<R1Data | null>(null)
+
+  async function loadDashboard() {
+    setLoading(true)
+    setError('')
+    try {
+      const url = `${ORCHESTRATOR_URL}/dashboard/r1${userId ? `?user_id=${encodeURIComponent(userId)}` : ''}`
+      const res = await fetch(url)
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`)
+      }
+      const payload = (await res.json()) as R1Data
+      setData(payload)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      setError(`Could not load R1 dashboard: ${message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadDashboard()
+  }, [userId])
+
+  return (
+    <div className="page">
+      <div className="bg-grid" aria-hidden="true" />
+      <header className="hero">
+        <p className="eyebrow">Network Operations</p>
+        <h1>Ruckus R1 Dashboard</h1>
+        <p className="subtitle">Wireless reliability, event pressure, and site-level performance for the R1 estate.</p>
+      </header>
+
+      <div className="dashboard-shell">
+        <div className="dashboard-toolbar">
+          <button className="status-btn" onClick={onBack}>← Back to Chat</button>
+          <button className="status-btn" onClick={() => void loadDashboard()} disabled={loading}>⟳ Refresh</button>
+        </div>
+
+        {error && <div className="dashboard-error">{error}</div>}
+        {loading && !data && <div className="dashboard-loading">Loading R1 dashboard...</div>}
+
+        {data && (
+          <>
+            <div className="kpi-grid">
+              <div className="kpi-card"><span>Sites</span><strong>{formatNumber(data.summary.sites)}</strong></div>
+              <div className="kpi-card"><span>Devices</span><strong>{formatNumber(data.summary.devices)}</strong></div>
+              <div className="kpi-card"><span>Avg Uptime</span><strong>{data.summary.avg_uptime_pct}%</strong></div>
+              <div className="kpi-card"><span>Avg Latency</span><strong>{data.summary.avg_latency_ms} ms</strong></div>
+              <div className="kpi-card"><span>Packet Loss</span><strong>{data.summary.avg_packet_loss_pct}%</strong></div>
+              <div className="kpi-card"><span>Open Events</span><strong>{formatNumber(data.summary.open_events)}</strong></div>
+            </div>
+
+            <div className="dashboard-row">
+              <section className="dashboard-panel">
+                <h3>Event Severity Mix</h3>
+                <ul>
+                  {data.severity_distribution.map((row) => (
+                    <li key={row.severity}>
+                      <span>{row.severity}</span>
+                      <span>{formatNumber(row.count)} · {row.pct_of_events}%</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              <section className="dashboard-panel">
+                <h3>Monthly Incident Trend</h3>
+                <ul>
+                  {data.monthly_trend.slice(0, 6).map((row) => (
+                    <li key={row.month}>
+                      <span>{row.month}</span>
+                      <span>{formatNumber(row.incidents)} incidents</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+
+            <section className="dashboard-panel">
+              <h3>Site Snapshot (Last 30 Days)</h3>
+              <div className="table-wrap">
+                <table className="perf-table">
+                  <thead>
+                    <tr>
+                      <th>Site</th>
+                      <th>Uptime</th>
+                      <th>Latency</th>
+                      <th>Packet Loss</th>
+                      <th>Incidents</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.site_snapshot_30d.map((s) => (
+                      <tr key={s.site_code}>
+                        <td>{s.site_name} ({s.site_code})</td>
+                        <td>{s.avg_uptime_pct}%</td>
+                        <td>{s.avg_latency_ms} ms</td>
+                        <td>{s.avg_packet_loss_pct}%</td>
+                        <td>{formatNumber(s.incidents)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -450,6 +604,10 @@ function ChatView() {
     return <PerformanceDashboardView userId={user?.email} onBack={() => setView('chat')} />
   }
 
+  if (view === 'r1') {
+    return <R1DashboardView userId={user?.email} onBack={() => setView('chat')} />
+  }
+
   const hasConversation = messages.length > 1
 
   return (
@@ -493,6 +651,9 @@ function ChatView() {
             )}
             <button className="status-btn" onClick={() => setView('performance')} title="Performance Dashboard">
               📊 Dashboard
+            </button>
+            <button className="status-btn" onClick={() => setView('r1')} title="R1 Network Dashboard">
+              📡 R1 Dashboard
             </button>
             {hasConversation && (
               <button className="status-btn" onClick={clearChat} title="Clear conversation">

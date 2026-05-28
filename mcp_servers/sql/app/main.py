@@ -159,9 +159,13 @@ def _demo_response(payload: QueryRequest) -> dict[str, Any]:
         "kpi", "metric", "portfolio", "performance", "summary",
         "aggregate", "breakdown", "report"
     ])
+    fetch_r1 = _keyword_match(q, [
+        "r1", "ruckus", "wireless", "wifi", "network", "access point",
+        "device event", "packet loss", "latency", "throughput", "incident"
+    ])
 
     # Default: return everything if nothing specific matched
-    if not any([fetch_properties, fetch_contacts, fetch_deals, fetch_activities, fetch_metrics]):
+    if not any([fetch_properties, fetch_contacts, fetch_deals, fetch_activities, fetch_metrics, fetch_r1]):
         fetch_properties = True
         fetch_deals = True
         fetch_metrics = True
@@ -271,6 +275,14 @@ def _demo_response(payload: QueryRequest) -> dict[str, Any]:
             f"Closed: ${_CLOSED_VALUE:,.0f} ({_CLOSED_COUNT} deals)."
         )
 
+    if fetch_r1:
+        # Demo mode does not maintain a separate R1 dataset.
+        results["r1_sites"] = []
+        results["r1_devices"] = []
+        results["r1_device_events"] = []
+        results["r1_device_daily_metrics"] = []
+        results["r1_summary"] = "R1 dataset is only available when SQL DAB endpoints are reachable."
+
     return results
 
 
@@ -316,6 +328,10 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
     fetch_charges = _keyword_match(q, [
         "charge", "ledger", "rent roll", "payment", "delinquent", "late fee", "collections"
     ])
+    fetch_r1 = _keyword_match(q, [
+        "r1", "ruckus", "wireless", "wifi", "network", "access point",
+        "device event", "packet loss", "latency", "throughput", "incident"
+    ])
 
     if not any([
         fetch_properties,
@@ -327,6 +343,7 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
         fetch_leases,
         fetch_work_orders,
         fetch_charges,
+        fetch_r1,
     ]):
         fetch_properties = True
         fetch_deals = True
@@ -434,6 +451,47 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
                     dab_available = True
             except Exception as exc:
                 results["charges_error"] = str(exc)
+
+        if fetch_r1:
+            try:
+                resp = await client.get(f"{DAB_BASE}/api/R1Site")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    results["r1_sites"] = data.get("value", data)
+                    results["r1_sites_summary"] = f"Found {len(results['r1_sites'])} R1 sites"
+                    dab_available = True
+            except Exception as exc:
+                results["r1_sites_error"] = str(exc)
+
+            try:
+                resp = await client.get(f"{DAB_BASE}/api/R1Device")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    results["r1_devices"] = data.get("value", data)
+                    results["r1_devices_summary"] = f"Found {len(results['r1_devices'])} R1 devices"
+                    dab_available = True
+            except Exception as exc:
+                results["r1_devices_error"] = str(exc)
+
+            try:
+                resp = await client.get(f"{DAB_BASE}/api/R1DeviceEvent")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    results["r1_device_events"] = data.get("value", data)
+                    results["r1_device_events_summary"] = f"Found {len(results['r1_device_events'])} R1 device events"
+                    dab_available = True
+            except Exception as exc:
+                results["r1_device_events_error"] = str(exc)
+
+            try:
+                resp = await client.get(f"{DAB_BASE}/api/R1DeviceDailyMetric")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    results["r1_device_daily_metrics"] = data.get("value", data)
+                    results["r1_device_daily_metrics_summary"] = f"Found {len(results['r1_device_daily_metrics'])} R1 daily metrics"
+                    dab_available = True
+            except Exception as exc:
+                results["r1_device_daily_metrics_error"] = str(exc)
 
     # Fall back to demo data if DAB is unavailable
     if not dab_available:

@@ -105,6 +105,42 @@
           "actions": ["read"]
         }
       ]
+    },
+    "R1Site": {
+      "source": "dbo.r1_sites",
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ]
+    },
+    "R1Device": {
+      "source": "dbo.r1_devices",
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ]
+    },
+    "R1DeviceEvent": {
+      "source": "dbo.r1_device_events",
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ]
+    },
+    "R1DeviceDailyMetric": {
+      "source": "dbo.r1_device_daily_metrics",
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ]
     }
   }
 }
