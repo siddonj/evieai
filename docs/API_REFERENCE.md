@@ -1,143 +1,200 @@
 # API Reference
 
-Base URL: `https://api.resiq.co` (prod) or `http://localhost:8000` (local)
+Base URL:
 
-All endpoints return JSON. Streaming endpoints return SSE (Server-Sent Events).
+- Local: `http://localhost:8000`
+- Production: your deployed orchestrator URL
+
+All endpoints return JSON unless noted.
 
 ---
 
-## Orchestrator Endpoints
+## Core
 
 ### `GET /`
-Service info. Returns: `{"service": "orchestrator", "status": "ok", "mode": "openai-tool-calling"}`
+Service info.
 
 ### `GET /health`
-Liveness probe. Returns: `{"status": "healthy"}`
+Liveness + connector runtime snapshot + reliability metrics.
 
 ### `GET /ready`
-Readiness probe. Checks all 8 MCP servers. Returns dependency reachability map.
+Readiness check across all MCP dependencies.
 
-### `POST /chat`
-Standard (batch) chat. Returns full response after LLM completes.
+---
 
-**Request:**
+## Chat
+
+### `POST /chat` (SSE streaming)
+Primary chat endpoint used by the Web UI.
+
+- Content-Type: `application/json`
+- Response: `text/event-stream`
+- SSE events include `token`, `tool`, `done`, `error`
+
+Request body:
+
 ```json
 {
-  "message": "Show me the sales pipeline",
-  "user_id": "alice.chen",
-  "history": [
-    {"role": "user", "content": "What data do you have?"},
-    {"role": "assistant", "content": "I have access to..."}
-  ],
-  "teams_token": "(optional SSO token)"
+  "message": "Show me portfolio risk by property",
+  "user_id": "josh",
+  "history": [{"role": "user", "content": "previous message"}],
+  "teams_token": "optional"
 }
 ```
 
-**Response:**
+### `POST /chat/batch`
+Non-streaming wrapper that returns final JSON in one response.
+
+Response shape:
+
 ```json
 {
-  "reply": "### Sales Pipeline Overview\n...",
+  "reply": "...",
   "tool_calls": [{"name": "query_sql", "args": {"query": "..."}}],
-  "mcp_results": [
-    {
-      "service": "sql",
-      "contacts": [...],
-      "companies": [...],
-      "metrics": {...}
-    }
-  ]
+  "mcp_results": [{"service": "sql"}]
 }
 ```
 
-### `POST /chat/stream`
-Streaming variant. Returns SSE events.
+---
 
-**Request:** Same as `/chat`.
+## Download & auth
 
-**SSE Events:**
-
-| Event | Description | Example |
-|-------|-------------|---------|
-| `token` | Word-by-word text | `{"type":"token","content":"### Sales"}` |
-| `tool_start` | Tool call initiated | `{"type":"tool_start","name":"query_sql","args":"..."}` |
-| `tool_result` | Tool completed | `{"type":"tool_result","name":"query_sql","summary":"Found 12 contacts"}` |
-| `done` | Response complete | `{"type":"done","reply":"...","tool_calls":[...],"mcp_results":[...]}` |
-
-### `GET /download/{service}/{file_name}`
-Proxy file download from an MCP server.
-
-**Parameters:**
-- `service`: `files`, `mail`, `onedrive`, `sql`, `knowledge_base`, `memory`, `document_generation`, `analytics`
-- `file_name`: URL-encoded filename
-
-Returns file content with `Content-Disposition: attachment` header.
+### `GET /download/{service}/{file_name:path}`
+Proxy-download files from MCP backends.
 
 ### `POST /auth/teams-token`
-Exchange a Teams SSO token for a Graph API token (OBO flow).
-
-**Request:** `{"token": "eyJ..."}`  
-**Response:** `{"exchanged": true, "token_type": "Bearer", "scope": "..."}`  
-
-Requires: `ENABLE_TEAMS_SSO=true` env var. Uses `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`.
+Teams SSO OBO exchange (enabled when `ENABLE_TEAMS_SSO=true`).
 
 ---
 
-## Admin Endpoints
+## Connectors / ingestion
+
+### `GET /connectors`
+List registered connectors.
+
+### `POST /connectors/{source_id}/enable`
+Enable/disable a connector.
+
+### `POST /connectors/{source_id}/fetch`
+Fetch records from a connector source.
+
+### `POST /connectors/{source_id}/sync`
+Run sync for a source/entity pair.
+
+### `POST /webhooks/ingress`
+Ingest inbound webhook event.
+
+### `GET /signals`
+List emitted signals.
+
+### `GET /events`
+List ingested events.
+
+---
+
+## Bitemporal tools
+
+### `POST /tools/get_connector_freshness`
+### `POST /tools/get_entity_lineage`
+### `POST /tools/get_confidence_breakdown`
+### `POST /tools/query_as_of`
+### `POST /tools/diff_between`
+
+---
+
+## Write-back actions / approvals
+
+### `POST /actions/write`
+Queue a write action request.
+
+### `POST /actions/approve`
+Approve action (moves from pending approval).
+
+### `POST /actions/reject`
+Reject action.
+
+### `POST /actions/execute`
+Execute an approved action.
+
+### `GET /actions`
+List actions.
+
+### `GET /actions/approvals`
+List pending approvals.
+
+### `POST /actions/circuit`
+Open/close write circuit breaker.
+
+### `GET /actions/circuit`
+Get circuit breaker state.
+
+### `GET /actions/audit`
+Action audit log.
+
+### `GET /actions/reliability`
+Action reliability thresholds + current values.
+
+---
+
+## Connector sync scheduler / reliability
+
+### `POST /connectors/sync/schedule`
+Create/update connector sync schedule.
+
+### `GET /connectors/sync/schedules`
+List schedules.
+
+### `POST /connectors/sync/stop`
+Disable a schedule.
+
+### `DELETE /connectors/sync/schedule`
+Delete a schedule.
+
+### `POST /connectors/sync/schedule/enable`
+Enable a disabled schedule.
+
+### `GET /connectors/sync/worker`
+Get scheduler worker status.
+
+### `GET /connectors/sync/runs`
+List runs (with status filters).
+
+### `GET /connectors/sync/runs/recent`
+List recent runs.
+
+### `GET /connectors/sync/reliability`
+Connector sync reliability thresholds + current values.
+
+### `POST /connectors/sync/replay`
+Replay a dead-lettered sync item.
+
+---
+
+## Admin MCP controls
 
 ### `GET /admin/mcp-config`
-List all MCP servers and their enabled/disabled status.
+List MCP runtime enablement.
 
 ### `POST /admin/mcp-config`
-Enable or disable an MCP server at runtime.
-
-**Request:** `{"key": "sql", "enabled": false}`
+Enable/disable an MCP route at runtime.
 
 ### `GET /admin/mcp-data/{service}`
-Fetch sample data from an MCP server's `/admin/data` endpoint.
+Read MCP sample/admin data.
 
 ### `POST /admin/mcp-data/{service}`
-Add data to an MCP server.
+Write/update MCP sample/admin data.
 
 ---
 
-## MCP Endpoint Contract
+## Rate limiting
 
-Every MCP server implements:
+- Sliding-window limiter per `user_id` (fallback IP)
+- Limit violations return HTTP 429
 
-### `GET /health` → `{"status": "healthy"}`
-### `GET /mcp` → `{"transport": "streamable-http", "service": "service_name"}`
-### `POST /mcp/query` → `{"service": "...", "query": "...", ...}`
+## Common HTTP errors
 
-**MCP-specific response fields:**
-
-| MCP Server | Response Fields |
-|------------|----------------|
-| `sql` | `contacts`, `companies`, `metrics`, `contacts_summary`, `companies_summary`, `metrics_summary` |
-| `files` | `items` (list of files/dicts) |
-| `mail` | `messages` (list of emails) |
-| `onedrive` | `files` (list of OneDrive files) |
-| `knowledge_base` | `documents` (SOPs, policies) |
-| `memory` | `profile`, `preferences`, `recent_topics`, `bookmarks`, `relevant_snippets` |
-| `document_generation` | `documents` (templates with sections, metrics, action items) |
-| `analytics` | `kpi_cards`, `trends`, `insights` |
-
-### `GET /mcp/files/{file_name}/download` — File download (files, onedrive)
-
-Returns file content with appropriate `Content-Type` and `Content-Disposition: attachment`.
-
----
-
-## Rate Limiting
-
-- **20 requests/minute per user** (keyed by `user_id` or IP)
-- Returns HTTP 429 with `{"detail": "Rate limit reached. X requests remaining."}`
-- In-memory sliding window — resets on container restart
-
-## Error Responses
-
-| Status | Meaning |
-|--------|---------|
-| 400 | Invalid input (empty message, >4000 chars) |
-| 429 | Rate limit exceeded |
-| 404 | Unknown service (download proxy) or endpoint not found |
-| 500 | Internal error (check application logs) |
+- `400` invalid payload
+- `401` invalid webhook signature (when enabled)
+- `404` unknown route/service
+- `429` rate limited
+- `500` internal/runtime dependency error
