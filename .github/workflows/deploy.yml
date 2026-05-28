@@ -3,6 +3,16 @@
 
 name: Deploy EvieAI
 
+on:
+  push:
+    branches: [main]
+    paths:
+      - orchestrator/**
+      - mcp_servers/**
+      - web_ui/**
+      - .github/workflows/deploy.yml
+
+  workflow_dispatch:
 
 permissions:
   contents: read
