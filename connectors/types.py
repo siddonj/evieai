@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Any, Dict, List, Optional
+from enum import StrEnum
+from typing import Any
 
 
-class Capability(str, Enum):
+class Capability(StrEnum):
     READ = "read"
     WRITE = "write"
     STREAM = "stream"
@@ -14,7 +14,7 @@ class Capability(str, Enum):
     SCHEMA = "schema"
 
 
-class SyncMode(str, Enum):
+class SyncMode(StrEnum):
     FULL = "full"
     INCREMENTAL = "incremental"
     WEBHOOK = "webhook"
@@ -34,8 +34,8 @@ class SyncCursor:
 
 @dataclass
 class Page:
-    records: List[Dict[str, Any]]
-    next_cursor: Optional[SyncCursor] = None
+    records: list[dict[str, Any]]
+    next_cursor: SyncCursor | None = None
     received_at: datetime = field(default_factory=datetime.utcnow)
 
 
@@ -45,7 +45,7 @@ class ConnectorEvent:
     event_type: str
     entity_type: str
     source_record_id: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     occurred_at: datetime
     received_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -53,9 +53,9 @@ class ConnectorEvent:
 @dataclass
 class WriteResult:
     success: bool
-    source_record_id: Optional[str] = None
-    status_code: Optional[int] = None
-    message: Optional[str] = None
+    source_record_id: str | None = None
+    status_code: int | None = None
+    message: str | None = None
 
 
 @dataclass

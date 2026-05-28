@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 
 def _to_iso(value: Any) -> str | None:
@@ -32,7 +32,7 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
-def _map_property(raw: Dict[str, Any]) -> Dict[str, Any]:
+def _map_property(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "property_id": raw.get("property_id") or raw.get("id"),
         "name": raw.get("name") or raw.get("property_name"),
@@ -47,7 +47,7 @@ def _map_property(raw: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _map_resident(raw: Dict[str, Any]) -> Dict[str, Any]:
+def _map_resident(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "resident_id": raw.get("resident_id") or raw.get("id"),
         "first_name": raw.get("first_name"),
@@ -66,7 +66,7 @@ def _map_resident(raw: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _map_lease(raw: Dict[str, Any]) -> Dict[str, Any]:
+def _map_lease(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "lease_id": raw.get("lease_id") or raw.get("id"),
         "resident_id": raw.get("resident_id"),
@@ -81,7 +81,7 @@ def _map_lease(raw: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def map_propexo_record(entity_type: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+def map_propexo_record(entity_type: str, raw: dict[str, Any]) -> dict[str, Any]:
     """Map Propexo payloads into EvieAI canonical ingest envelope."""
     source_record_id = raw.get("id") or raw.get("record_id") or raw.get("uuid")
     updated_at = (
@@ -91,7 +91,7 @@ def map_propexo_record(entity_type: str, raw: Dict[str, Any]) -> Dict[str, Any]:
         or raw.get("timestamp")
     )
 
-    canonical: Dict[str, Any]
+    canonical: dict[str, Any]
     if entity_type == "property":
         canonical = _map_property(raw)
     elif entity_type == "resident":

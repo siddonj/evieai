@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from app.actions_service import ActionsService
 from app.actions_store import ActionsStore
+
 from connectors.adapters.propexo_adapter import PropexoAdapter
 from connectors.registry import ConnectorRegistry
 from connectors.types import Capability, WriteResult

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
 from time import sleep
-from typing import Any, AsyncIterator, Dict, List, Set
+from typing import Any
 
 import httpx
 
@@ -16,7 +17,7 @@ class PropexoAdapter(Connector):
 
     source_id = "propexo"
     display_name = "Propexo Unified API"
-    capabilities: Set[Capability] = {Capability.READ, Capability.WRITE, Capability.SCHEMA}
+    capabilities: set[Capability] = {Capability.READ, Capability.WRITE, Capability.SCHEMA}
     rate_limit = RateLimit(requests_per_minute=150, burst=300)
 
     def __init__(
@@ -57,7 +58,7 @@ class PropexoAdapter(Connector):
         if self._consecutive_failures >= self.failure_threshold:
             self._circuit_open_until = datetime.utcnow() + timedelta(seconds=self.circuit_cooldown_seconds)
 
-    def _request_json(self, endpoint: str, params: Dict[str, Any] | None = None) -> Any:
+    def _request_json(self, endpoint: str, params: dict[str, Any] | None = None) -> Any:
         if self._circuit_open():
             raise RuntimeError("Propexo circuit is open; retry later")
 
@@ -89,7 +90,7 @@ class PropexoAdapter(Connector):
         assert last_exc is not None
         raise last_exc
 
-    def discover_entities(self) -> List[str]:
+    def discover_entities(self) -> list[str]:
         return [
             "property",
             "unit",
@@ -100,7 +101,7 @@ class PropexoAdapter(Connector):
             "prospect",
         ]
 
-    def schema(self, entity_type: str) -> Dict[str, Any]:
+    def schema(self, entity_type: str) -> dict[str, Any]:
         # TODO: load from live OpenAPI / schema endpoint when available.
         return {
             "type": "object",
@@ -118,7 +119,7 @@ class PropexoAdapter(Connector):
         if entity_type not in self.discover_entities():
             raise ValueError(f"Unsupported entity_type for Propexo: {entity_type}")
 
-        params: Dict[str, Any] = {"limit": max(1, min(limit, 1000))}
+        params: dict[str, Any] = {"limit": max(1, min(limit, 1000))}
         if cursor is not None:
             params["cursor"] = cursor.value
 
@@ -151,7 +152,7 @@ class PropexoAdapter(Connector):
                 occurred_at=datetime.utcnow(),
             )
 
-    def write(self, entity_type: str, payload: Dict[str, Any], *, idempotency_key: str) -> WriteResult:
+    def write(self, entity_type: str, payload: dict[str, Any], *, idempotency_key: str) -> WriteResult:
         # TODO: implement with headers: Idempotency-Key, Authorization
         _ = (entity_type, payload, idempotency_key)
         return WriteResult(success=False, status_code=501, message="Not implemented")

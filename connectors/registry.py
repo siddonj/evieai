@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional
 
 from .base import Connector
 from .types import Capability, HealthStatus
@@ -11,14 +11,14 @@ from .types import Capability, HealthStatus
 class ConnectorRegistration:
     connector: Connector
     enabled: bool = True
-    tenant_id: Optional[str] = None
+    tenant_id: str | None = None
 
 
 class ConnectorRegistry:
     """In-memory registry; replace with DB-backed registry for production."""
 
     def __init__(self) -> None:
-        self._items: Dict[str, ConnectorRegistration] = {}
+        self._items: dict[str, ConnectorRegistration] = {}
 
     def register(self, connector: Connector, *, enabled: bool = True, tenant_id: str | None = None) -> None:
         self._items[connector.source_id] = ConnectorRegistration(
@@ -34,10 +34,10 @@ class ConnectorRegistry:
     def get_registration(self, source_id: str) -> ConnectorRegistration:
         return self._items[source_id]
 
-    def list_enabled(self) -> List[Connector]:
+    def list_enabled(self) -> list[Connector]:
         return [r.connector for r in self._items.values() if r.enabled]
 
-    def list_all(self) -> List[ConnectorRegistration]:
+    def list_all(self) -> list[ConnectorRegistration]:
         return list(self._items.values())
 
     def is_enabled(self, source_id: str) -> bool:
@@ -46,15 +46,15 @@ class ConnectorRegistry:
     def set_enabled(self, source_id: str, enabled: bool) -> None:
         self._items[source_id].enabled = enabled
 
-    def by_capability(self, capability: Capability) -> List[Connector]:
+    def by_capability(self, capability: Capability) -> list[Connector]:
         return [
             r.connector
             for r in self._items.values()
             if r.enabled and capability in r.connector.capabilities
         ]
 
-    def health_report(self, *, include_disabled: bool = False) -> Dict[str, HealthStatus]:
-        report: Dict[str, HealthStatus] = {}
+    def health_report(self, *, include_disabled: bool = False) -> dict[str, HealthStatus]:
+        report: dict[str, HealthStatus] = {}
         for source_id, reg in self._items.items():
             if not reg.enabled and not include_disabled:
                 continue

@@ -17,7 +17,7 @@ class GraphClient:
     user_upn: str
 
     @classmethod
-    def from_env(cls) -> "GraphClient":
+    def from_env(cls) -> GraphClient:
         return cls(
             tenant_id=os.getenv("AZURE_TENANT_ID", ""),
             client_id=os.getenv("AZURE_CLIENT_ID", ""),

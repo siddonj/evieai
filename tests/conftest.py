@@ -1,9 +1,8 @@
 """Test fixtures for orchestrator and MCP server tests."""
 
-import json
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

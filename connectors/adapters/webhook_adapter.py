@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
 import hashlib
 import hmac
 import json
-from typing import Any, Dict
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
 
 from ..types import ConnectorEvent
 
 
 @dataclass
 class WebhookEnvelope:
-    headers: Dict[str, str]
-    payload: Dict[str, Any]
+    headers: dict[str, str]
+    payload: dict[str, Any]
     received_at: datetime
 
 

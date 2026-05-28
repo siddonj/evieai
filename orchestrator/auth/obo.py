@@ -14,7 +14,6 @@ from dataclasses import dataclass
 
 import msal
 
-
 logger = logging.getLogger("orchestrator.auth.obo")
 
 ENABLED = os.getenv("ENABLE_TEAMS_SSO", "false").lower() in ("1", "true", "yes")
@@ -29,7 +28,7 @@ class TeamsOBOExchange:
     client_secret: str | None = None
 
     @classmethod
-    def from_env(cls) -> "TeamsOBOExchange":
+    def from_env(cls) -> TeamsOBOExchange:
         return cls(
             tenant_id=os.getenv("AZURE_TENANT_ID", ""),
             client_id=os.getenv("AZURE_CLIENT_ID", os.getenv("TEAMS_CLIENT_ID", "")),

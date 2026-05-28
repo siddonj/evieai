@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "orchestrator"))
 
 import pytest
-from app.security import RateLimiter, CircuitBreaker, CircuitOpenError, validate_and_sanitize
+from app.security import CircuitBreaker, CircuitOpenError, RateLimiter, validate_and_sanitize
 
 
 class TestRateLimiter:
