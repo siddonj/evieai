@@ -618,6 +618,14 @@ class ChatResponse(BaseModel):
     mcp_results: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class PerformanceDashboardResponse(BaseModel):
+    generated_at: str
+    overview: dict[str, Any]
+    pipeline: dict[str, Any]
+    activities: dict[str, Any]
+    top_properties_by_noi: list[dict[str, Any]]
+
+
 # ─── SSE Helpers ──────────────────────────────────────────────────────
 
 def _sse(data: dict[str, Any]) -> str:
@@ -1007,6 +1015,54 @@ async def ready() -> dict[str, Any]:
             except Exception as exc:
                 status[name] = {"reachable": False, "url": health_url, "error": str(exc)}
     return {"status": "ready", "dependencies": status}
+
+
+@app.get("/dashboard/performance", response_model=PerformanceDashboardResponse)
+async def performance_dashboard(user_id: str | None = None) -> dict[str, Any]:
+    overview_result = await _call_mcp("query_dashboard", "overview dashboard summary", user_id)
+    pipeline_result = await _call_mcp("query_dashboard", "deal pipeline funnel stage summary", user_id)
+    activities_result = await _call_mcp("query_dashboard", "upcoming activities and tasks", user_id)
+    portfolio_result = await _call_mcp("query_dashboard", "portfolio properties by noi", user_id)
+
+    overview_data = (overview_result.get("data") or {}) if isinstance(overview_result, dict) else {}
+    pipeline_data = (pipeline_result.get("data") or {}) if isinstance(pipeline_result, dict) else {}
+    activities_data = (activities_result.get("data") or {}) if isinstance(activities_result, dict) else {}
+    portfolio_data = (portfolio_result.get("data") or {}) if isinstance(portfolio_result, dict) else {}
+
+    properties = portfolio_data.get("properties") if isinstance(portfolio_data, dict) else []
+    top_properties = []
+    if isinstance(properties, list):
+        ordered = sorted(
+            [p for p in properties if isinstance(p, dict)],
+            key=lambda p: float(p.get("noi", 0) or 0),
+            reverse=True,
+        )
+        top_properties = [
+            {
+                "name": p.get("name", ""),
+                "city": p.get("city", ""),
+                "noi": p.get("noi", 0),
+                "value": p.get("value", 0),
+                "cap": p.get("cap", 0),
+            }
+            for p in ordered[:5]
+        ]
+
+    return {
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "overview": overview_data,
+        "pipeline": {
+            "pipeline_total": pipeline_data.get("pipeline_total", 0),
+            "commission_pipeline": pipeline_data.get("commission_pipeline", 0),
+            "by_stage": pipeline_data.get("by_stage", {}),
+        },
+        "activities": {
+            "upcoming_count": activities_data.get("upcoming_count", 0),
+            "completed_count": activities_data.get("completed_count", 0),
+            "by_type": activities_data.get("by_type", {}),
+        },
+        "top_properties_by_noi": top_properties,
+    }
 
 
 def _augment_files_with_urls(result: dict[str, Any], service: str) -> dict[str, Any]:

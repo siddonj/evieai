@@ -6,7 +6,34 @@ import { SettingsPage } from './SettingsPage'
 import type { ChatResponse } from './Cards'
 import { ResultDeck, ToolBadge, LiveToolBadge } from './Cards'
 
-type View = 'chat' | 'settings'
+type View = 'chat' | 'settings' | 'performance'
+
+type PerformanceData = {
+  generated_at: string
+  overview: {
+    portfolio_value: number
+    total_units: number
+    occupied_units: number
+    occupancy: number
+    total_noi: number
+    pipeline_value: number
+    pipeline_commission: number
+    active_deals: number
+    closed_ytd: number
+    properties_count: number
+  }
+  pipeline: {
+    pipeline_total: number
+    commission_pipeline: number
+    by_stage: Record<string, { count: number; value: number; commission: number }>
+  }
+  activities: {
+    upcoming_count: number
+    completed_count: number
+    by_type: Record<string, number>
+  }
+  top_properties_by_noi: Array<{ name: string; city: string; noi: number; value: number; cap: number }>
+}
 
 type ChatMessage = {
   id: string
@@ -84,6 +111,129 @@ function renderMarkdown(text: string): string {
   } catch {
     return text || ''
   }
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
+}
+
+function PerformanceDashboardView({ userId, onBack }: { userId?: string; onBack: () => void }) {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [data, setData] = useState<PerformanceData | null>(null)
+
+  async function loadDashboard() {
+    setLoading(true)
+    setError('')
+    try {
+      const url = `${ORCHESTRATOR_URL}/dashboard/performance${userId ? `?user_id=${encodeURIComponent(userId)}` : ''}`
+      const res = await fetch(url)
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`)
+      }
+      const payload = (await res.json()) as PerformanceData
+      setData(payload)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      setError(`Could not load performance dashboard: ${message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadDashboard()
+  }, [userId])
+
+  return (
+    <div className="page">
+      <div className="bg-grid" aria-hidden="true" />
+      <header className="hero">
+        <p className="eyebrow">Live Operations</p>
+        <h1>Performance Dashboard</h1>
+        <p className="subtitle">
+          Portfolio, pipeline, and execution performance in one view.
+        </p>
+      </header>
+
+      <div className="dashboard-shell">
+        <div className="dashboard-toolbar">
+          <button className="status-btn" onClick={onBack}>← Back to Chat</button>
+          <button className="status-btn" onClick={() => void loadDashboard()} disabled={loading}>⟳ Refresh</button>
+        </div>
+
+        {error && <div className="dashboard-error">{error}</div>}
+
+        {loading && !data && <div className="dashboard-loading">Loading dashboard...</div>}
+
+        {data && (
+          <>
+            <div className="kpi-grid">
+              <div className="kpi-card"><span>Portfolio Value</span><strong>{formatCurrency(data.overview.portfolio_value)}</strong></div>
+              <div className="kpi-card"><span>Occupancy</span><strong>{data.overview.occupancy}%</strong></div>
+              <div className="kpi-card"><span>Total NOI</span><strong>{formatCurrency(data.overview.total_noi)}</strong></div>
+              <div className="kpi-card"><span>Pipeline Value</span><strong>{formatCurrency(data.overview.pipeline_value)}</strong></div>
+              <div className="kpi-card"><span>Pipeline Commission</span><strong>{formatCurrency(data.overview.pipeline_commission)}</strong></div>
+              <div className="kpi-card"><span>Active Deals</span><strong>{data.overview.active_deals}</strong></div>
+            </div>
+
+            <div className="dashboard-row">
+              <section className="dashboard-panel">
+                <h3>Pipeline by Stage</h3>
+                <ul>
+                  {Object.entries(data.pipeline.by_stage).map(([stage, value]) => (
+                    <li key={stage}>
+                      <span>{stage}</span>
+                      <span>{value.count} deals · {formatCurrency(value.value)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              <section className="dashboard-panel">
+                <h3>Activity Workload</h3>
+                <ul>
+                  <li><span>Upcoming</span><span>{data.activities.upcoming_count}</span></li>
+                  <li><span>Completed</span><span>{data.activities.completed_count}</span></li>
+                  {Object.entries(data.activities.by_type).map(([atype, count]) => (
+                    <li key={atype}><span>{atype}</span><span>{count}</span></li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+
+            <section className="dashboard-panel">
+              <h3>Top Properties by NOI</h3>
+              <div className="table-wrap">
+                <table className="perf-table">
+                  <thead>
+                    <tr>
+                      <th>Property</th>
+                      <th>City</th>
+                      <th>NOI</th>
+                      <th>Value</th>
+                      <th>Cap Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.top_properties_by_noi.map((p) => (
+                      <tr key={p.name}>
+                        <td>{p.name}</td>
+                        <td>{p.city}</td>
+                        <td>{formatCurrency(p.noi)}</td>
+                        <td>{formatCurrency(p.value)}</td>
+                        <td>{p.cap}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function saveHistory(msgs: ChatMessage[]) {
@@ -296,6 +446,10 @@ function ChatView() {
     return <SettingsPage />
   }
 
+  if (view === 'performance') {
+    return <PerformanceDashboardView userId={user?.email} onBack={() => setView('chat')} />
+  }
+
   const hasConversation = messages.length > 1
 
   return (
@@ -337,6 +491,9 @@ function ChatView() {
                 ⚙️ Settings
               </button>
             )}
+            <button className="status-btn" onClick={() => setView('performance')} title="Performance Dashboard">
+              📊 Dashboard
+            </button>
             {hasConversation && (
               <button className="status-btn" onClick={clearChat} title="Clear conversation">
                 🗑️ Clear
