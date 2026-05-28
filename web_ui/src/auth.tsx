@@ -40,6 +40,25 @@ type AuthCtx = {
 
 const AuthContext = createContext<AuthCtx | null>(null)
 
+function normalizeApiError(detail: unknown, fallback: string): string {
+  if (typeof detail === 'string' && detail.trim().length > 0) return detail
+
+  if (Array.isArray(detail)) {
+    const first = detail[0]
+    if (first && typeof first === 'object' && 'msg' in first) {
+      const msg = (first as { msg?: unknown }).msg
+      if (typeof msg === 'string' && msg.trim().length > 0) return msg
+    }
+  }
+
+  if (detail && typeof detail === 'object' && 'msg' in detail) {
+    const msg = (detail as { msg?: unknown }).msg
+    if (typeof msg === 'string' && msg.trim().length > 0) return msg
+  }
+
+  return fallback
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<{ token: string; user: User } | null>(() => loadSession())
   const [isLoading, setIsLoading] = useState(false)
@@ -58,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       const data = await resp.json()
       if (!resp.ok) {
-        return data.detail || 'Login failed'
+        return normalizeApiError(data?.detail, 'Login failed')
       }
       saveSession(data.access_token, data.user)
       setSession({ token: data.access_token, user: data.user })
@@ -86,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         const data = await resp.json()
         if (!resp.ok) {
-          return data.detail || 'Registration failed'
+          return normalizeApiError(data?.detail, 'Registration failed')
         }
         saveSession(data.access_token, data.user)
         setSession({ token: data.access_token, user: data.user })
