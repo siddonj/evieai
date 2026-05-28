@@ -857,6 +857,14 @@ async def _stream_chat_response(
         "packet loss", "throughput", "access point", "incident", "uptime",
     )
     network_intent = any(k in payload.message.lower() for k in network_keywords)
+    blocked_tools: set[str] = {"query_analytics", "query_dashboard"} if network_intent else set()
+
+    if network_intent:
+        messages[0]["content"] += (
+            "\n\nNetwork telemetry mode is active for this request. "
+            "Use query_sql for R1/network telemetry facts. "
+            "Do NOT call query_analytics or query_dashboard for this response."
+        )
 
     if not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_API_KEY:
         yield _sse({"type": "error", "message": "Azure OpenAI not configured. Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY."})
@@ -912,7 +920,7 @@ async def _stream_chat_response(
             stream = await openai_client.chat.completions.create(
                 model=AZURE_OPENAI_DEPLOYMENT,
                 messages=messages,
-                tools=_active_tools(),
+                tools=_active_tools(disabled_tool_names=blocked_tools),
                 tool_choice="auto",
                 stream=True,
                 stream_options={"include_usage": False},
@@ -961,6 +969,20 @@ async def _stream_chat_response(
 
             for tc in accumulated_tool_calls:
                 name = tc["function"]["name"]
+                if name in blocked_tools:
+                    blocked_result = {
+                        "error": (
+                            f"Tool '{name}' is disabled for network telemetry requests. "
+                            "Use query_sql instead."
+                        )
+                    }
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "content": json.dumps(blocked_result),
+                    })
+                    continue
+
                 try:
                     args = json.loads(tc["function"]["arguments"])
                 except json.JSONDecodeError:
@@ -1864,11 +1886,15 @@ def replay_dead_letter(payload: ConnectorReplayRequest) -> dict[str, Any]:
 
 # ─── Admin Endpoints ──────────────────────────────────────────────────
 
-def _active_tools() -> list[dict[str, Any]]:
-    """Return only tools whose MCP server is currently enabled."""
+def _active_tools(disabled_tool_names: set[str] | None = None) -> list[dict[str, Any]]:
+    """Return only tools whose MCP server is currently enabled and not explicitly disabled."""
+    disabled = disabled_tool_names or set()
     active: list[dict[str, Any]] = []
     for tool in TOOLS:
-        route = _TOOL_NAME_TO_KEY.get(tool["function"]["name"])
+        name = tool["function"]["name"]
+        if name in disabled:
+            continue
+        route = _TOOL_NAME_TO_KEY.get(name)
         if not route or route not in MCP_ENDPOINTS:
             continue
         if MCP_ENABLED.get(route, True):
