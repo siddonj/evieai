@@ -14,6 +14,11 @@ TARGET_PROPERTIES = 12
 TARGET_CONTACTS = 20
 TARGET_DEALS = 12
 TARGET_ACTIVITIES = 24
+TARGET_UNITS = 24
+TARGET_RESIDENTS = 18
+TARGET_LEASES = 18
+TARGET_WORK_ORDERS = 20
+TARGET_CHARGES = 36
 
 
 def _extract(pattern: str, s: str) -> str:
@@ -92,6 +97,83 @@ CREATE TABLE activities (
     deal_id INT, contact_id INT, activity_type NVARCHAR(50), subject NVARCHAR(200),
     description NVARCHAR(MAX), due_date DATE, completed_at DATETIME,
     assigned_to NVARCHAR(100), status NVARCHAR(20) DEFAULT 'Open',
+    created_at DATETIME DEFAULT GETDATE()
+)
+""")
+cursor.execute("""
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'units')
+CREATE TABLE units (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    property_id INT NOT NULL,
+    unit_number NVARCHAR(20) NOT NULL,
+    floor_plan NVARCHAR(50),
+    beds INT,
+    baths DECIMAL(3,1),
+    square_feet INT,
+    market_rent DECIMAL(10,2),
+    status NVARCHAR(20) DEFAULT 'Occupied',
+    created_at DATETIME DEFAULT GETDATE(),
+    updated_at DATETIME DEFAULT GETDATE()
+)
+""")
+cursor.execute("""
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'residents')
+CREATE TABLE residents (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    first_name NVARCHAR(50) NOT NULL,
+    last_name NVARCHAR(50) NOT NULL,
+    email NVARCHAR(120),
+    phone NVARCHAR(30),
+    status NVARCHAR(20) DEFAULT 'Active',
+    credit_band NVARCHAR(20),
+    created_at DATETIME DEFAULT GETDATE()
+)
+""")
+cursor.execute("""
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'leases')
+CREATE TABLE leases (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    property_id INT NOT NULL,
+    unit_id INT NOT NULL,
+    resident_id INT NOT NULL,
+    lease_start DATE NOT NULL,
+    lease_end DATE NOT NULL,
+    monthly_rent DECIMAL(10,2) NOT NULL,
+    security_deposit DECIMAL(10,2),
+    lease_status NVARCHAR(30) DEFAULT 'Current',
+    renewal_offer_sent BIT DEFAULT 0,
+    created_at DATETIME DEFAULT GETDATE(),
+    updated_at DATETIME DEFAULT GETDATE()
+)
+""")
+cursor.execute("""
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'work_orders')
+CREATE TABLE work_orders (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    property_id INT NOT NULL,
+    unit_id INT NULL,
+    resident_id INT NULL,
+    category NVARCHAR(50),
+    priority NVARCHAR(20) DEFAULT 'Medium',
+    status NVARCHAR(20) DEFAULT 'Open',
+    description NVARCHAR(400),
+    submitted_at DATETIME DEFAULT GETDATE(),
+    completed_at DATETIME NULL,
+    assigned_vendor NVARCHAR(100),
+    estimated_cost DECIMAL(10,2),
+    actual_cost DECIMAL(10,2)
+)
+""")
+cursor.execute("""
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'charges')
+CREATE TABLE charges (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    lease_id INT NOT NULL,
+    charge_month DATE NOT NULL,
+    charge_type NVARCHAR(30) DEFAULT 'Rent',
+    amount DECIMAL(10,2) NOT NULL,
+    payment_status NVARCHAR(20) DEFAULT 'Pending',
+    paid_at DATETIME NULL,
     created_at DATETIME DEFAULT GETDATE()
 )
 """)
@@ -238,6 +320,144 @@ ACTIVITIES = [
     (None, 4, "Meeting", "Weekly deal pipeline review", "Standard Monday pipeline review. 12 active deals, $197M total pipeline. Reviewing Q3 targets.", "2026-05-19", "2026-05-19T09:00:00", "Linda Thornton", "Completed"),
 ]
 insert_batch("activities", "deal_id,contact_id,activity_type,subject,description,due_date,completed_at,assigned_to,status", ACTIVITIES, TARGET_ACTIVITIES)
+
+# ─── Property Operations (Entrata/Yardi-style, synthetic) ───────────
+
+UNITS = [
+    (1, "A-101", "1BR-A", 1, 1.0, 735, 1545, "Occupied"),
+    (1, "A-203", "2BR-B", 2, 2.0, 1060, 1895, "Occupied"),
+    (1, "B-305", "2BR-A", 2, 2.0, 990, 1810, "Vacant"),
+    (2, "R-110", "1BR-A", 1, 1.0, 710, 1425, "Occupied"),
+    (2, "R-214", "2BR-A", 2, 2.0, 1025, 1710, "Occupied"),
+    (2, "R-318", "3BR-A", 3, 2.0, 1280, 2075, "Notice"),
+    (3, "O-01", "1BR-Classic", 1, 1.0, 640, 995, "Occupied"),
+    (3, "O-12", "2BR-Reno", 2, 1.5, 910, 1210, "Occupied"),
+    (3, "O-22", "2BR-Classic", 2, 1.5, 890, 1150, "Vacant"),
+    (4, "H-06", "1BR-A", 1, 1.0, 590, 915, "Occupied"),
+    (4, "H-16", "2BR-A", 2, 1.5, 860, 1125, "Occupied"),
+    (5, "E-1012", "1BR-Lux", 1, 1.0, 805, 2050, "Occupied"),
+    (5, "E-1411", "2BR-Lux", 2, 2.0, 1190, 2760, "Occupied"),
+    (5, "E-1804", "3BR-Penthouse", 3, 2.5, 1675, 3980, "Occupied"),
+    (6, "S-04", "1BR-Workforce", 1, 1.0, 600, 825, "Occupied"),
+    (6, "S-21", "2BR-Workforce", 2, 1.0, 820, 980, "Delinquent"),
+    (7, "P-17", "1BR-A", 1, 1.0, 700, 1230, "Occupied"),
+    (7, "P-38", "2BR-A", 2, 2.0, 980, 1510, "Occupied"),
+    (8, "G-102", "1BR-Premium", 1, 1.0, 760, 1450, "Occupied"),
+    (8, "G-223", "2BR-Premium", 2, 2.0, 1105, 1780, "Occupied"),
+    (9, "U-09", "PerBed-4x4", 4, 4.0, 1360, 2900, "Occupied"),
+    (10, "GS-14", "1BR-Senior", 1, 1.0, 680, 2090, "Occupied"),
+    (11, "CS-4B", "Loft-1BR", 1, 1.0, 810, 1625, "Occupied"),
+    (12, "C-27", "2BR-Garden", 2, 2.0, 1035, 1285, "Occupied"),
+]
+insert_batch("units", "property_id,unit_number,floor_plan,beds,baths,square_feet,market_rent,status", UNITS, TARGET_UNITS)
+
+RESIDENTS = [
+    ("Alex", "Morgan", "alex.morgan@example.com", "901-555-1001", "Active", "A"),
+    ("Priya", "Shah", "priya.shah@example.com", "901-555-1002", "Active", "A"),
+    ("Jordan", "Lee", "jordan.lee@example.com", "901-555-1003", "Active", "B"),
+    ("Taylor", "Brooks", "taylor.brooks@example.com", "901-555-1004", "Active", "B"),
+    ("Casey", "Nguyen", "casey.nguyen@example.com", "901-555-1005", "Active", "A"),
+    ("Riley", "Hughes", "riley.hughes@example.com", "901-555-1006", "Notice", "B"),
+    ("Morgan", "Diaz", "morgan.diaz@example.com", "901-555-1007", "Active", "C"),
+    ("Avery", "Patel", "avery.patel@example.com", "901-555-1008", "Active", "B"),
+    ("Sam", "Parker", "sam.parker@example.com", "901-555-1009", "Active", "A"),
+    ("Jamie", "Reed", "jamie.reed@example.com", "901-555-1010", "Active", "A"),
+    ("Cameron", "Bell", "cameron.bell@example.com", "901-555-1011", "Active", "B"),
+    ("Reese", "Gomez", "reese.gomez@example.com", "901-555-1012", "Delinquent", "C"),
+    ("Peyton", "Carter", "peyton.carter@example.com", "901-555-1013", "Active", "A"),
+    ("Drew", "Ward", "drew.ward@example.com", "901-555-1014", "Active", "B"),
+    ("Quinn", "Fisher", "quinn.fisher@example.com", "901-555-1015", "Active", "B"),
+    ("Blake", "West", "blake.west@example.com", "901-555-1016", "Active", "A"),
+    ("Skyler", "Howard", "skyler.howard@example.com", "901-555-1017", "Active", "B"),
+    ("Logan", "Barnes", "logan.barnes@example.com", "901-555-1018", "Active", "A"),
+]
+insert_batch("residents", "first_name,last_name,email,phone,status,credit_band", RESIDENTS, TARGET_RESIDENTS)
+
+LEASES = [
+    (1, 1, 1, "2025-08-01", "2026-07-31", 1545, 750, "Current", 1),
+    (1, 2, 2, "2025-10-01", "2026-09-30", 1895, 1000, "Current", 1),
+    (2, 4, 3, "2025-09-15", "2026-09-14", 1425, 700, "Current", 0),
+    (2, 5, 4, "2025-12-01", "2026-11-30", 1710, 900, "Current", 0),
+    (2, 6, 5, "2025-06-01", "2026-05-31", 2075, 1200, "Renewal", 1),
+    (3, 7, 6, "2025-05-01", "2026-04-30", 995, 500, "Month-to-Month", 1),
+    (3, 8, 7, "2025-07-01", "2026-06-30", 1210, 600, "Current", 0),
+    (4, 10, 8, "2025-11-01", "2026-10-31", 915, 450, "Current", 0),
+    (4, 11, 9, "2025-10-10", "2026-10-09", 1125, 550, "Current", 0),
+    (5, 12, 10, "2026-01-01", "2026-12-31", 2050, 1000, "Current", 0),
+    (5, 13, 11, "2025-09-01", "2026-08-31", 2760, 1500, "Current", 1),
+    (5, 14, 12, "2025-07-01", "2026-06-30", 3980, 2500, "Current", 1),
+    (6, 15, 13, "2025-08-01", "2026-07-31", 825, 400, "Current", 0),
+    (6, 16, 14, "2025-03-01", "2026-02-28", 980, 450, "Delinquent", 1),
+    (7, 17, 15, "2026-02-01", "2027-01-31", 1230, 600, "Current", 0),
+    (8, 19, 16, "2025-09-01", "2026-08-31", 1450, 700, "Current", 1),
+    (10, 22, 17, "2025-06-01", "2026-05-31", 2090, 1000, "Renewal", 1),
+    (12, 24, 18, "2025-11-15", "2026-11-14", 1285, 650, "Current", 0),
+]
+insert_batch("leases", "property_id,unit_id,resident_id,lease_start,lease_end,monthly_rent,security_deposit,lease_status,renewal_offer_sent", LEASES, TARGET_LEASES)
+
+WORK_ORDERS = [
+    (1, 1, 1, "HVAC", "High", "Open", "AC not cooling in living room", "2026-05-20", None, "CoolAir Mechanical", 280, None),
+    (1, 2, 2, "Appliance", "Medium", "Completed", "Dishwasher leaks during cycle", "2026-05-03", "2026-05-05T10:20:00", "QuickFix Appliance", 145, 132),
+    (2, 4, 3, "Plumbing", "High", "Open", "Water pressure drop in shower", "2026-05-22", None, "Memphis Plumbing Co", 320, None),
+    (2, 6, 5, "Electrical", "Medium", "Open", "Breaker trips when oven runs", "2026-05-18", None, "SparkPro Electric", 250, None),
+    (3, 8, 7, "Make Ready", "High", "In Progress", "Turn unit for incoming lease", "2026-05-25", None, "In-house Turn Team", 1200, None),
+    (3, 9, None, "Grounds", "Low", "Open", "Replace damaged exterior light", "2026-05-26", None, "Site Staff", 85, None),
+    (4, 10, 8, "Pest", "Medium", "Completed", "Quarterly pest treatment", "2026-05-02", "2026-05-02T13:00:00", "SafeHome Pest", 95, 95),
+    (4, 11, 9, "Plumbing", "High", "Open", "Kitchen sink backup", "2026-05-24", None, "Memphis Plumbing Co", 175, None),
+    (5, 12, 10, "Access", "Low", "Completed", "Replace mailbox key", "2026-05-10", "2026-05-11T09:15:00", "Concierge Team", 35, 30),
+    (5, 13, 11, "HVAC", "High", "In Progress", "Condenser vibration noise", "2026-05-21", None, "CoolAir Mechanical", 540, None),
+    (5, 14, 12, "Amenity", "Medium", "Open", "Gym treadmill maintenance", "2026-05-19", None, "FitEquip Services", 260, None),
+    (6, 16, 14, "Compliance", "High", "Open", "Balcony railing safety check", "2026-05-17", None, "CodeSafe Inspections", 190, None),
+    (7, 17, 15, "Appliance", "Low", "Completed", "Replace garbage disposal", "2026-05-06", "2026-05-07T16:40:00", "QuickFix Appliance", 120, 118),
+    (7, 18, None, "Turn", "Medium", "In Progress", "Carpet cleaning + repaint", "2026-05-23", None, "TurnRight Services", 680, None),
+    (8, 19, 16, "Electrical", "Medium", "Open", "Entry light flickering", "2026-05-24", None, "SparkPro Electric", 110, None),
+    (8, 20, None, "Grounds", "Low", "Completed", "Pool deck pressure wash", "2026-05-08", "2026-05-09T12:05:00", "BlueWave Maintenance", 220, 205),
+    (10, 22, 17, "Safety", "High", "Open", "Install additional grab bars", "2026-05-18", None, "SeniorCare Retrofit", 340, None),
+    (11, 23, None, "HVAC", "Medium", "Open", "Seasonal HVAC tune-up", "2026-05-27", None, "CoolAir Mechanical", 175, None),
+    (12, 24, 18, "Plumbing", "Medium", "Completed", "Toilet tank replacement", "2026-05-09", "2026-05-10T14:00:00", "Memphis Plumbing Co", 140, 138),
+    (12, None, None, "Grounds", "Low", "Open", "Parking lot striping touch-up", "2026-05-28", None, "LotMark Services", 950, None),
+]
+insert_batch("work_orders", "property_id,unit_id,resident_id,category,priority,status,description,submitted_at,completed_at,assigned_vendor,estimated_cost,actual_cost", WORK_ORDERS, TARGET_WORK_ORDERS)
+
+CHARGES = [
+    (1, "2026-05-01", "Rent", 1545, "Paid", "2026-05-02T09:10:00"),
+    (1, "2026-06-01", "Rent", 1545, "Pending", None),
+    (2, "2026-05-01", "Rent", 1895, "Paid", "2026-05-01T08:05:00"),
+    (2, "2026-06-01", "Rent", 1895, "Pending", None),
+    (3, "2026-05-01", "Rent", 1425, "Paid", "2026-05-03T14:22:00"),
+    (3, "2026-05-01", "Utility", 95, "Paid", "2026-05-05T11:00:00"),
+    (4, "2026-05-01", "Rent", 1710, "Paid", "2026-05-02T16:45:00"),
+    (4, "2026-06-01", "Rent", 1710, "Pending", None),
+    (5, "2026-05-01", "Rent", 2075, "Partial", "2026-05-04T10:12:00"),
+    (5, "2026-05-01", "Pet", 35, "Paid", "2026-05-04T10:13:00"),
+    (6, "2026-05-01", "Rent", 995, "Paid", "2026-05-06T09:40:00"),
+    (6, "2026-06-01", "Rent", 995, "Pending", None),
+    (7, "2026-05-01", "Rent", 1210, "Paid", "2026-05-05T13:01:00"),
+    (7, "2026-05-01", "Fee", 50, "Paid", "2026-05-05T13:02:00"),
+    (8, "2026-05-01", "Rent", 915, "Paid", "2026-05-02T09:20:00"),
+    (8, "2026-06-01", "Rent", 915, "Pending", None),
+    (9, "2026-05-01", "Rent", 1125, "Paid", "2026-05-01T15:30:00"),
+    (9, "2026-05-01", "Utility", 110, "Pending", None),
+    (10, "2026-05-01", "Rent", 2050, "Paid", "2026-05-03T08:45:00"),
+    (10, "2026-06-01", "Rent", 2050, "Pending", None),
+    (11, "2026-05-01", "Rent", 2760, "Paid", "2026-05-02T17:00:00"),
+    (11, "2026-06-01", "Rent", 2760, "Pending", None),
+    (12, "2026-05-01", "Rent", 3980, "Paid", "2026-05-02T09:55:00"),
+    (12, "2026-05-01", "Parking", 175, "Paid", "2026-05-02T09:56:00"),
+    (13, "2026-05-01", "Rent", 825, "Paid", "2026-05-05T16:02:00"),
+    (13, "2026-06-01", "Rent", 825, "Pending", None),
+    (14, "2026-05-01", "Rent", 980, "Delinquent", None),
+    (14, "2026-05-01", "LateFee", 75, "Delinquent", None),
+    (15, "2026-05-01", "Rent", 1230, "Paid", "2026-05-01T07:40:00"),
+    (15, "2026-06-01", "Rent", 1230, "Pending", None),
+    (16, "2026-05-01", "Rent", 1450, "Paid", "2026-05-03T12:20:00"),
+    (16, "2026-05-01", "Utility", 88, "Paid", "2026-05-03T12:21:00"),
+    (17, "2026-05-01", "Rent", 2090, "Paid", "2026-05-04T09:12:00"),
+    (17, "2026-06-01", "Rent", 2090, "Pending", None),
+    (18, "2026-05-01", "Rent", 1285, "Paid", "2026-05-06T14:10:00"),
+    (18, "2026-06-01", "Rent", 1285, "Pending", None),
+]
+insert_batch("charges", "lease_id,charge_month,charge_type,amount,payment_status,paid_at", CHARGES, TARGET_CHARGES)
 
 print("Seed complete.")
 cursor.close()

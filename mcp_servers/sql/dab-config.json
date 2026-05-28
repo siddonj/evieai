@@ -60,6 +60,51 @@
           "actions": ["read"]
         }
       ]
+    },
+    "Unit": {
+      "source": "dbo.units",
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ]
+    },
+    "Resident": {
+      "source": "dbo.residents",
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ]
+    },
+    "Lease": {
+      "source": "dbo.leases",
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ]
+    },
+    "WorkOrder": {
+      "source": "dbo.work_orders",
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ]
+    },
+    "Charge": {
+      "source": "dbo.charges",
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ]
     }
   }
 }

@@ -301,8 +301,33 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
         "appraisal", "meeting", "call", "follow", "upcoming",
         "schedule", "calendar", "task", "open item"
     ])
+    fetch_units = _keyword_match(q, [
+        "unit", "unit mix", "floor plan", "vacant unit", "occupied unit"
+    ])
+    fetch_residents = _keyword_match(q, [
+        "resident", "tenant", "renter", "household"
+    ])
+    fetch_leases = _keyword_match(q, [
+        "lease", "renewal", "expiring", "move out", "move-in", "delinquent lease"
+    ])
+    fetch_work_orders = _keyword_match(q, [
+        "work order", "maintenance", "service request", "ticket", "repair"
+    ])
+    fetch_charges = _keyword_match(q, [
+        "charge", "ledger", "rent roll", "payment", "delinquent", "late fee", "collections"
+    ])
 
-    if not any([fetch_properties, fetch_contacts, fetch_deals, fetch_activities]):
+    if not any([
+        fetch_properties,
+        fetch_contacts,
+        fetch_deals,
+        fetch_activities,
+        fetch_units,
+        fetch_residents,
+        fetch_leases,
+        fetch_work_orders,
+        fetch_charges,
+    ]):
         fetch_properties = True
         fetch_deals = True
 
@@ -354,6 +379,61 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
                     dab_available = True
             except Exception as exc:
                 results["activities_error"] = str(exc)
+
+        if fetch_units:
+            try:
+                resp = await client.get(f"{DAB_BASE}/api/Unit")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    results["units"] = data.get("value", data)
+                    results["units_summary"] = f"Found {len(results['units'])} units"
+                    dab_available = True
+            except Exception as exc:
+                results["units_error"] = str(exc)
+
+        if fetch_residents:
+            try:
+                resp = await client.get(f"{DAB_BASE}/api/Resident")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    results["residents"] = data.get("value", data)
+                    results["residents_summary"] = f"Found {len(results['residents'])} residents"
+                    dab_available = True
+            except Exception as exc:
+                results["residents_error"] = str(exc)
+
+        if fetch_leases:
+            try:
+                resp = await client.get(f"{DAB_BASE}/api/Lease")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    results["leases"] = data.get("value", data)
+                    results["leases_summary"] = f"Found {len(results['leases'])} leases"
+                    dab_available = True
+            except Exception as exc:
+                results["leases_error"] = str(exc)
+
+        if fetch_work_orders:
+            try:
+                resp = await client.get(f"{DAB_BASE}/api/WorkOrder")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    results["work_orders"] = data.get("value", data)
+                    results["work_orders_summary"] = f"Found {len(results['work_orders'])} work orders"
+                    dab_available = True
+            except Exception as exc:
+                results["work_orders_error"] = str(exc)
+
+        if fetch_charges:
+            try:
+                resp = await client.get(f"{DAB_BASE}/api/Charge")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    results["charges"] = data.get("value", data)
+                    results["charges_summary"] = f"Found {len(results['charges'])} charges"
+                    dab_available = True
+            except Exception as exc:
+                results["charges_error"] = str(exc)
 
     # Fall back to demo data if DAB is unavailable
     if not dab_available:

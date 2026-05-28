@@ -54,7 +54,19 @@ terraform apply     # deploy (takes 10-15 minutes)
 
 ### Post-deployment manual steps
 1. **Admin consent:** Azure Portal → Entra ID → App registrations → `aiagent2-graph-app-dev` → API permissions → Grant admin consent
-2. **Run seed container:** (one-time) populate SQL with demo data
+2. **Run SQL migrations + seed:** (one-time) populate SQL with demo data
+
+```bash
+# Run schema migrations (includes property-management tables such as units/leases/work_orders)
+export DATABASE_CONNECTION_STRING="<sql-connection-string>"
+python mcp_servers/sql/migrate.py
+
+# Seed synthetic multifamily + property-management data
+python mcp_servers/sql/seed/seed.py
+```
+
+The seeded property-management dataset is synthetic and inspired by common PMS workflows
+(Entrata/Yardi-style domains), not copied from proprietary vendor data.
   
 ---
 
