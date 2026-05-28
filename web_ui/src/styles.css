@@ -264,6 +264,391 @@ button:disabled {
   }
 }
 
+/* ─── Settings/Admin Console ───────────────────────────────────────── */
+
+.settings-shell {
+  margin-top: 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.8rem;
+  border-bottom: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.settings-tab {
+  justify-self: auto;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #1f2a34;
+  color: #c9d5e3;
+  cursor: pointer;
+}
+
+.settings-tab.active {
+  border-color: rgba(237, 176, 89, 0.5);
+  background: rgba(237, 176, 89, 0.16);
+  color: #ffd8a0;
+}
+
+.settings-section {
+  padding: 0.95rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-section h2 {
+  margin: 0 0 0.7rem;
+  font-size: 1rem;
+  color: #fff;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.7rem;
+}
+
+.settings-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.settings-field label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.settings-field input,
+.settings-field select,
+.json-textarea {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #151e27;
+  color: #fff;
+  padding: 0.58rem 0.65rem;
+  font-size: 0.88rem;
+}
+
+.settings-message {
+  margin-top: 0.6rem;
+  font-size: 0.82rem;
+  color: #ffd39e;
+}
+
+.settings-message.success {
+  color: #97f0b6;
+}
+
+.settings-hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.users-table th,
+.users-table td {
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  padding: 0.52rem;
+  vertical-align: middle;
+}
+
+.users-table th {
+  color: #a7b4c2;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.72rem;
+}
+
+.users-table tr.current td {
+  background: rgba(51, 85, 114, 0.2);
+}
+
+.role-badge {
+  display: inline-flex;
+  padding: 0.16rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  text-transform: uppercase;
+  font-size: 0.68rem;
+}
+
+.role-admin {
+  color: #ffd8a0;
+  border-color: rgba(237, 176, 89, 0.45);
+}
+
+.role-user {
+  color: #9fccff;
+  border-color: rgba(51, 85, 114, 0.45);
+}
+
+.you-badge {
+  margin-left: 0.4rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.btn-remove,
+.btn-preview,
+.btn-close-preview,
+.btn-logout {
+  justify-self: auto;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.btn-danger {
+  background: #b85050;
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: #c35f5f;
+}
+
+.mcp-server-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.mcp-server-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.mcp-server-row.enabled {
+  border-color: rgba(135, 208, 162, 0.4);
+}
+
+.mcp-server-row.disabled {
+  opacity: 0.78;
+}
+
+.mcp-server-info {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.mcp-server-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.mcp-server-key {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.mcp-toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+}
+
+.mcp-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.mcp-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: #5b6773;
+  border-radius: 999px;
+  transition: 180ms ease;
+}
+
+.mcp-toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  border-radius: 50%;
+  background: #fff;
+  transition: 180ms ease;
+}
+
+.mcp-toggle input:checked + .mcp-toggle-slider {
+  background: #4e8a63;
+}
+
+.mcp-toggle input:checked + .mcp-toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.data-preview-panel {
+  margin-top: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #121a22;
+}
+
+.data-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.data-preview-service {
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  color: #a6b9cf;
+}
+
+.data-preview-json {
+  margin: 0;
+  padding: 0.7rem;
+  font-size: 0.74rem;
+  color: #ced9e5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.approval-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.approval-grid {
+  margin-top: 0.7rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.7rem;
+}
+
+.reliability-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #17212b;
+  padding: 0.65rem;
+}
+
+.reliability-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.45rem;
+}
+
+.reliability-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.35rem 0 0.6rem;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.reliability-list li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.77rem;
+  color: #ccd7e3;
+}
+
+.reliability-json {
+  max-height: 210px;
+  overflow: auto;
+}
+
+.circuit-row {
+  margin-top: 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.circuit-pill,
+.status-pill,
+.risk-pill {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 0.14rem 0.55rem;
+  border: 1px solid var(--line);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.circuit-pill.open,
+.status-pill.failed,
+.status-pill.rejected,
+.risk-pill.high {
+  color: #ffb2b2;
+  border-color: rgba(201, 97, 97, 0.5);
+}
+
+.circuit-pill.closed,
+.status-pill.completed,
+.status-pill.approved,
+.risk-pill.low {
+  color: #98f0bb;
+  border-color: rgba(84, 173, 118, 0.5);
+}
+
+.status-pill.pending_approval,
+.risk-pill.medium {
+  color: #ffd8a0;
+  border-color: rgba(237, 176, 89, 0.5);
+}
+
+.approvals-table .mono-cell {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.75rem;
+}
+
+.action-buttons-cell {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.action-filter-field {
+  min-width: 160px;
+}
+
+.settings-footer {
+  padding: 0.9rem 1rem;
+}
+
+@media (max-width: 880px) {
+  .approval-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .users-table {
+    font-size: 0.78rem;
+  }
+}
+
 /* ─── Card ───────────────────────────────────────────────────────── */
 
 .card {
