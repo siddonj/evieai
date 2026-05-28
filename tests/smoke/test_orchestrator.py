@@ -7,7 +7,6 @@ Usage:
 
 import json
 import os
-import json
 
 import httpx
 import pytest
@@ -105,3 +104,29 @@ async def test_download_endpoint_404():
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(f"{_base_url()}/download/nonexistent/file.txt")
         assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_dashboard_performance_populated():
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.get(f"{_base_url()}/dashboard/performance")
+        assert resp.status_code == 200
+
+        body = resp.json()
+        assert "generated_at" in body
+
+        overview = body.get("overview") or {}
+        pipeline = body.get("pipeline") or {}
+        activities = body.get("activities") or {}
+        top_props = body.get("top_properties_by_noi") or []
+
+        assert overview.get("portfolio_value", 0) > 0
+        assert overview.get("pipeline_value", 0) > 0
+
+        # Regression guard: pipeline must be populated, not zeroed.
+        assert pipeline.get("pipeline_total", 0) > 0
+        assert pipeline.get("commission_pipeline", 0) > 0
+        assert len(pipeline.get("by_stage") or {}) > 0
+
+        assert activities.get("upcoming_count", 0) >= 0
+        assert len(top_props) > 0
