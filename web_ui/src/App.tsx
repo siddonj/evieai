@@ -49,11 +49,21 @@ type R1Data = {
     total_incidents: number
     open_events: number
     open_event_rate_pct: number
+    isp_count?: number
+    sla_target_uptime_pct?: number
+    sla_met_pct?: number
+    sla_breach_days?: number
+    incident_rate_per_100_device_days?: number
   }
   severity_distribution: Array<{ severity: string; count: number; pct_of_events: number }>
   site_snapshot_30d: Array<{
     site_code: string
     site_name: string
+    isp_primary?: string
+    isp_secondary?: string
+    sla_target_uptime_pct?: number
+    sla_met_pct?: number
+    sla_breach_days?: number
     avg_uptime_pct: number
     avg_latency_ms: number
     avg_packet_loss_pct: number
@@ -324,10 +334,14 @@ function R1DashboardView({ userId, onBack }: { userId?: string; onBack: () => vo
             <div className="kpi-grid">
               <div className="kpi-card"><span>Sites</span><strong>{formatNumber(data.summary.sites)}</strong></div>
               <div className="kpi-card"><span>Devices</span><strong>{formatNumber(data.summary.devices)}</strong></div>
+              <div className="kpi-card"><span>ISPs</span><strong>{formatNumber(data.summary.isp_count ?? 0)}</strong></div>
               <div className="kpi-card"><span>Avg Uptime</span><strong>{data.summary.avg_uptime_pct}%</strong></div>
+              <div className="kpi-card"><span>SLA Met</span><strong>{data.summary.sla_met_pct ?? 0}%</strong></div>
               <div className="kpi-card"><span>Avg Latency</span><strong>{data.summary.avg_latency_ms} ms</strong></div>
               <div className="kpi-card"><span>Packet Loss</span><strong>{data.summary.avg_packet_loss_pct}%</strong></div>
+              <div className="kpi-card"><span>SLA Breach Days</span><strong>{formatNumber(data.summary.sla_breach_days ?? 0)}</strong></div>
               <div className="kpi-card"><span>Open Events</span><strong>{formatNumber(data.summary.open_events)}</strong></div>
+              <div className="kpi-card"><span>Incident Rate</span><strong>{data.summary.incident_rate_per_100_device_days ?? 0}/100d</strong></div>
             </div>
 
             <div className="dashboard-row">
@@ -363,6 +377,8 @@ function R1DashboardView({ userId, onBack }: { userId?: string; onBack: () => vo
                   <thead>
                     <tr>
                       <th>Site</th>
+                      <th>ISP(s)</th>
+                      <th>SLA</th>
                       <th>Uptime</th>
                       <th>Latency</th>
                       <th>Packet Loss</th>
@@ -373,6 +389,8 @@ function R1DashboardView({ userId, onBack }: { userId?: string; onBack: () => vo
                     {data.site_snapshot_30d.map((s) => (
                       <tr key={s.site_code}>
                         <td>{s.site_name} ({s.site_code})</td>
+                        <td>{s.isp_primary ?? 'unknown'}{s.isp_secondary ? ` / ${s.isp_secondary}` : ''}</td>
+                        <td>{s.sla_met_pct ?? 0}% met (target {s.sla_target_uptime_pct ?? 0}%)</td>
                         <td>{s.avg_uptime_pct}%</td>
                         <td>{s.avg_latency_ms} ms</td>
                         <td>{s.avg_packet_loss_pct}%</td>

@@ -88,9 +88,39 @@ _DEMO_ACTIVITIES = [
 ]
 
 _DEMO_R1_SITES = [
-    {"id": 1, "name": "HQ Campus", "region": "West", "city": "Memphis", "state": "TN"},
-    {"id": 2, "name": "Distribution North", "region": "Central", "city": "Nashville", "state": "TN"},
-    {"id": 3, "name": "Remote Branch East", "region": "East", "city": "Knoxville", "state": "TN"},
+    {
+        "id": 1,
+        "site_code": "hq-campus",
+        "site_name": "HQ Campus",
+        "region": "West",
+        "city": "Memphis",
+        "state": "TN",
+        "isp_primary": "AT&T Business Fiber",
+        "isp_secondary": "Comcast Business",
+        "sla_target_uptime_pct": 99.95,
+    },
+    {
+        "id": 2,
+        "site_code": "dist-north",
+        "site_name": "Distribution North",
+        "region": "Central",
+        "city": "Nashville",
+        "state": "TN",
+        "isp_primary": "Lumen DIA",
+        "isp_secondary": "AT&T Business Fiber",
+        "sla_target_uptime_pct": 99.9,
+    },
+    {
+        "id": 3,
+        "site_code": "remote-east",
+        "site_name": "Remote Branch East",
+        "region": "East",
+        "city": "Knoxville",
+        "state": "TN",
+        "isp_primary": "Charter Spectrum Enterprise",
+        "isp_secondary": "Lumen DIA",
+        "sla_target_uptime_pct": 99.9,
+    },
 ]
 
 _DEMO_R1_DEVICES = [
@@ -101,9 +131,9 @@ _DEMO_R1_DEVICES = [
 ]
 
 _DEMO_R1_DEVICE_EVENTS = [
-    {"id": 5001, "device_id": 301, "severity": "high", "is_open": 1, "event_type": "packet_loss"},
-    {"id": 5002, "device_id": 201, "severity": "medium", "is_open": 0, "event_type": "latency_spike"},
-    {"id": 5003, "device_id": 102, "severity": "low", "is_open": 1, "event_type": "client_reauth"},
+    {"id": 5001, "device_id": 301, "severity": "high", "is_open": 1, "event_type": "packet_loss", "incident_type": "transport"},
+    {"id": 5002, "device_id": 201, "severity": "medium", "is_open": 0, "event_type": "latency_spike", "incident_type": "congestion"},
+    {"id": 5003, "device_id": 102, "severity": "low", "is_open": 1, "event_type": "client_reauth", "incident_type": "wireless"},
 ]
 
 _DEMO_R1_DEVICE_DAILY_METRICS = [

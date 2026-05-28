@@ -1176,21 +1176,39 @@ async def r1_dashboard(user_id: str | None = None) -> dict[str, Any]:
         for s in sites
         if isinstance(s, dict)
     }
+    site_sla_target: dict[int, float] = {
+        _to_int(s.get("id")): _to_float(s.get("sla_target_uptime_pct"), 99.9)
+        for s in sites
+        if isinstance(s, dict)
+    }
+    isp_counts: dict[str, int] = {}
+    for s in sites:
+        if not isinstance(s, dict):
+            continue
+        for isp_field in ("isp_primary", "isp_secondary"):
+            isp = str(s.get(isp_field, "")).strip()
+            if not isp:
+                continue
+            isp_counts[isp] = isp_counts.get(isp, 0) + 1
 
     total_uptime = 0.0
     total_latency = 0.0
     total_packet_loss = 0.0
     total_throughput = 0.0
     total_incidents = 0
+    total_sla_breaches = 0
     max_metric_date = ""
 
     severity_counts: dict[str, int] = {}
+    incident_type_counts: dict[str, int] = {}
     open_events = 0
     for event in events:
         if not isinstance(event, dict):
             continue
         sev = str(event.get("severity", "Unknown"))
         severity_counts[sev] = severity_counts.get(sev, 0) + 1
+        incident_type = str(event.get("incident_type", event.get("event_type", "other")))
+        incident_type_counts[incident_type] = incident_type_counts.get(incident_type, 0) + 1
         if _to_int(event.get("is_open"), 0) == 1:
             open_events += 1
 
@@ -1228,14 +1246,30 @@ async def r1_dashboard(user_id: str | None = None) -> dict[str, Any]:
         site_id = device_to_site.get(dev_id)
         if site_id is None:
             continue
-        sroll = site_rollup.setdefault(site_id, {"count": 0.0, "uptime": 0.0, "latency": 0.0, "packet_loss": 0.0, "incidents": 0.0})
+        sroll = site_rollup.setdefault(site_id, {"count": 0.0, "uptime": 0.0, "latency": 0.0, "packet_loss": 0.0, "incidents": 0.0, "sla_met": 0.0, "sla_breach": 0.0})
         sroll["count"] += 1
         sroll["uptime"] += uptime
         sroll["latency"] += latency
         sroll["packet_loss"] += packet_loss
         sroll["incidents"] += incidents
+        sla_target = site_sla_target.get(site_id, 99.9)
+        if uptime >= sla_target:
+            sroll["sla_met"] += 1
+        else:
+            sroll["sla_breach"] += 1
+            total_sla_breaches += 1
 
     metric_count = len(metrics)
+    avg_sla_target = round(sum(site_sla_target.values()) / len(site_sla_target), 2) if site_sla_target else 99.9
+    sla_met_pct = round(((metric_count - total_sla_breaches) / metric_count) * 100, 2) if metric_count else 0
+    top_incident_types = [
+        {"incident_type": name, "count": count}
+        for name, count in sorted(incident_type_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+    ]
+    isp_mix = [
+        {"isp": isp, "site_links": count}
+        for isp, count in sorted(isp_counts.items(), key=lambda x: x[1], reverse=True)
+    ]
     summary = {
         "sites": len(sites),
         "devices": len(devices),
@@ -1248,6 +1282,13 @@ async def r1_dashboard(user_id: str | None = None) -> dict[str, Any]:
         "total_incidents": total_incidents,
         "open_events": open_events,
         "open_event_rate_pct": round((open_events / len(events)) * 100, 2) if events else 0,
+        "isp_count": len(isp_counts),
+        "isp_mix": isp_mix,
+        "sla_target_uptime_pct": avg_sla_target,
+        "sla_met_pct": sla_met_pct,
+        "sla_breach_days": total_sla_breaches,
+        "incident_rate_per_100_device_days": round((total_incidents / metric_count) * 100, 2) if metric_count else 0,
+        "top_incident_types": top_incident_types,
     }
 
     severity_distribution = [
@@ -1267,6 +1308,11 @@ async def r1_dashboard(user_id: str | None = None) -> dict[str, Any]:
             {
                 "site_code": str(meta.get("site_code", f"site-{site_id}")),
                 "site_name": str(meta.get("site_name", f"Site {site_id}")),
+                "isp_primary": str(meta.get("isp_primary", "unknown")),
+                "isp_secondary": str(meta.get("isp_secondary", "none")),
+                "sla_target_uptime_pct": round(site_sla_target.get(site_id, 99.9), 2),
+                "sla_met_pct": round((agg.get("sla_met", 0.0) / count) * 100, 2),
+                "sla_breach_days": int(agg.get("sla_breach", 0.0)),
                 "avg_uptime_pct": round(agg["uptime"] / count, 2),
                 "avg_latency_ms": round(agg["latency"] / count, 2),
                 "avg_packet_loss_pct": round(agg["packet_loss"] / count, 2),
