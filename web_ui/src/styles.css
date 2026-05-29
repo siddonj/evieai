@@ -1732,6 +1732,7 @@ body::before {
   letter-spacing: 0.24em;
   line-height: 1;
   color: #f0f5ff;
+  text-shadow: 0 1px 2px rgba(2, 10, 28, 0.75), 0 6px 16px rgba(7, 39, 102, 0.45);
 }
 
 .evie-wordmark-tag {
@@ -1740,21 +1741,25 @@ body::before {
   letter-spacing: 0.31em;
   font-weight: 600;
   color: rgba(207, 225, 255, 0.88);
+  text-shadow: 0 1px 2px rgba(3, 12, 33, 0.7);
 }
 
 .eyebrow {
   color: #65daff;
+  text-shadow: 0 1px 2px rgba(3, 16, 44, 0.7);
 }
 
 h1 {
   font-family: 'Orbitron', 'Rajdhani', sans-serif;
   font-weight: 700;
   letter-spacing: 0.03em;
+  text-shadow: 0 1px 2px rgba(2, 10, 28, 0.82), 0 8px 20px rgba(7, 39, 102, 0.36);
 }
 
 .subtitle {
   max-width: 860px;
   color: #bdcbee;
+  text-shadow: 0 1px 2px rgba(3, 12, 34, 0.65);
 }
 
 .suggested-prompts {
@@ -1870,6 +1875,10 @@ textarea:focus,
 .bubble.assistant {
   background: rgba(8, 19, 52, 0.83);
   border-color: rgba(95, 141, 255, 0.4);
+}
+
+.bubble .text {
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
 }
 
 .card,
