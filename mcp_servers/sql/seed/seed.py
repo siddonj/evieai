@@ -2,10 +2,10 @@
 Safe to re-run — only inserts additional records below target count."""
 from __future__ import annotations
 
-from datetime import date, timedelta
 import os
 import re
 import time
+from datetime import date, timedelta
 
 import pyodbc
 
