@@ -349,12 +349,17 @@ def _demo_response(payload: QueryRequest) -> dict[str, Any]:
     return results
 
 
-async def _fetch_dab_values(client: httpx.AsyncClient, entity: str) -> list[dict[str, Any]]:
+async def _fetch_dab_values(
+    client: httpx.AsyncClient,
+    entity: str,
+    max_rows: int | None = None,
+) -> list[dict[str, Any]]:
     """Fetch one DAB entity collection, following nextLink pagination up to DAB_MAX_ROWS."""
     url = f"{DAB_BASE}/api/{entity}?$first={DAB_PAGE_SIZE}"
+    row_cap = max_rows if max_rows is not None else DAB_MAX_ROWS
     values: list[dict[str, Any]] = []
 
-    while url and len(values) < DAB_MAX_ROWS:
+    while url and len(values) < row_cap:
         resp = await client.get(url)
         if resp.status_code != 200:
             break
@@ -365,8 +370,8 @@ async def _fetch_dab_values(client: httpx.AsyncClient, entity: str) -> list[dict
         values.extend(page)
         url = data.get("nextLink")
 
-    if len(values) > DAB_MAX_ROWS:
-        return values[:DAB_MAX_ROWS]
+    if len(values) > row_cap:
+        return values[:row_cap]
     return values
 
 
@@ -416,6 +421,7 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
         "r1", "ruckus", "wireless", "wifi", "network", "access point",
         "device event", "packet loss", "latency", "throughput", "incident"
     ])
+    is_dashboard_query = "dashboard" in q
 
     if not any([
         fetch_properties,
@@ -519,8 +525,9 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
                 results["charges_error"] = str(exc)
 
         if fetch_r1:
+            r1_max_rows = DAB_MAX_ROWS if is_dashboard_query else 200
             try:
-                results["r1_sites"] = await _fetch_dab_values(client, "R1Site")
+                results["r1_sites"] = await _fetch_dab_values(client, "R1Site", max_rows=r1_max_rows)
                 if results["r1_sites"]:
                     results["r1_sites_summary"] = f"Found {len(results['r1_sites'])} network sites"
                     dab_available = True
@@ -528,7 +535,7 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
                 results["r1_sites_error"] = str(exc)
 
             try:
-                results["r1_devices"] = await _fetch_dab_values(client, "R1Device")
+                results["r1_devices"] = await _fetch_dab_values(client, "R1Device", max_rows=r1_max_rows)
                 if results["r1_devices"]:
                     results["r1_devices_summary"] = f"Found {len(results['r1_devices'])} network devices"
                     dab_available = True
@@ -536,7 +543,7 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
                 results["r1_devices_error"] = str(exc)
 
             try:
-                results["r1_device_events"] = await _fetch_dab_values(client, "R1DeviceEvent")
+                results["r1_device_events"] = await _fetch_dab_values(client, "R1DeviceEvent", max_rows=r1_max_rows)
                 if results["r1_device_events"]:
                     results["r1_device_events_summary"] = f"Found {len(results['r1_device_events'])} network device events"
                     dab_available = True
@@ -544,12 +551,18 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
                 results["r1_device_events_error"] = str(exc)
 
             try:
-                results["r1_device_daily_metrics"] = await _fetch_dab_values(client, "R1DeviceDailyMetric")
+                results["r1_device_daily_metrics"] = await _fetch_dab_values(client, "R1DeviceDailyMetric", max_rows=r1_max_rows)
                 if results["r1_device_daily_metrics"]:
                     results["r1_device_daily_metrics_summary"] = f"Found {len(results['r1_device_daily_metrics'])} network daily metrics"
                     dab_available = True
             except Exception as exc:
                 results["r1_device_daily_metrics_error"] = str(exc)
+
+            if not is_dashboard_query:
+                results["r1_sampling_note"] = (
+                    f"Network telemetry rows are sampled to {r1_max_rows} per dataset for chat analysis. "
+                    "Use dashboard queries for full-history aggregation."
+                )
 
     # Fall back to demo data if DAB is unavailable
     if not dab_available:
