@@ -633,6 +633,17 @@ function ChatView() {
       <div className="bg-grid" aria-hidden="true" />
 
       <header className="hero">
+        <div className="evie-brand">
+          <div className="evie-mark" aria-hidden="true">
+            <span className="mark-segment mark-segment-top" />
+            <span className="mark-segment mark-segment-mid" />
+            <span className="mark-segment mark-segment-bot" />
+          </div>
+          <div className="evie-wordmark">
+            <div className="evie-wordmark-title">EVIEAI</div>
+            <div className="evie-wordmark-tag">MULTIFAMILY AI SOLUTIONS</div>
+          </div>
+        </div>
         <p className="eyebrow">AI-Powered Agentic Q&A</p>
         <h1>Workspace Intelligence Console</h1>
         <p className="subtitle">

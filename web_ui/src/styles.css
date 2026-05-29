@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@400;500;600;700&display=swap');
+
 :root {
   --bg: #1d1d1d;
   --panel: #262d35;
@@ -1616,6 +1618,355 @@ button:disabled {
   font-size: 1.6rem;
   flex-shrink: 0;
   margin-top: 0.1rem;
+}
+
+/* ─── EVIEAI Brand Refresh ───────────────────────────────────────── */
+
+:root {
+  --bg: #050718;
+  --panel: rgba(9, 18, 46, 0.8);
+  --ink: #ebf2ff;
+  --muted: #a2b5dc;
+  --accent: #59dcff;
+  --accent-2: #2e39cf;
+  --line: rgba(106, 144, 255, 0.32);
+  --card-bg: rgba(11, 24, 56, 0.84);
+  --card-hover: rgba(14, 33, 78, 0.96);
+}
+
+body {
+  font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+  letter-spacing: 0.01em;
+  background:
+    radial-gradient(circle at 18% 32%, rgba(39, 84, 255, 0.34) 0, transparent 38%),
+    linear-gradient(110deg, #010108 0%, #040c2f 22%, #1d25a7 74%, #3537c4 100%);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(130deg, rgba(0, 0, 0, 0.74) 0%, rgba(0, 0, 0, 0.12) 42%, transparent 66%),
+    repeating-linear-gradient(
+      -30deg,
+      rgba(107, 156, 255, 0.06) 0,
+      rgba(107, 156, 255, 0.06) 1px,
+      transparent 1px,
+      transparent 28px
+    );
+  z-index: -1;
+}
+
+.page {
+  max-width: 1120px;
+  padding: 2.1rem 1rem 2.8rem;
+}
+
+.bg-grid {
+  opacity: 0.45;
+  background-image:
+    linear-gradient(to right, rgba(131, 171, 255, 0.09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(131, 171, 255, 0.09) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at 50% 28%, black 18%, transparent 88%);
+}
+
+.hero {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 1.1rem 1.15rem 1rem;
+  background: linear-gradient(120deg, rgba(8, 18, 47, 0.88), rgba(15, 22, 97, 0.56));
+  box-shadow: 0 22px 48px rgba(2, 7, 30, 0.4);
+}
+
+.evie-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.65rem;
+}
+
+.evie-brand-compact {
+  justify-content: center;
+  margin-bottom: 0.7rem;
+}
+
+.evie-mark {
+  position: relative;
+  width: 74px;
+  height: 58px;
+  border-radius: 6px;
+  background: linear-gradient(160deg, rgba(16, 161, 255, 0.18), rgba(16, 161, 255, 0.02));
+  border: 1px solid rgba(87, 203, 255, 0.45);
+  overflow: hidden;
+}
+
+.mark-segment {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 10px;
+  background: linear-gradient(95deg, #0bb4ff, #2d68ff 72%);
+  clip-path: polygon(0 0, 88% 0, 100% 100%, 0 100%);
+}
+
+.mark-segment-top {
+  top: 10px;
+}
+
+.mark-segment-mid {
+  top: 24px;
+  right: 18px;
+}
+
+.mark-segment-bot {
+  top: 38px;
+}
+
+.evie-wordmark-title {
+  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-size: clamp(1.45rem, 2.3vw, 1.95rem);
+  letter-spacing: 0.24em;
+  line-height: 1;
+  color: #f0f5ff;
+}
+
+.evie-wordmark-tag {
+  margin-top: 0.3rem;
+  font-size: 0.67rem;
+  letter-spacing: 0.31em;
+  font-weight: 600;
+  color: rgba(207, 225, 255, 0.88);
+}
+
+.eyebrow {
+  color: #65daff;
+}
+
+h1 {
+  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.subtitle {
+  max-width: 860px;
+  color: #bdcbee;
+}
+
+.suggested-prompts {
+  margin-top: 1.1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.55rem;
+}
+
+.prompt-chip {
+  justify-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid rgba(111, 175, 255, 0.4);
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  background: linear-gradient(125deg, rgba(6, 15, 44, 0.95), rgba(19, 47, 117, 0.72));
+  color: #ddecff;
+  text-align: left;
+  font-size: 0.88rem;
+}
+
+.prompt-chip:hover {
+  border-color: #62deff;
+  box-shadow: 0 8px 18px rgba(9, 149, 255, 0.24);
+}
+
+.prompt-label {
+  font-weight: 600;
+}
+
+.chat-shell,
+.settings-shell,
+.dashboard-shell,
+.login-card {
+  border-radius: 14px;
+  border-color: var(--line);
+  background: linear-gradient(145deg, rgba(6, 16, 44, 0.92), rgba(9, 20, 56, 0.84));
+  box-shadow: 0 24px 56px rgba(2, 8, 28, 0.46);
+}
+
+.status {
+  background: rgba(0, 0, 0, 0.24);
+  font-family: 'Rajdhani', monospace;
+  color: #abbee4;
+}
+
+.status-btn,
+.settings-tab,
+.btn-preview,
+.btn-close-preview,
+.btn-header,
+.btn-remove,
+.btn-logout,
+.btn-logout-sm,
+.btn-danger {
+  border: 1px solid rgba(107, 163, 255, 0.42);
+  border-radius: 8px;
+  background: linear-gradient(130deg, rgba(12, 31, 78, 0.95), rgba(22, 43, 126, 0.86));
+  color: #d9ecff;
+}
+
+.status-btn:hover,
+.settings-tab:hover,
+.btn-preview:hover,
+.btn-close-preview:hover,
+.btn-header:hover {
+  border-color: #64deff;
+  color: #f4f8ff;
+}
+
+button {
+  border: 1px solid rgba(98, 216, 255, 0.52);
+  border-radius: 8px;
+  background: linear-gradient(130deg, #07b6ff 0%, #2a58ff 82%);
+  color: #eef6ff;
+  font-weight: 700;
+}
+
+button:hover {
+  background: linear-gradient(130deg, #1fd4ff 0%, #3965ff 82%);
+}
+
+textarea,
+.login-field input,
+.settings-field input,
+.settings-field select,
+.json-textarea {
+  border-color: rgba(108, 157, 255, 0.42);
+  background: rgba(6, 13, 36, 0.92);
+  color: #edf4ff;
+}
+
+textarea:focus,
+.login-field input:focus,
+.settings-field input:focus,
+.settings-field select:focus,
+.json-textarea:focus {
+  border-color: #59dbff;
+  box-shadow: 0 0 0 2px rgba(89, 219, 255, 0.22);
+}
+
+.bubble {
+  border-radius: 12px;
+}
+
+.bubble.user {
+  background: linear-gradient(132deg, rgba(11, 175, 255, 0.3), rgba(37, 92, 255, 0.42));
+  border-color: rgba(92, 211, 255, 0.58);
+}
+
+.bubble.assistant {
+  background: rgba(8, 19, 52, 0.83);
+  border-color: rgba(95, 141, 255, 0.4);
+}
+
+.card,
+.dashboard-panel,
+.kpi-card,
+.deck {
+  border-color: rgba(102, 142, 255, 0.38);
+  background: rgba(11, 24, 58, 0.79);
+}
+
+.kpi-card strong,
+.dashboard-panel h3,
+.file-name,
+.kb-title,
+.memory-name,
+.doc-title {
+  color: #f0f5ff;
+}
+
+.composer-hint,
+.settings-hint,
+.status,
+.label,
+.email-date,
+.file-desc,
+.kb-category,
+.memory-label,
+.doc-meta,
+.users-table th,
+.perf-table th {
+  color: #9fb3df;
+}
+
+.typing-indicator span {
+  background: #5ad9ff;
+}
+
+@media (max-width: 900px) {
+  .page {
+    padding-top: 1rem;
+  }
+
+  .hero {
+    padding: 0.9rem 0.85rem;
+  }
+
+  .evie-brand {
+    align-items: flex-start;
+  }
+
+  .evie-mark {
+    width: 62px;
+    height: 50px;
+  }
+
+  .evie-wordmark-title {
+    letter-spacing: 0.18em;
+  }
+
+  .evie-wordmark-tag {
+    letter-spacing: 0.2em;
+    font-size: 0.61rem;
+  }
+
+  .status {
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .status-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .suggested-prompts {
+    grid-template-columns: 1fr;
+  }
+
+  .evie-brand {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.45rem;
+  }
+
+  .evie-brand-compact {
+    align-items: center;
+  }
+
+  .chat-shell,
+  .settings-shell,
+  .dashboard-shell,
+  .login-card {
+    border-radius: 12px;
+  }
 }
 
 .doc-meta {
