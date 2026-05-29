@@ -11,6 +11,7 @@ from pydantic import BaseModel
 app = FastAPI(title="mcp-sql", version="0.3.0")
 
 DAB_BASE = os.getenv("DAB_BASE_URL", "http://localhost:5000")
+DAB_PAGE_SIZE = int(os.getenv("DAB_PAGE_SIZE", "10000"))
 
 # ─── Rich Demo Data — Multifamily & Brokerage ───────────────────────
 
@@ -347,6 +348,16 @@ def _demo_response(payload: QueryRequest) -> dict[str, Any]:
     return results
 
 
+async def _fetch_dab_values(client: httpx.AsyncClient, entity: str) -> list[dict[str, Any]]:
+    """Fetch one DAB entity collection with a larger page size for analysis use-cases."""
+    resp = await client.get(f"{DAB_BASE}/api/{entity}?$first={DAB_PAGE_SIZE}")
+    if resp.status_code != 200:
+        return []
+    data = resp.json()
+    values = data.get("value", data)
+    return values if isinstance(values, list) else []
+
+
 @app.post("/mcp/query")
 async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
     q = payload.query.lower()
@@ -415,10 +426,8 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=15.0) as client:
         if fetch_properties:
             try:
-                resp = await client.get(f"{DAB_BASE}/api/Property")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    props = data.get("value", data)
+                props = await _fetch_dab_values(client, "Property")
+                if props:
                     results["properties"] = props
                     results["properties_summary"] = f"Found {len(props)} properties"
                     dab_available = True
@@ -427,10 +436,8 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
 
         if fetch_contacts:
             try:
-                resp = await client.get(f"{DAB_BASE}/api/Contact")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results["contacts"] = data.get("value", data)
+                results["contacts"] = await _fetch_dab_values(client, "Contact")
+                if results["contacts"]:
                     results["contacts_summary"] = f"Found {len(results['contacts'])} contacts"
                     dab_available = True
             except Exception as exc:
@@ -438,10 +445,8 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
 
         if fetch_deals:
             try:
-                resp = await client.get(f"{DAB_BASE}/api/Deal")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results["deals"] = data.get("value", data)
+                results["deals"] = await _fetch_dab_values(client, "Deal")
+                if results["deals"]:
                     results["deals_summary"] = f"Found {len(results['deals'])} deals"
                     dab_available = True
             except Exception as exc:
@@ -449,10 +454,8 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
 
         if fetch_activities:
             try:
-                resp = await client.get(f"{DAB_BASE}/api/Activity")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results["activities"] = data.get("value", data)
+                results["activities"] = await _fetch_dab_values(client, "Activity")
+                if results["activities"]:
                     results["activities_summary"] = f"Found {len(results['activities'])} activities"
                     dab_available = True
             except Exception as exc:
@@ -460,10 +463,8 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
 
         if fetch_units:
             try:
-                resp = await client.get(f"{DAB_BASE}/api/Unit")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results["units"] = data.get("value", data)
+                results["units"] = await _fetch_dab_values(client, "Unit")
+                if results["units"]:
                     results["units_summary"] = f"Found {len(results['units'])} units"
                     dab_available = True
             except Exception as exc:
@@ -471,10 +472,8 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
 
         if fetch_residents:
             try:
-                resp = await client.get(f"{DAB_BASE}/api/Resident")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results["residents"] = data.get("value", data)
+                results["residents"] = await _fetch_dab_values(client, "Resident")
+                if results["residents"]:
                     results["residents_summary"] = f"Found {len(results['residents'])} residents"
                     dab_available = True
             except Exception as exc:
@@ -482,10 +481,8 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
 
         if fetch_leases:
             try:
-                resp = await client.get(f"{DAB_BASE}/api/Lease")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results["leases"] = data.get("value", data)
+                results["leases"] = await _fetch_dab_values(client, "Lease")
+                if results["leases"]:
                     results["leases_summary"] = f"Found {len(results['leases'])} leases"
                     dab_available = True
             except Exception as exc:
@@ -493,10 +490,8 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
 
         if fetch_work_orders:
             try:
-                resp = await client.get(f"{DAB_BASE}/api/WorkOrder")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results["work_orders"] = data.get("value", data)
+                results["work_orders"] = await _fetch_dab_values(client, "WorkOrder")
+                if results["work_orders"]:
                     results["work_orders_summary"] = f"Found {len(results['work_orders'])} work orders"
                     dab_available = True
             except Exception as exc:
@@ -504,10 +499,8 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
 
         if fetch_charges:
             try:
-                resp = await client.get(f"{DAB_BASE}/api/Charge")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results["charges"] = data.get("value", data)
+                results["charges"] = await _fetch_dab_values(client, "Charge")
+                if results["charges"]:
                     results["charges_summary"] = f"Found {len(results['charges'])} charges"
                     dab_available = True
             except Exception as exc:
@@ -515,40 +508,32 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
 
         if fetch_r1:
             try:
-                resp = await client.get(f"{DAB_BASE}/api/R1Site")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results["r1_sites"] = data.get("value", data)
+                results["r1_sites"] = await _fetch_dab_values(client, "R1Site")
+                if results["r1_sites"]:
                     results["r1_sites_summary"] = f"Found {len(results['r1_sites'])} network sites"
                     dab_available = True
             except Exception as exc:
                 results["r1_sites_error"] = str(exc)
 
             try:
-                resp = await client.get(f"{DAB_BASE}/api/R1Device")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results["r1_devices"] = data.get("value", data)
+                results["r1_devices"] = await _fetch_dab_values(client, "R1Device")
+                if results["r1_devices"]:
                     results["r1_devices_summary"] = f"Found {len(results['r1_devices'])} network devices"
                     dab_available = True
             except Exception as exc:
                 results["r1_devices_error"] = str(exc)
 
             try:
-                resp = await client.get(f"{DAB_BASE}/api/R1DeviceEvent")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results["r1_device_events"] = data.get("value", data)
+                results["r1_device_events"] = await _fetch_dab_values(client, "R1DeviceEvent")
+                if results["r1_device_events"]:
                     results["r1_device_events_summary"] = f"Found {len(results['r1_device_events'])} network device events"
                     dab_available = True
             except Exception as exc:
                 results["r1_device_events_error"] = str(exc)
 
             try:
-                resp = await client.get(f"{DAB_BASE}/api/R1DeviceDailyMetric")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results["r1_device_daily_metrics"] = data.get("value", data)
+                results["r1_device_daily_metrics"] = await _fetch_dab_values(client, "R1DeviceDailyMetric")
+                if results["r1_device_daily_metrics"]:
                     results["r1_device_daily_metrics_summary"] = f"Found {len(results['r1_device_daily_metrics'])} network daily metrics"
                     dab_available = True
             except Exception as exc:
