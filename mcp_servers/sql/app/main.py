@@ -12,6 +12,7 @@ app = FastAPI(title="mcp-sql", version="0.3.0")
 
 DAB_BASE = os.getenv("DAB_BASE_URL", "http://localhost:5000")
 DAB_PAGE_SIZE = int(os.getenv("DAB_PAGE_SIZE", "10000"))
+DAB_MAX_ROWS = int(os.getenv("DAB_MAX_ROWS", "200000"))
 
 # ─── Rich Demo Data — Multifamily & Brokerage ───────────────────────
 
@@ -349,13 +350,24 @@ def _demo_response(payload: QueryRequest) -> dict[str, Any]:
 
 
 async def _fetch_dab_values(client: httpx.AsyncClient, entity: str) -> list[dict[str, Any]]:
-    """Fetch one DAB entity collection with a larger page size for analysis use-cases."""
-    resp = await client.get(f"{DAB_BASE}/api/{entity}?$first={DAB_PAGE_SIZE}")
-    if resp.status_code != 200:
-        return []
-    data = resp.json()
-    values = data.get("value", data)
-    return values if isinstance(values, list) else []
+    """Fetch one DAB entity collection, following nextLink pagination up to DAB_MAX_ROWS."""
+    url = f"{DAB_BASE}/api/{entity}?$first={DAB_PAGE_SIZE}"
+    values: list[dict[str, Any]] = []
+
+    while url and len(values) < DAB_MAX_ROWS:
+        resp = await client.get(url)
+        if resp.status_code != 200:
+            break
+        data = resp.json()
+        page = data.get("value", data)
+        if not isinstance(page, list) or not page:
+            break
+        values.extend(page)
+        url = data.get("nextLink")
+
+    if len(values) > DAB_MAX_ROWS:
+        return values[:DAB_MAX_ROWS]
+    return values
 
 
 @app.post("/mcp/query")
