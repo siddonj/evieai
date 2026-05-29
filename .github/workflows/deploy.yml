@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install ruff mypy fastapi pydantic httpx openai msal
-      - run: ruff check orchestrator/app mcp_servers/*/app
+      - run: ruff check .
       - run: mypy --ignore-missing-imports mcp_servers/*/app/ || true
 
   build:
@@ -39,6 +39,20 @@ jobs:
     needs: lint
     steps:
       - uses: actions/checkout@v4
+      - name: Validate Azure credentials JSON
+        run: |
+          echo '${{ secrets.AZURE_CREDENTIALS }}' | python3 -c "
+          import json, sys
+          try:
+            d = json.load(sys.stdin)
+            for k in ('clientId','clientSecret','tenantId','subscriptionId'):
+              v = d.get(k)
+              if not v or not isinstance(v, str):
+                print(f'MISSING or invalid: {k}'); sys.exit(1)
+            print('AZURE_CREDENTIALS JSON is valid')
+          except Exception as e:
+            print(f'Invalid JSON in AZURE_CREDENTIALS: {e}'); sys.exit(1)
+          "
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
@@ -96,6 +110,20 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v4
+      - name: Validate Azure credentials JSON
+        run: |
+          echo '${{ secrets.AZURE_CREDENTIALS }}' | python3 -c "
+          import json, sys
+          try:
+            d = json.load(sys.stdin)
+            for k in ('clientId','clientSecret','tenantId','subscriptionId'):
+              v = d.get(k)
+              if not v or not isinstance(v, str):
+                print(f'MISSING or invalid: {k}'); sys.exit(1)
+            print('AZURE_CREDENTIALS JSON is valid')
+          except Exception as e:
+            print(f'Invalid JSON in AZURE_CREDENTIALS: {e}'); sys.exit(1)
+          "
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
