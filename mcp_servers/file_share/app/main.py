@@ -138,6 +138,28 @@ def download_file(file_name: str) -> Response:
     ext = decoded.rsplit(".", 1)[-1].lower() if "." in decoded else ""
     content_type = _content_types.get(ext, "application/octet-stream")
 
+    # Return actual content for known files; placeholder for others
+    if "employee" in decoded.lower() and decoded.endswith(".csv"):
+        content = """ID,Name,Department,Title,Salary,StartDate
+E001,Alice Johnson,Engineering,Senior Software Engineer,145000,2022-01-15
+E002,Bob Smith,Sales,Sales Director,125000,2021-03-20
+E003,Carol Martinez,Marketing,Product Marketing Manager,98000,2022-06-01
+E004,David Chen,Engineering,DevOps Engineer,135000,2022-09-10
+E005,Emma Wilson,Finance,CFO,180000,2020-05-01
+E006,Frank Thompson,Operations,Operations Manager,110000,2021-11-15
+E007,Grace Lee,Engineering,Backend Engineer,140000,2023-01-01
+E008,Henry Rodriguez,Sales,Enterprise Account Executive,115000,2022-02-28
+E009,Iris Patel,HR,People Operations Manager,92000,2021-07-15
+E010,Jack Murphy,Engineering,Frontend Engineer,138000,2023-02-01
+E011,Karen Brown,Finance,Accounting Manager,88000,2021-09-20
+E012,Leo Gonzalez,Marketing,Content Marketing Specialist,78000,2023-03-15
+E013,Maria Lopez,Operations,Customer Success Manager,95000,2022-04-10"""
+        return Response(
+            content=content.encode("utf-8"),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{decoded}"'},
+        )
+
     placeholder = f"Demo file: {decoded}\n\nThis is placeholder content for the '{decoded}' file.\nThe actual file would be served from Azure Files in production.\n"
     return Response(
         content=placeholder.encode("utf-8"),
