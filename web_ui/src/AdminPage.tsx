@@ -515,3 +515,4 @@ export function AdminPage({ onBack }: AdminPageProps) {
     </div>
   )
 }
+// Rebuild trigger - 20260529-230156
