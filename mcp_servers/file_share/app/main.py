@@ -32,6 +32,13 @@ def mcp_info() -> dict[str, str]:
 
 
 _demo_files = [
+    # Employee & HR Documents
+    {"name": "Employee-Roster.csv", "size": 1024, "modified": "2026-05-29T15:30:00Z", "category": "HR"},
+    {"name": "Employee-Handbook-2026.pdf", "size": 2048576, "modified": "2026-01-15T09:00:00Z", "category": "HR"},
+    {"name": "Headcount-Plan-FY2026.xlsx", "size": 312400, "modified": "2026-04-10T10:00:00Z", "category": "HR"},
+    
+    # Financial Documents
+    {"name": "Q1-2026-Financial-Report.txt", "size": 1280, "modified": "2026-05-29T14:00:00Z", "category": "Finance"},
     {"name": "Q2-2026-Revenue-Report.xlsx", "size": 485760, "modified": "2026-05-05T09:15:00Z", "category": "Finance"},
     {"name": "FY2026-Budget-Master.xlsx", "size": 892100, "modified": "2026-05-03T14:22:00Z", "category": "Finance"},
     {"name": "Q1-Profit-and-Loss-Statement.pdf", "size": 1248576, "modified": "2026-04-15T11:00:00Z", "category": "Finance"},
@@ -39,20 +46,33 @@ _demo_files = [
     {"name": "Board-Deck-Q2-Review.pptx", "size": 2150400, "modified": "2026-05-02T16:30:00Z", "category": "Finance"},
     {"name": "Investor-Update-May-2026.docx", "size": 189600, "modified": "2026-05-01T10:15:00Z", "category": "Finance"},
     {"name": "Tax-Preparation-2025-Final.xlsx", "size": 1048576, "modified": "2026-03-20T09:00:00Z", "category": "Finance"},
+    
+    # Product & Strategy Documents
+    {"name": "Product-Roadmap-2026.txt", "size": 2176, "modified": "2026-05-29T15:00:00Z", "category": "Product"},
+    {"name": "Strategic-Plan-2026-2028.docx", "size": 356000, "modified": "2026-03-01T09:00:00Z", "category": "Strategy"},
+    
+    # Meeting Notes & Technical Specs
+    {"name": "Meeting-Notes-Executive.txt", "size": 1536, "modified": "2026-05-29T14:30:00Z", "category": "Meetings"},
+    {"name": "Technical-Spec-Service-Restart.txt", "size": 3328, "modified": "2026-05-29T15:15:00Z", "category": "Engineering"},
+    
+    # Sales Documents
     {"name": "Sales-Pipeline-Q2.xlsx", "size": 433120, "modified": "2026-05-05T08:30:00Z", "category": "Sales"},
     {"name": "Enterprise-Deal-Northwind-Traders.docx", "size": 156800, "modified": "2026-05-04T13:20:00Z", "category": "Sales"},
     {"name": "Customer-Churn-Analysis-Q1-2026.pptx", "size": 1843200, "modified": "2026-04-25T11:00:00Z", "category": "Sales"},
     {"name": "Territory-Assignment-2026.xlsx", "size": 224560, "modified": "2026-01-10T09:00:00Z", "category": "Sales"},
+    
+    # Projects
     {"name": "Project-Phoenix-Scope-of-Work.docx", "size": 189600, "modified": "2026-05-03T10:00:00Z", "category": "Projects"},
     {"name": "Project-Phoenix-Status-Report-May.docx", "size": 142000, "modified": "2026-05-06T07:30:00Z", "category": "Projects"},
     {"name": "Project-Atlas-Requirements.pdf", "size": 987136, "modified": "2026-04-20T15:45:00Z", "category": "Projects"},
-    {"name": "Employee-Handbook-2026.pdf", "size": 2048576, "modified": "2026-01-15T09:00:00Z", "category": "HR"},
-    {"name": "Headcount-Plan-FY2026.xlsx", "size": 312400, "modified": "2026-04-10T10:00:00Z", "category": "HR"},
+    
+    # Engineering & Security
     {"name": "System-Architecture-Diagram-v3.vsdx", "size": 712000, "modified": "2026-04-29T16:45:00Z", "category": "Engineering"},
     {"name": "Security-Audit-Report-Q1-2026.pdf", "size": 1536000, "modified": "2026-04-05T09:00:00Z", "category": "Engineering"},
     {"name": "API-Documentation-v2.4.md", "size": 89000, "modified": "2026-05-01T14:00:00Z", "category": "Engineering"},
+    
+    # General
     {"name": "All-Hands-Slides-May-2026.pptx", "size": 2560000, "modified": "2026-05-05T12:00:00Z", "category": "General"},
-    {"name": "Strategic-Plan-2026-2028.docx", "size": 356000, "modified": "2026-03-01T09:00:00Z", "category": "General"},
 ]
 
 
@@ -74,12 +94,25 @@ def mcp_query(payload: QueryRequest) -> dict[str, Any]:
             "items": limited,
         }
 
-    # Demo mode: return rich file listing when no real files exist
+    # Demo mode: filter files based on query
+    query_lower = payload.query.lower()
+    matching_files = [
+        f for f in _demo_files
+        if query_lower in f["name"].lower() or query_lower in f["category"].lower()
+    ]
+    
+    # If no matches found, return all files
+    if not matching_files:
+        matching_files = _demo_files
+        summary = f"No files matched '{payload.query}'. Showing all {len(_demo_files)} available files."
+    else:
+        summary = f"Found {len(matching_files)} files matching '{payload.query}'"
+    
     return {
         "service": "file_share",
-        "summary": f"Demo mode: returning {len(_demo_files)} sample files from shared storage",
+        "summary": summary,
         "query": payload.query,
-        "items": _demo_files,
+        "items": matching_files,
     }
 
 
