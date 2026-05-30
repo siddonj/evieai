@@ -400,11 +400,11 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "query_mail",
-            "description": "Search or retrieve emails from the Office 365 Outlook mailbox.",
+            "description": "Search emails in Office 365 Outlook mailbox by sender, subject, topic, date, or keywords. Use this when the user asks for emails, messages, or communication history.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Email search query, e.g. sender, subject, or topic."},
+                    "query": {"type": "string", "description": "Email search query, e.g. 'emails from john', 'meeting notes in email', 'Q2 update'."},
                 },
                 "required": ["query"],
             },
@@ -414,11 +414,11 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "query_onedrive",
-            "description": "Search or list files and documents stored in OneDrive.",
+            "description": "Search files and folders in OneDrive and SharePoint. Use this when the user asks for OneDrive-specific files, shared documents, or team folders.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Search query for OneDrive files or documents."},
+                    "query": {"type": "string", "description": "Search query for OneDrive files, e.g. 'Q2 planning', 'team documents', 'shared folder'."},
                 },
                 "required": ["query"],
             },
@@ -428,11 +428,11 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "query_sql",
-            "description": "Query the SQL database for multifamily properties, contacts, deals, and brokerage activities.",
+            "description": "Query the SQL database containing: multifamily properties, real estate contacts, broker deals, CRM pipeline, commissions, and brokerage business metrics. ONLY use for real estate/brokerage data. Do NOT use for employees, policies, or general documents — use query_files for those.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Natural language query for the SQL database."},
+                    "query": {"type": "string", "description": "Natural language query for real estate/brokerage data, e.g. 'multifamily properties in Memphis', 'deals in closing stage', 'top agents by commission'."},
                 },
                 "required": ["query"],
             },
@@ -498,11 +498,11 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "query_analytics",
-            "description": "Retrieve multifamily and brokerage analytics — portfolio KPIs, deal pipeline metrics, market trends, and agent performance. Use this when the user asks about occupancy, cap rates, NOI, deal stages, commissions, or market data.",
+            "description": "Retrieve multifamily and brokerage analytics: portfolio KPIs, deal pipeline metrics, market trends, occupancy rates, cap rates, NOI, deal stages, commission tracking, and agent performance. Use for trends, metrics, and business intelligence.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Natural language query for analytics, e.g. 'portfolio performance', 'deal pipeline KPIs', 'Memphis market trends', 'commission tracker'."},
+                    "query": {"type": "string", "description": "Natural language query for analytics, e.g. 'portfolio performance', 'deal pipeline by stage', 'Memphis market trends', 'commission by agent'."},
                 },
                 "required": ["query"],
             },
@@ -845,6 +845,16 @@ async def _stream_chat_response(
         "query_analytics for KPIs/trends/insights, "
         "query_document_generation for creating reports/documents, "
         "query_memory for user profile/bookmarks (auto-provided)."
+        "\n\n## Tool Selection Examples (ALWAYS follow these patterns):"
+        "\n• User: 'Give me a list of employees' → Use: query_files (returns Employee-Roster.csv)"
+        "\n• User: 'Show me financial reports' → Use: query_files (returns financial documents)"
+        "\n• User: 'What is our product roadmap?' → Use: query_files (returns Product-Roadmap.txt)"
+        "\n• User: 'Show me meeting notes from May' → Use: query_files (returns Meeting-Notes)"
+        "\n• User: 'Who are our top sales people by commission?' → Use: query_analytics or query_sql (brokerage data)"
+        "\n• User: 'What properties do we have in Memphis?' → Use: query_sql (multifamily/real estate database)"
+        "\n• User: 'What is our remote work policy?' → Use: query_knowledge_base (company policies)"
+        "\n• User: 'Send me the latest email from john' → Use: query_mail (Outlook mailbox)"
+        "\n• User: 'Generate an executive summary' → Use: query_document_generation (creates documents)"
         "\n\nBitemporal policy: for connector/entity recency, provenance, trust, or historical comparison, "
         "use tools get_connector_freshness, get_entity_lineage, get_confidence_breakdown, query_as_of, and diff_between. "
         "When responding with facts from connector/entity data, include freshness timestamp/lag, source lineage, and confidence. "
