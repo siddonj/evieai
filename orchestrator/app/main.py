@@ -386,11 +386,11 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "query_files",
-            "description": "Search or list files from the local file share / Azure Files storage.",
+            "description": "Search or list files from the file share — includes employee rosters, financial reports, product roadmaps, meeting notes, technical specs, and other business documents.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Search query describing what files to find."},
+                    "query": {"type": "string", "description": "Search query describing what files to find, e.g., 'employee roster', 'financial report', 'meeting notes'."},
                 },
                 "required": ["query"],
             },
@@ -832,12 +832,13 @@ async def _stream_chat_response(
         "You are a helpful enterprise Q&A assistant."
         + user_hint
         + (f"\n\nUser Context (for personalization only — NOT a substitute for data retrieval):\n{memory_context}" if memory_context else "")
-        + "\n\nIMPORTANT: When the user asks for files, documents, emails, contacts, companies, "
+        + "\n\nIMPORTANT: When the user asks for files, documents, emails, contacts, companies, employees, "
         "analytics, KPIs, pipeline data, metrics, SQL data, or any factual business information, "
         "you MUST call the appropriate tool to retrieve real data. Never answer a data query from "
         "memory context alone — the context is for personalization only. "
         "Always use the available tools to fetch actual data before answering: "
-        "query_files for file listings, query_mail for emails, query_onedrive for OneDrive files, "
+        "query_files for employee rosters, financial reports, product roadmaps, meeting notes, and documents, "
+        "query_mail for emails, query_onedrive for OneDrive files, "
         "query_sql for CRM/contacts/companies/pipeline/metrics, "
         "query_postgresql for PostgreSQL operational tables and read-only SQL, "
         "query_knowledge_base for SOPs/policies/handbook, "
