@@ -59,11 +59,27 @@ type CircuitState = {
   updated_at: string
 }
 
-type Tab = 'data_sources' | 'approvals'
+type Tab = 'data_sources' | 'approvals' | 'service_health'
 
-export function SettingsPage() {
+type SettingsPageProps = {
+  initialTab?: Tab
+}
+
+type ServiceHealthRow = {
+  key: string
+  name: string
+  enabled: boolean
+  cooldown_remaining_seconds: number
+  reachable: boolean
+  status_code: number | null
+  response_ms: number
+  health_url: string
+  error?: string | null
+}
+
+export function SettingsPage({ initialTab = 'data_sources' }: SettingsPageProps) {
   const { logout, user: currentUser } = useAuth()
-  const [tab, setTab] = useState<Tab>('data_sources')
+  const [tab, setTab] = useState<Tab>(initialTab)
   const [userMessage, setUserMessage] = useState('')
 
   // ─── Data Sources State ─────────────────────────────────────────────
@@ -88,6 +104,10 @@ export function SettingsPage() {
   const [circuitState, setCircuitState] = useState<CircuitState | null>(null)
   const [actionStatusFilter, setActionStatusFilter] = useState('')
 
+  const [serviceHealthRows, setServiceHealthRows] = useState<ServiceHealthRow[]>([])
+  const [serviceHealthLoading, setServiceHealthLoading] = useState(false)
+  const [serviceHealthMessage, setServiceHealthMessage] = useState('')
+
   const activeWriteConnectors = useMemo(
     () => connectors.filter((c) => c.capabilities?.includes('write')),
     [connectors],
@@ -95,12 +115,19 @@ export function SettingsPage() {
 
   // Load MCP config on mount
   useEffect(() => {
+    setTab(initialTab)
+  }, [initialTab])
+
+  useEffect(() => {
     loadMcpConfig()
   }, [])
 
   useEffect(() => {
     if (tab === 'approvals') {
       void loadApprovalAdminData()
+    }
+    if (tab === 'service_health') {
+      void loadServiceHealth()
     }
   }, [tab])
 
@@ -128,10 +155,16 @@ export function SettingsPage() {
   async function loadMcpConfig() {
     setServerLoading(true)
     try {
-      const data = await fetchJson<{ servers: McpServer[] }>(`${ORCHESTRATOR_URL}/admin/mcp-config`)
-      setServers(data.servers || [])
+      const data = await fetchJson<{ servers?: McpServer[]; services?: McpServer[] }>(`${ORCHESTRATOR_URL}/admin/mcp-config`)
+      const normalized = Array.isArray(data.servers)
+        ? data.servers
+        : Array.isArray(data.services)
+          ? data.services
+          : []
+      setServers(normalized)
     } catch {
       setUserMessage('Failed to load MCP configuration.')
+      setServers([])
     } finally {
       setServerLoading(false)
     }
@@ -301,6 +334,34 @@ export function SettingsPage() {
     return actions.filter((a) => a.status === actionStatusFilter)
   }, [actions, actionStatusFilter])
 
+  async function loadServiceHealth() {
+    setServiceHealthLoading(true)
+    setServiceHealthMessage('')
+    try {
+      const data = await fetchJson<{ services?: ServiceHealthRow[] }>(`${ORCHESTRATOR_URL}/admin/mcp-status`)
+      setServiceHealthRows(Array.isArray(data.services) ? data.services : [])
+    } catch (err) {
+      setServiceHealthMessage(err instanceof Error ? err.message : 'Failed to load service health')
+      setServiceHealthRows([])
+    } finally {
+      setServiceHealthLoading(false)
+    }
+  }
+
+  async function resetService(serviceKey: string) {
+    setServiceHealthMessage('')
+    try {
+      await fetchJson(`${ORCHESTRATOR_URL}/admin/mcp-reset/${encodeURIComponent(serviceKey)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      setServiceHealthMessage(`Reset ${serviceKey}`)
+      await loadServiceHealth()
+    } catch (err) {
+      setServiceHealthMessage(err instanceof Error ? err.message : `Failed to reset ${serviceKey}`)
+    }
+  }
+
   return (
     <div className="page">
       <div className="bg-grid" aria-hidden="true" />
@@ -316,7 +377,10 @@ export function SettingsPage() {
         {/* Tab Navigation */}
         <div className="settings-tabs">
           <button className={`settings-tab ${tab === 'data_sources' ? 'active' : ''}`} onClick={() => setTab('data_sources')}>
-            🗃️ Data Sources
+            🧩 Service Status
+          </button>
+          <button className={`settings-tab ${tab === 'service_health' ? 'active' : ''}`} onClick={() => setTab('service_health')}>
+            ⏱️ Service Health
           </button>
           <button className={`settings-tab ${tab === 'approvals' ? 'active' : ''}`} onClick={() => setTab('approvals')}>
             ✅ Approvals
@@ -408,6 +472,52 @@ export function SettingsPage() {
                 <button onClick={submitData}>Submit Data</button>
                 {addDataMessage && <div className={`settings-message ${addDataMessage.startsWith('Success') ? 'success' : ''}`}>{addDataMessage}</div>}
               </div>
+            </section>
+          </>
+        )}
+
+        {tab === 'service_health' && (
+          <>
+            <section className="settings-section">
+              <div className="approval-toolbar">
+                <h2>MCP Service Health</h2>
+                <button onClick={() => void loadServiceHealth()} disabled={serviceHealthLoading}>
+                  {serviceHealthLoading ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+              <p className="settings-hint">
+                Live status, response time, and reset controls for each MCP service.
+              </p>
+              {serviceHealthMessage && <div className="settings-message">{serviceHealthMessage}</div>}
+
+              <table className="users-table approvals-table">
+                <thead>
+                  <tr>
+                    <th>Service</th>
+                    <th>Enabled</th>
+                    <th>Reachable</th>
+                    <th>Status</th>
+                    <th>Response (ms)</th>
+                    <th>Cooldown</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {serviceHealthRows.map((row) => (
+                    <tr key={row.key}>
+                      <td>{row.name}</td>
+                      <td><span className={`status-pill ${row.enabled ? 'completed' : 'failed'}`}>{row.enabled ? 'on' : 'off'}</span></td>
+                      <td><span className={`status-pill ${row.reachable ? 'completed' : 'failed'}`}>{row.reachable ? 'yes' : 'no'}</span></td>
+                      <td>{row.status_code ?? 'n/a'}</td>
+                      <td>{row.response_ms}</td>
+                      <td>{row.cooldown_remaining_seconds > 0 ? `${row.cooldown_remaining_seconds}s` : '-'}</td>
+                      <td>
+                        <button onClick={() => void resetService(row.key)}>Reset</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </section>
           </>
         )}

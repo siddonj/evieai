@@ -57,6 +57,10 @@ async def _run_query(sql: str) -> list[dict[str, Any]]:
 async def _nl_to_query(query: str) -> str:
     q = query.lower()
 
+    # If the tool receives a direct read-only SQL query, execute it as-is.
+    if q.startswith(("select ", "with ")):
+        return _ensure_read_only(query.strip())
+
     if q.startswith("sql:"):
         return _ensure_read_only(query[4:].strip())
 
@@ -81,10 +85,10 @@ async def _nl_to_query(query: str) -> str:
 
     if any(word in q for word in ("leases", "residents", "work order", "work_orders", "charges", "units")):
         return (
-            "SELECT table_name, n_live_tup AS estimated_rows "
+            "SELECT relname AS table_name, n_live_tup AS estimated_rows "
             "FROM pg_stat_user_tables "
-            "WHERE table_name IN ('leases','residents','work_orders','charges','units') "
-            "ORDER BY table_name"
+            "WHERE relname IN ('leases','residents','work_orders','charges','units') "
+            "ORDER BY relname"
         )
 
     return (

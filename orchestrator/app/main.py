@@ -4,6 +4,8 @@ import asyncio
 import json
 import logging
 import os
+import re
+import time
 import urllib.parse
 import uuid
 from collections.abc import AsyncGenerator
@@ -664,6 +666,32 @@ def _summarize_mcp_result(result: dict[str, Any]) -> str:
     return str(summary)[:120] if summary else "Data retrieved"
 
 
+
+
+def _normalize_postgresql_query(query: str, user_message: str) -> str:
+    """Normalize common NL/SQL mistakes before calling PostgreSQL MCP."""
+    raw = (query or "").strip()
+    if not raw:
+        return raw
+
+    lower_raw = raw.lower()
+    lower_msg = (user_message or "").lower()
+
+    if any(k in lower_raw for k in ("work order type", "work order types", "types of work orders")):
+        return "SELECT DISTINCT type FROM work_orders ORDER BY type"
+    if any(k in lower_msg for k in ("work order type", "work order types", "types of work orders")):
+        return "SELECT DISTINCT type FROM work_orders ORDER BY type"
+
+    # Handle common mistaken column name.
+    raw = re.sub(r"\bwork_order_type\b", "type", raw, flags=re.IGNORECASE)
+
+    # Keep to one statement by removing trailing semicolon only.
+    if raw.endswith(";") and raw.count(";") == 1:
+        raw = raw[:-1].rstrip()
+
+    return raw
+
+
 # ─── MCP Calling ──────────────────────────────────────────────────────
 
 async def _call_mcp(tool_name: str, query: str, user_id: str | None = None) -> dict[str, Any]:
@@ -988,6 +1016,10 @@ async def _stream_chat_response(
                 except json.JSONDecodeError:
                     args = {}
                 query = args.get("query", "")
+
+                if name == "query_postgresql":
+                    query = _normalize_postgresql_query(str(query), payload.message)
+                    args["query"] = query
 
                 label = _TOOL_LABELS.get(name, name)
                 yield _sse({"type": "tool", "name": name, "label": label, "status": "calling"})
@@ -1976,6 +2008,12 @@ class McpToggleRequest(BaseModel):
     enabled: bool
 
 
+class McpResetResponse(BaseModel):
+    key: str
+    enabled: bool
+    reset: bool
+
+
 @app.post("/admin/mcp-config")
 def admin_toggle_mcp(payload: McpToggleRequest) -> dict[str, Any]:
     """Enable or disable an MCP server."""
@@ -1983,6 +2021,57 @@ def admin_toggle_mcp(payload: McpToggleRequest) -> dict[str, Any]:
         return {"error": f"Unknown MCP server: {payload.key}"}
     MCP_ENABLED[payload.key] = payload.enabled
     return {"key": payload.key, "enabled": payload.enabled}
+
+
+@app.get("/admin/mcp-status")
+async def admin_mcp_status() -> dict[str, Any]:
+    """Return MCP status, reachability, and response time for each configured service."""
+    rows: list[dict[str, Any]] = []
+    now = time.time()
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        for key, url in MCP_ENDPOINTS.items():
+            base = _base(url)
+            health_url = f"{base}/health"
+            started = time.perf_counter()
+            reachable = False
+            status_code: int | None = None
+            error: str | None = None
+            try:
+                resp = await client.get(health_url)
+                status_code = resp.status_code
+                reachable = resp.status_code == 200
+            except Exception as exc:  # noqa: BLE001
+                error = str(exc)
+            elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+
+            disabled_at = _MCP_DISABLED_AT.get(key, 0)
+            cooldown_remaining = max(0, int(MCP_COOLDOWN_SECONDS - (now - disabled_at))) if not MCP_ENABLED.get(key, True) else 0
+
+            rows.append(
+                {
+                    "key": key,
+                    "name": key.replace("_", " ").title(),
+                    "enabled": MCP_ENABLED.get(key, True),
+                    "cooldown_remaining_seconds": cooldown_remaining,
+                    "reachable": reachable,
+                    "status_code": status_code,
+                    "response_ms": elapsed_ms,
+                    "health_url": health_url,
+                    "error": error,
+                }
+            )
+
+    return {"services": rows}
+
+
+@app.post("/admin/mcp-reset/{service}", response_model=McpResetResponse)
+def admin_mcp_reset(service: str) -> McpResetResponse:
+    """Re-enable a specific MCP service and clear cooldown state."""
+    if service not in MCP_ENDPOINTS:
+        raise HTTPException(status_code=404, detail=f"Unknown MCP server: {service}")
+    MCP_ENABLED[service] = True
+    _MCP_DISABLED_AT.pop(service, None)
+    return McpResetResponse(key=service, enabled=True, reset=True)
 
 
 @app.get("/admin/mcp-data/{service}")

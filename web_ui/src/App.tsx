@@ -615,7 +615,7 @@ function ChatView() {
   }
 
   if (view === 'settings') {
-    return <SettingsPage />
+    return <SettingsPage initialTab="data_sources" />
   }
 
   if (view === 'performance') {
@@ -673,11 +673,9 @@ function ChatView() {
         <div className="status">
           <span>{statusText}</span>
           <span className="status-actions">
-            {isAdmin && (
-              <button className="status-btn" onClick={() => setView('settings')} title="Settings">
-                ⚙️ Settings
-              </button>
-            )}
+            <button className="status-btn" onClick={() => setView('settings')} title="Settings">
+              ⚙️ Settings
+            </button>
             <button className="status-btn" onClick={() => setView('performance')} title="Performance Dashboard">
               📊 Dashboard
             </button>
