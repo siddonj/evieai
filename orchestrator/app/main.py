@@ -1091,11 +1091,11 @@ async def ready() -> dict[str, Any]:
                     "response_time_ms": round(elapsed_ms, 1),
                     "error": str(exc),
                 })
-    
+
     # Calculate health percentage
     reachable_count = sum(1 for s in services if s["reachable"])
     health_percentage = int((reachable_count / len(services) * 100) if services else 0)
-    
+
     from datetime import datetime
     return {
         "orchestrator_status": "running",
