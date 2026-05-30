@@ -1065,23 +1065,44 @@ def health() -> dict[str, Any]:
 
 @app.get("/ready")
 async def ready() -> dict[str, Any]:
-    status: dict[str, Any] = {}
+    import time
+    services: list[dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
         for name, mcp_url in MCP_ENDPOINTS.items():
             health_url = f"{_base(mcp_url)}/health"
+            start_time = time.time()
             try:
                 resp = await client.get(health_url)
+                elapsed_ms = (time.time() - start_time) * 1000
+                reachable = resp.status_code == 200
                 entry: dict[str, Any] = {
-                    "reachable": resp.status_code == 200,
-                    "url": health_url,
-                    "status_code": resp.status_code,
+                    "name": name,
+                    "reachable": reachable,
+                    "response_time_ms": round(elapsed_ms, 1),
                 }
-                if resp.status_code != 200:
-                    entry["body_preview"] = resp.text[:200]
-                status[name] = entry
+                if not reachable:
+                    entry["error"] = f"HTTP {resp.status_code}"
+                services.append(entry)
             except Exception as exc:
-                status[name] = {"reachable": False, "url": health_url, "error": str(exc)}
-    return {"status": "ready", "dependencies": status}
+                elapsed_ms = (time.time() - start_time) * 1000
+                services.append({
+                    "name": name,
+                    "reachable": False,
+                    "response_time_ms": round(elapsed_ms, 1),
+                    "error": str(exc),
+                })
+    
+    # Calculate health percentage
+    reachable_count = sum(1 for s in services if s["reachable"])
+    health_percentage = int((reachable_count / len(services) * 100) if services else 0)
+    
+    from datetime import datetime
+    return {
+        "orchestrator_status": "running",
+        "health_percentage": health_percentage,
+        "services": services,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
 
 
 @app.get("/dashboard/performance", response_model=PerformanceDashboardResponse)
