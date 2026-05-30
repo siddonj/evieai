@@ -76,6 +76,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
   // Service detail modal
   const [selectedService, setSelectedService] = useState<ServiceDetail | null>(null)
 
+  // Restart state
+  const [restarting, setRestarting] = useState<string | null>(null)
+  const [restartStatus, setRestartStatus] = useState<Record<string, { status: string; message?: string }>>({})
+
   async function fetchHealth() {
     try {
       setError('')
@@ -154,6 +158,58 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
   function dismissAlert(id: string) {
     setAlerts((prev) => prev.filter((a) => a.id !== id))
+  }
+
+  async function handleRestart(serviceName: string) {
+    setRestarting(serviceName)
+    try {
+      const response = await fetch(`${ORCHESTRATOR_URL}/restart`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ service: serviceName }),
+      })
+
+      const data = (await response.json()) as any
+
+      if (response.ok && data.status === 'restarting') {
+        setRestartStatus((prev) => ({
+          ...prev,
+          [serviceName]: {
+            status: 'success',
+            message: 'Restart initiated ✓',
+          },
+        }))
+        // Auto-refresh health after a delay
+        setTimeout(() => void fetchHealth(), 3000)
+        // Clear success message after 3 seconds
+        setTimeout(() => {
+          setRestartStatus((prev) => {
+            const updated = { ...prev }
+            delete updated[serviceName]
+            return updated
+          })
+        }, 3000)
+      } else {
+        setRestartStatus((prev) => ({
+          ...prev,
+          [serviceName]: {
+            status: 'error',
+            message: data.error || 'Failed to restart',
+          },
+        }))
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      setRestartStatus((prev) => ({
+        ...prev,
+        [serviceName]: {
+          status: 'error',
+          message,
+        },
+      }))
+    } finally {
+      setRestarting(null)
+    }
   }
 
   useEffect(() => {
@@ -320,26 +376,38 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <div
                   key={service.name}
                   className={`service-card ${service.reachable ? 'healthy' : 'unhealthy'}`}
-                  onClick={() =>
-                    setSelectedService({
-                      name: service.name,
-                      reachable: service.reachable,
-                      response_time_ms: service.response_time_ms,
-                      error: service.error,
-                    })
-                  }
-                  style={{ cursor: 'pointer' }}
                 >
                   <div className="service-header">
-                    <div className="service-icon">
-                      {SERVICE_CATEGORIES[service.name]?.emoji || '🔧'}
+                    <div
+                      className="service-content"
+                      onClick={() =>
+                        setSelectedService({
+                          name: service.name,
+                          reachable: service.reachable,
+                          response_time_ms: service.response_time_ms,
+                          error: service.error,
+                        })
+                      }
+                      style={{ cursor: 'pointer', flex: 1 }}
+                    >
+                      <div className="service-icon">
+                        {SERVICE_CATEGORIES[service.name]?.emoji || '🔧'}
+                      </div>
+                      <div className="service-name">
+                        {SERVICE_CATEGORIES[service.name]?.label || service.name}
+                      </div>
+                      <div className={`service-status ${service.reachable ? 'up' : 'down'}`}>
+                        {service.reachable ? '🟢 Online' : '🔴 Offline'}
+                      </div>
                     </div>
-                    <div className="service-name">
-                      {SERVICE_CATEGORIES[service.name]?.label || service.name}
-                    </div>
-                    <div className={`service-status ${service.reachable ? 'up' : 'down'}`}>
-                      {service.reachable ? '🟢 Online' : '🔴 Offline'}
-                    </div>
+                    <button
+                      className="service-restart-btn"
+                      onClick={() => void handleRestart(service.name)}
+                      disabled={restarting === service.name}
+                      title="Restart this service"
+                    >
+                      {restarting === service.name ? '⏳' : '🔄'}
+                    </button>
                   </div>
                   {service.response_time_ms && (
                     <div className="service-details">
@@ -347,6 +415,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         <span>Response time:</span>
                         <span>{service.response_time_ms}ms</span>
                       </div>
+                    </div>
+                  )}
+                  {restartStatus[service.name] && (
+                    <div className={`restart-status ${restartStatus[service.name].status}`}>
+                      {restartStatus[service.name].message}
                     </div>
                   )}
                 </div>

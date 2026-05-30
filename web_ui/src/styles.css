@@ -3370,6 +3370,58 @@ input:checked + .mcp-toggle-slider::before {
   font-weight: 600;
 }
 
+/* ─── Service Restart Button ─────────────────────────────────────── */
+
+.service-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.service-restart-btn {
+  padding: 0.5rem 0.75rem;
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  border-radius: 6px;
+  color: #10b981;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.service-restart-btn:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.35);
+  border-color: rgba(16, 185, 129, 0.8);
+  transform: scale(1.05);
+}
+
+.service-restart-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.restart-status {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.restart-status.success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.restart-status.error {
+  background: rgba(220, 38, 38, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+}
+
 .detail-value {
   font-size: 0.95rem;
   color: #fff;

@@ -1,14 +1,19 @@
 # AI Agentic Q&A — Architecture Overview
 
 > High-level design document for the ResiQ AI Agentic Q&A platform.  
-> **Last updated:** May 6, 2026  
-> **Status:** Deployed & operational on Azure (`rg-aiagent2-dev`)
+> **Last updated:** May 29, 2026  
+> **Status:** Deployed & operational on Azure (`rg-aiagent2-dev`); Multi-client ready with service restart capability
 
 ---
 
 ## 1. What Is This?
 
 ResiQ is an **AI-powered agentic question-and-answer platform** that lets users ask natural-language questions about data scattered across their organization — emails, files, databases, OneDrive, SOPs, and analytics dashboards. Instead of manually searching five different systems, a user types one message into a chat UI; the system reasons over the request, calls the right backend tools, and returns a synthesized answer (and optionally a generated report).
+
+**Key documents for quick navigation:**
+- **[docs/FEATURES.md](FEATURES.md)** — Complete feature list and capabilities
+- **[docs/OPERATIONAL_GUIDE.md](OPERATIONAL_GUIDE.md)** — Day-to-day operations, service restart, monitoring
+- **[README.md](../README.md)** — Quick start and overview
 
 **Live endpoints**
 - Chat UI: `https://demo.resiq.co`
@@ -491,3 +496,276 @@ gantt
 ---
 
 *For questions or updates, see `AGENTS.md` for the development runbook and `GAPS.md` for proposed improvements.*
+
+---
+
+## 13. Service Restart & Admin Operations
+
+### 13.1 Service Restart Architecture
+
+EvieAI includes an integrated service restart capability accessible from the admin dashboard, enabling operators to recover failed services without portal access or SSH.
+
+#### Restart Flow
+
+`
+Admin Dashboard (Web UI)
+    │
+    ├─ Displays: Health status of all services
+    ├─ Lists: Orchestrator + all 8 MCP services
+    └─ Action: Click "Restart" button on service card
+            │
+            ▼
+    POST /restart {service: "sql"}
+            │
+            ▼
+    Orchestrator
+    • Reads env vars: PROJECT_NAME, ENVIRONMENT, RESOURCE_GROUP, AZURE_SUBSCRIPTION_ID
+    • Constructs app name: {PROJECT_NAME}-mcp-{SERVICE}-{ENVIRONMENT}
+    │   Example: aiagent2-mcp-sql-dev
+    │
+    ├─ Attempt 1: Azure SDK (azure-mgmt-app)
+    │   • Uses system-assigned managed identity
+    │   • Calls: ContainerAppsAPIClient.container_apps.revision_restart()
+    │   • Requires: Container App Contributor role
+    │
+    └─ Fallback: Azure CLI
+        • Runs: az containerapp revision restart
+        • Requires: Azure CLI installed + managed identity with permissions
+            │
+            ▼
+    Azure Container Apps
+    • Stops current container revision
+    • Pulls fresh image
+    • Starts new revision
+    • Health check validates startup
+            │
+            ▼
+    Response to UI
+    • Success: "Service restarted at 14:32:45 UTC"
+    • Error: "Failed to restart: {error_message}"
+    • UI auto-refreshes health in 3 seconds
+`
+
+#### Environment Variables Required for Restart
+
+| Variable | Purpose | Source | Example |
+|----------|---------|--------|---------|
+| PROJECT_NAME | Resource naming prefix | Terraform (var.project_name) | iagent2 |
+| ENVIRONMENT | Deployment stage | Terraform (var.environment) | dev |
+| RESOURCE_GROUP | Azure resource group | Terraform (auto-constructed) | 
+g-aiagent2-dev |
+| AZURE_SUBSCRIPTION_ID | Azure subscription ID | Terraform (auto-detected) | 82aff681-... |
+
+**Note:** These are **automatically set by Terraform** in Container Apps at deployment time. No manual env var configuration needed for Azure deployments.
+
+### 13.2 Admin Dashboard Features
+
+The web UI includes a comprehensive admin panel accessible at /admin:
+
+`
+Admin Dashboard
+├─ Service Health Monitor
+│  ├─ Real-time status of orchestrator
+│  ├─ Health of all 8+ MCP servers
+│  ├─ Restart button for each service
+│  └─ Last restart time + status messages
+│
+├─ Approvals & Actions
+│  ├─ Pending write-back approvals
+│  ├─ Action history + execution logs
+│  └─ Approve/reject buttons per action
+│
+├─ Reliability Metrics
+│  ├─ Action success rate + failure reasons
+│  ├─ Connector sync health + backlog
+│  ├─ Circuit breaker status (open/closed)
+│  └─ Reliability gates (enabled/disabled)
+│
+└─ Operational Logs
+   ├─ Chat history + tool call traces
+   ├─ MCP server logs + errors
+   ├─ Restart events + timestamps
+   └─ Approval audit trail
+`
+
+### 13.3 RBAC & Security for Restart
+
+| Requirement | Implementation |
+|-------------|-----------------|
+| **Authentication** | Orchestrator validates request origin (CORS allow-list) |
+| **Authorization** | Admin routes check user role (feature-flagged: ENABLE_ADMIN_RESTART=true) |
+| **Identity** | Container App uses system-assigned managed identity |
+| **Permissions** | Managed identity must have "Container App Contributor" role on resource group |
+| **Audit** | All restart requests logged with timestamp, service name, outcome |
+| **No secrets** | Restart uses managed identity, not credential storage |
+
+---
+
+## 14. Multi-Client Deployment Architecture
+
+### 14.1 Multi-Tenant Resource Isolation
+
+EvieAI supports deploying to multiple client organizations with complete resource isolation. Each client gets a dedicated, independent deployment.
+
+#### Naming Convention
+
+`
+Client: "acme-corp" (project_name), Environment: "prod" (environment)
+    ↓
+Resource Group:        rg-acme-corp-prod
+Orchestrator:          acme-corp-orchestrator-prod
+SQL MCP:               acme-corp-mcp-sql-prod
+Mail MCP:              acme-corp-mcp-mail-prod
+OneDrive MCP:          acme-corp-mcp-onedrive-prod
+File Share MCP:        acme-corp-mcp-files-prod
+Memory MCP:            acme-corp-mcp-memory-prod
+Knowledge Base MCP:    acme-corp-mcp-kb-prod
+Analytics MCP:         acme-corp-mcp-analytics-prod
+Doc Gen MCP:           acme-corp-mcp-docgen-prod
+Dashboard:             acme-corp-dashboard-prod
+Static Web App:        acme-corp-ui-prod
+Key Vault:             acme-corp-kv-prod
+SQL Database:          acme-corp-sqldb-prod
+Storage Account:       acmecorpstgprod
+Container Registry:    acmecorpacrprod
+`
+
+**Benefit:** Each client's resources are completely isolated. No cross-contamination. Deletion of one client doesn't affect others.
+
+#### Multi-Client Terraform Deployment
+
+`ash
+# Client A
+cd terraform/clients/acme-corp
+cp ../terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars
+# project_name = "acme-corp"
+# environment  = "prod"
+terraform init
+terraform apply
+
+# Client B (independent Azure subscription or RG)
+cd terraform/clients/globex-inc
+cp ../terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars
+# project_name = "globex-inc"
+# environment  = "staging"
+terraform init
+terraform apply
+`
+
+**Result:**
+- Two completely independent EvieAI stacks
+- acme-corp services restart independently
+- globex-inc services restart independently
+- No resource contention
+- Separate billing per client
+
+### 14.2 Service Restart in Multi-Client Deployments
+
+Each orchestrator reads its own PROJECT_NAME and ENVIRONMENT, so restarts are **automatically scoped to that client's services**.
+
+#### Example: Restart Flow for Client A
+
+`
+Client A Admin Dashboard
+(acme-corp-orchestrator-prod)
+    │
+    ├─ Reads env vars:
+    │  PROJECT_NAME = acme-corp
+    │  ENVIRONMENT  = prod
+    │
+    ├─ Constructs service names:
+    │  - acme-corp-orchestrator-prod
+    │  - acme-corp-mcp-sql-prod
+    │  - acme-corp-mcp-mail-prod
+    │  ... (all with acme-corp prefix)
+    │
+    └─ Restart Target: acme-corp-mcp-sql-prod
+           │
+           ▼
+       ✓ Only Client A's SQL service restarts
+       ✗ Client B (globex-inc) services unaffected
+`
+
+### 14.3 Multi-Client Deployment Checklist
+
+See [docs/DEPLOYMENT_CHECKLIST.md](docs/DEPLOYMENT_CHECKLIST.md) for a detailed per-client deployment procedure:
+
+1. **Pre-flight**: Azure subscription + permissions
+2. **Terraform setup**: Client-specific tfvars, init, plan
+3. **Infrastructure provisioning**: terraform apply (~10–15 min)
+4. **Data integration**: SQL schema, Graph API consent, file mapping
+5. **Testing**: End-to-end validation
+6. **Go-live**: DNS cutover, user onboarding
+7. **Hypercare**: 2-week support period
+
+### 14.4 Cost Model for Multi-Client
+
+With N clients deployed independently:
+
+| Component | Cost per Client | Notes |
+|-----------|-----------------|-------|
+| **Compute (Container Apps)** | –/mo | Min 0 replicas (consumption pricing) |
+| **OpenAI (GPT-4o)** | –/mo | 10K TPM, ~2M tokens/mo per client |
+| **SQL Database** | –/mo | Serverless, auto-pause |
+| **Storage + vault + logs** | –/mo | |
+| **UI (Static Web App)** |  | Free tier per client |
+| **Total per client** | **~–/mo** | |
+| **N clients total** | **N × –** | Linear scaling |
+
+**Cost optimization:** Batch high-availability clients; use dev/staging for cost-conscious pilots.
+
+---
+
+## 15. Observability & Monitoring
+
+### 15.1 Health Check Endpoints
+
+All services expose health endpoints:
+
+| Endpoint | Purpose | Response |
+|----------|---------|----------|
+| GET /health | Liveness probe | {status: "healthy"} or error |
+| GET /ready | Readiness probe | {status: "ready", dependencies: {...}} |
+| GET /metrics | Prometheus metrics | CPU, memory, request count, latency |
+
+### 15.2 Logging & Tracing
+
+- **Container Logs**: Streamed to Azure Log Analytics via Container Apps integration
+- **KQL Queries**: Pre-built dashboards for MCP server latency, error rates, tool calls
+- **Audit Trail**: All chat sessions, approvals, restarts logged with timestamps
+- **Distributed Tracing**: Request IDs propagated across orchestrator + MCP calls for end-to-end debugging
+
+### 15.3 Alerting (Optional)
+
+Recommended alert rules in Log Analytics:
+
+`kusto
+// Alert: MCP server 404 rate > 5%
+AzureDiagnostics
+| where ResourceType == "CONTAINERAPPS"
+| where status_code in (404, 500)
+| summarize ErrorRate = (todouble(countif(status_code >= 400)) / count()) * 100
+| where ErrorRate > 5.0
+
+// Alert: Orchestrator response time > 5s
+AzureDiagnostics
+| where Name == "orchestrator"
+| where duration_ms > 5000
+| summarize count(), avg(duration_ms), max(duration_ms) by bin(TimeGenerated, 5m)
+`
+
+---
+
+## 16. Future Roadmap
+
+- [ ] **Graceful shutdown** — Drain requests before restart
+- [ ] **Blue-green deployments** — Zero-downtime service updates
+- [ ] **Circuit breaker auto-healing** — Automatic recovery from cascading failures
+- [ ] **Cost anomaly detection** — Alert on spending spikes
+- [ ] **Knowledge base embedding indexing** — Vector search for semantic retrieval
+- [ ] **Multi-turn approval workflows** — Complex approvals requiring escalation
+- [ ] **Custom MCP server templates** — SDK for customer-authored tools
+- [ ] **Federated chat** — Query across multiple EvieAI instances
+

@@ -884,6 +884,22 @@ resource "azurerm_container_app" "orchestrator" {
         name  = "DEFAULT_ADMIN_PASSWORD"
         value = var.default_admin_password
       }
+      env {
+        name  = "PROJECT_NAME"
+        value = var.project_name
+      }
+      env {
+        name  = "ENVIRONMENT"
+        value = var.environment
+      }
+      env {
+        name  = "RESOURCE_GROUP"
+        value = azurerm_resource_group.main.name
+      }
+      env {
+        name  = "AZURE_SUBSCRIPTION_ID"
+        value = data.azurerm_client_config.current.subscription_id
+      }
     }
     min_replicas = 1
     max_replicas = var.container_app_max_replicas
