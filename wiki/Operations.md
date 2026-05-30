@@ -412,6 +412,35 @@ customMetrics
 
 ## Cost Management
 
+See **[[Cost-Management]]** page for detailed cost saving strategies.
+
+### Quick Cost Reduction
+
+Stop services when not in use:
+
+**PowerShell:**
+```powershell
+.\scripts\manage-environment.ps1 -Action stop   # Stop all services
+.\scripts\manage-environment.ps1 -Action start  # Restart when needed
+.\scripts\manage-environment.ps1 -Action status # Check status
+```
+
+**Bash:**
+```bash
+chmod +x scripts/manage-environment.sh
+./scripts/manage-environment.sh stop   # Stop all services
+./scripts/manage-environment.sh start  # Restart when needed
+./scripts/manage-environment.sh status # Check status
+```
+
+### Cost Savings
+
+| Scenario | Monthly | Annual Savings |
+|----------|---------|-----------------|
+| 8 hrs/day | $67 | **$1,600** |
+| Weekdays | $95 | **$1,260** |
+| Manual (dev) | $100+ | **$1,200+** |
+
 ### Monthly Spend Review
 
 ```bash
@@ -425,16 +454,18 @@ az costmanagement query create \
 
 ### Cost Optimization Checklist
 
-- [ ] Container replicas set to min necessary (scale to 0 when idle?)
-- [ ] SQL database on serverless tier (auto-pause enabled?)
-- [ ] Log retention set to 30–90 days (not forever)
-- [ ] Unused resources cleaned up (old app versions, test deployments)
-- [ ] Reserved instances for predictable workloads (if budget allows)
+- [ ] Set up stop/start schedule for off-hours
+- [ ] Configure budget alert at $150/month
+- [ ] SQL database on serverless tier (auto-pause enabled)
+- [ ] Log retention set to 30-90 days
+- [ ] Unused resources cleaned up
+- [ ] Review costs monthly
 
 ---
 
 ## Next Steps
 
+- **Cost reduction:** [[Cost-Management]]
 - **Emergency restart:** [[Service-Restart]]
 - **Troubleshoot issues:** [[Troubleshooting]]
 - **Understand architecture:** [[Architecture]]

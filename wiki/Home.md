@@ -19,8 +19,10 @@ Follow these for multi-client deployment:
 ### ⚙️ Running EvieAI?
 Operations and support:
 1. **[Operations Guide](wiki/Operations)** — Daily checks, monitoring, restart procedures
-2. **[Troubleshooting](wiki/Troubleshooting)** — Common issues and solutions
-3. **[Disaster Recovery](wiki/Disaster-Recovery)** — Emergency procedures
+2. **[Service Restart](wiki/Service-Restart)** — One-click service recovery
+3. **[Cost Management](wiki/Cost-Management)** — Reduce costs 80-90% when not in use
+4. **[Troubleshooting](wiki/Troubleshooting)** — Common issues and solutions
+5. **[Disaster Recovery](wiki/Disaster-Recovery)** — Emergency procedures
 
 ### 💻 Integrating with EvieAI?
 Developer resources:
@@ -46,12 +48,14 @@ Developer resources:
 ✨ **New Features**
 - Service restart from admin dashboard (one-click or API)
 - Multi-client deployment with resource isolation
+- Cost management: Stop services when not in use (save 80-90%)
 - Comprehensive operational procedures
 - Enhanced monitoring and alerting
 
 📚 **Documentation**
 - New [Features Overview](wiki/Features) page
 - New [Operations Guide](wiki/Operations) with daily procedures
+- New [Cost Management](wiki/Cost-Management) with stop/start scripts
 - New [Deployment Configuration](wiki/Deployment-Configuration) with examples
 - Updated [Architecture](wiki/Architecture) with multi-client details
 
@@ -69,6 +73,7 @@ Developer resources:
 | [Infrastructure](wiki/Infrastructure) | Terraform and IaC details | DevOps Engineers |
 | [Operations Guide](wiki/Operations) | Daily operations and monitoring | Operators, Admins |
 | [Service Restart](wiki/Service-Restart) | Admin dashboard restart procedures | Operators |
+| [Cost Management](wiki/Cost-Management) | Stop/start services, save 80-90% | Site Owners, Finance |
 | [Troubleshooting](wiki/Troubleshooting) | Common issues and fixes | Operators, Support |
 | [Disaster Recovery](wiki/Disaster-Recovery) | Emergency procedures | Site Owners, Operators |
 | [API Reference](wiki/API-Reference) | REST API endpoints | Developers |
@@ -94,6 +99,9 @@ Developer resources:
 
 **Q: Something is broken. Where do I start?**  
 → Check [Troubleshooting](wiki/Troubleshooting)
+
+**Q: How do I reduce costs?**  
+→ See [Cost Management](wiki/Cost-Management) — save 80-90% by stopping services
 
 **Q: What's the API?**  
 → See [API Reference](wiki/API-Reference)
