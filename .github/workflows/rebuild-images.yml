@@ -1,0 +1,70 @@
+name: Daily ACR Image Rebuild
+
+on:
+  schedule:
+    # Run every day at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    # Allow manual trigger from GitHub Actions UI
+
+jobs:
+  rebuild-images:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Build and push all images
+        run: |
+          # ACR registry details
+          REGISTRY="aiagent2acrdev"
+          
+          # Define all images to build
+          declare -a images=(
+            "orchestrator:orchestrator/Dockerfile"
+            "postgresql:mcp_servers/postgresql/Dockerfile"
+            "mcp-sql:mcp_servers/sql/Dockerfile"
+            "mcp-files:mcp_servers/file_share/Dockerfile"
+            "mcp-mail:mcp_servers/o365_mail/Dockerfile"
+            "mcp-onedrive:mcp_servers/onedrive/Dockerfile"
+            "mcp-memory:mcp_servers/memory/Dockerfile"
+            "mcp-knowledge-base:mcp_servers/knowledge_base/Dockerfile"
+            "mcp-document-generation:mcp_servers/document_generation/Dockerfile"
+            "mcp-analytics:mcp_servers/analytics/Dockerfile"
+            "mcp-dashboard:mcp_servers/dashboard/Dockerfile"
+          )
+          
+          # Build each image
+          for item in "${images[@]}"; do
+            IMAGE_NAME="${item%:*}"
+            DOCKERFILE="${item#*:}"
+            CONTEXT_DIR=$(dirname "$DOCKERFILE")
+            
+            echo "================================"
+            echo "Building: $IMAGE_NAME"
+            echo "Dockerfile: $DOCKERFILE"
+            echo "Context: $CONTEXT_DIR"
+            echo "================================"
+            
+            az acr build \
+              --registry "$REGISTRY" \
+              --image "${IMAGE_NAME}:latest" \
+              --file "$DOCKERFILE" \
+              "$CONTEXT_DIR"
+            
+            if [ $? -eq 0 ]; then
+              echo "✓ Build succeeded for $IMAGE_NAME"
+            else
+              echo "✗ Build failed for $IMAGE_NAME"
+              exit 1
+            fi
+          done
+          
+          echo ""
+          echo "✅ All images rebuilt successfully"
