@@ -3,10 +3,11 @@ import { marked } from 'marked'
 import { AuthProvider, useAuth } from './auth'
 import { LoginPage } from './LoginPage'
 import { SettingsPage } from './SettingsPage'
+import { AdminPage } from './AdminPage'
 import type { ChatResponse } from './Cards'
 import { ResultDeck, ToolBadge, LiveToolBadge } from './Cards'
 
-type View = 'chat' | 'settings' | 'performance' | 'network'
+type View = 'chat' | 'settings' | 'performance' | 'network' | 'admin'
 
 type PerformanceData = {
   generated_at: string
@@ -618,6 +619,10 @@ function ChatView() {
     return <SettingsPage initialTab="data_sources" />
   }
 
+  if (view === 'admin') {
+    return <AdminPage onBack={() => setView('chat')} />
+  }
+
   if (view === 'performance') {
     return <PerformanceDashboardView userId={user?.email} onBack={() => setView('chat')} />
   }
@@ -673,9 +678,22 @@ function ChatView() {
         <div className="status">
           <span>{statusText}</span>
           <span className="status-actions">
-            <button className="status-btn" onClick={() => setView('settings')} title="Settings">
-              ⚙️ Settings
-            </button>
+            {isAdmin && (
+              <>
+                <button className="status-btn" onClick={() => setView('admin')} title="System Health">
+                  🖥️ Admin
+                </button>
+                <button className="status-btn" onClick={() => setView('settings')} title="Settings">
+                  ⚙️ Settings
+                </button>
+              </>
+            )}
+            {!isAdmin && (
+              <button className="status-btn" onClick={() => setView('settings')} title="Settings">
+                ⚙️ Settings
+              </button>
+            )}
+>>>>>>> 7dc38407cbc1d50f2eff6b2a1d2cb7eea9e4a955
             <button className="status-btn" onClick={() => setView('performance')} title="Performance Dashboard">
               📊 Dashboard
             </button>

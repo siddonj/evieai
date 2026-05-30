@@ -64,6 +64,54 @@ Edit `terraform.tfvars`:
 - Set `sql_admin_password` (strong password, min 8 chars)
 - Set `target_user_upn` (the O365 user whose mail/files the app will read)
 
+## Environment Variables (Automatically Configured by Terraform)
+
+Terraform automatically configures several critical environment variables in the Container Apps, including those needed for the admin dashboard's service restart functionality:
+
+| Variable | Purpose | Set By | Value |
+|----------|---------|--------|-------|
+| `PROJECT_NAME` | Prefix for all Azure resources | Terraform | `var.project_name` |
+| `ENVIRONMENT` | Deployment environment name | Terraform | `var.environment` |
+| `RESOURCE_GROUP` | Azure resource group name | Terraform | Auto-constructed from project_name + environment |
+| `AZURE_SUBSCRIPTION_ID` | Azure subscription for SDK calls | Terraform | Auto-detected from current context |
+| `AZURE_OPENAI_ENDPOINT` | OpenAI service endpoint | Terraform + Key Vault | From `var.azure_openai_endpoint` |
+| `AZURE_OPENAI_API_KEY` | OpenAI API key (secret) | Terraform + Key Vault | From `var.azure_openai_api_key` |
+| `MCP_*_URL` | MCP service endpoints | Terraform | Auto-constructed from Container App FQDNs |
+
+### What This Means for Multi-Client Deployments
+
+When you run `terraform apply`, all Container Apps are automatically configured with:
+
+```
+PROJECT_NAME = aiagent2              # from terraform.tfvars project_name
+ENVIRONMENT = dev                    # from terraform.tfvars environment
+RESOURCE_GROUP = rg-aiagent2-dev     # auto-constructed
+AZURE_SUBSCRIPTION_ID = 82aff681...  # your current subscription
+```
+
+**This enables service restart functionality automatically** — the admin dashboard can restart any Container App by name using these variables.
+
+For multi-client deployments:
+```
+# Client A (terraform/client_a/terraform.tfvars)
+project_name = "clienta"
+environment = "prod"
+# Results in:
+# PROJECT_NAME = clienta
+# RESOURCE_GROUP = rg-clienta-prod
+# Services named: clienta-mcp-sql-prod, clienta-orchestrator-prod, etc.
+
+# Client B (terraform/client_b/terraform.tfvars)
+project_name = "clientb"
+environment = "staging"
+# Results in:
+# PROJECT_NAME = clientb
+# RESOURCE_GROUP = rg-clientb-staging
+# Services named: clientb-mcp-sql-staging, clientb-orchestrator-staging, etc.
+```
+
+See [docs/DEPLOYMENT_CONFIG.md](../docs/DEPLOYMENT_CONFIG.md) for detailed environment variable reference and [docs/DEPLOYMENT_CHECKLIST.md](../docs/DEPLOYMENT_CHECKLIST.md) for multi-client setup guide.
+
 ## Deploy
 
 ```bash

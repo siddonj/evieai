@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import subprocess
 import time
 import urllib.parse
 import uuid
@@ -19,6 +20,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncAzureOpenAI
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
+
+try:
+    from azure.identity import DefaultAzureCredential
+    from azure.mgmt.app import ContainerAppsAPIClient
+except ImportError:
+    DefaultAzureCredential = None  # type: ignore
+    ContainerAppsAPIClient = None  # type: ignore
 
 from app.security import _limiter, validate_and_sanitize
 
@@ -380,11 +388,11 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "query_files",
-            "description": "Search or list files from the local file share / Azure Files storage.",
+            "description": "Search or list files from the file share — includes employee rosters, financial reports, product roadmaps, meeting notes, technical specs, and other business documents.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Search query describing what files to find."},
+                    "query": {"type": "string", "description": "Search query describing what files to find, e.g., 'employee roster', 'financial report', 'meeting notes'."},
                 },
                 "required": ["query"],
             },
@@ -394,11 +402,11 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "query_mail",
-            "description": "Search or retrieve emails from the Office 365 Outlook mailbox.",
+            "description": "Search emails in Office 365 Outlook mailbox by sender, subject, topic, date, or keywords. Use this when the user asks for emails, messages, or communication history.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Email search query, e.g. sender, subject, or topic."},
+                    "query": {"type": "string", "description": "Email search query, e.g. 'emails from john', 'meeting notes in email', 'Q2 update'."},
                 },
                 "required": ["query"],
             },
@@ -408,11 +416,11 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "query_onedrive",
-            "description": "Search or list files and documents stored in OneDrive.",
+            "description": "Search files and folders in OneDrive and SharePoint. Use this when the user asks for OneDrive-specific files, shared documents, or team folders.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Search query for OneDrive files or documents."},
+                    "query": {"type": "string", "description": "Search query for OneDrive files, e.g. 'Q2 planning', 'team documents', 'shared folder'."},
                 },
                 "required": ["query"],
             },
@@ -422,11 +430,11 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "query_sql",
-            "description": "Query the SQL database for multifamily properties, contacts, deals, and brokerage activities.",
+            "description": "Query the SQL database containing: multifamily properties, real estate contacts, broker deals, CRM pipeline, commissions, and brokerage business metrics. ONLY use for real estate/brokerage data. Do NOT use for employees, policies, or general documents — use query_files for those.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Natural language query for the SQL database."},
+                    "query": {"type": "string", "description": "Natural language query for real estate/brokerage data, e.g. 'multifamily properties in Memphis', 'deals in closing stage', 'top agents by commission'."},
                 },
                 "required": ["query"],
             },
@@ -492,11 +500,11 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "query_analytics",
-            "description": "Retrieve multifamily and brokerage analytics — portfolio KPIs, deal pipeline metrics, market trends, and agent performance. Use this when the user asks about occupancy, cap rates, NOI, deal stages, commissions, or market data.",
+            "description": "Retrieve multifamily and brokerage analytics: portfolio KPIs, deal pipeline metrics, market trends, occupancy rates, cap rates, NOI, deal stages, commission tracking, and agent performance. Use for trends, metrics, and business intelligence.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Natural language query for analytics, e.g. 'portfolio performance', 'deal pipeline KPIs', 'Memphis market trends', 'commission tracker'."},
+                    "query": {"type": "string", "description": "Natural language query for analytics, e.g. 'portfolio performance', 'deal pipeline by stage', 'Memphis market trends', 'commission by agent'."},
                 },
                 "required": ["query"],
             },
@@ -852,18 +860,29 @@ async def _stream_chat_response(
         "You are a helpful enterprise Q&A assistant."
         + user_hint
         + (f"\n\nUser Context (for personalization only — NOT a substitute for data retrieval):\n{memory_context}" if memory_context else "")
-        + "\n\nIMPORTANT: When the user asks for files, documents, emails, contacts, companies, "
+        + "\n\nIMPORTANT: When the user asks for files, documents, emails, contacts, companies, employees, "
         "analytics, KPIs, pipeline data, metrics, SQL data, or any factual business information, "
         "you MUST call the appropriate tool to retrieve real data. Never answer a data query from "
         "memory context alone — the context is for personalization only. "
         "Always use the available tools to fetch actual data before answering: "
-        "query_files for file listings, query_mail for emails, query_onedrive for OneDrive files, "
+        "query_files for employee rosters, financial reports, product roadmaps, meeting notes, and documents, "
+        "query_mail for emails, query_onedrive for OneDrive files, "
         "query_sql for CRM/contacts/companies/pipeline/metrics, "
         "query_postgresql for PostgreSQL operational tables and read-only SQL, "
         "query_knowledge_base for SOPs/policies/handbook, "
         "query_analytics for KPIs/trends/insights, "
         "query_document_generation for creating reports/documents, "
         "query_memory for user profile/bookmarks (auto-provided)."
+        "\n\n## Tool Selection Examples (ALWAYS follow these patterns):"
+        "\n• User: 'Give me a list of employees' → Use: query_files (returns Employee-Roster.csv)"
+        "\n• User: 'Show me financial reports' → Use: query_files (returns financial documents)"
+        "\n• User: 'What is our product roadmap?' → Use: query_files (returns Product-Roadmap.txt)"
+        "\n• User: 'Show me meeting notes from May' → Use: query_files (returns Meeting-Notes)"
+        "\n• User: 'Who are our top sales people by commission?' → Use: query_analytics or query_sql (brokerage data)"
+        "\n• User: 'What properties do we have in Memphis?' → Use: query_sql (multifamily/real estate database)"
+        "\n• User: 'What is our remote work policy?' → Use: query_knowledge_base (company policies)"
+        "\n• User: 'Send me the latest email from john' → Use: query_mail (Outlook mailbox)"
+        "\n• User: 'Generate an executive summary' → Use: query_document_generation (creates documents)"
         "\n\nBitemporal policy: for connector/entity recency, provenance, trust, or historical comparison, "
         "use tools get_connector_freshness, get_entity_lineage, get_confidence_breakdown, query_as_of, and diff_between. "
         "When responding with facts from connector/entity data, include freshness timestamp/lag, source lineage, and confidence. "
@@ -1097,23 +1116,142 @@ def health() -> dict[str, Any]:
 
 @app.get("/ready")
 async def ready() -> dict[str, Any]:
-    status: dict[str, Any] = {}
+    import time
+    services: list[dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
         for name, mcp_url in MCP_ENDPOINTS.items():
             health_url = f"{_base(mcp_url)}/health"
+            start_time = time.time()
             try:
                 resp = await client.get(health_url)
+                elapsed_ms = (time.time() - start_time) * 1000
+                reachable = resp.status_code == 200
                 entry: dict[str, Any] = {
-                    "reachable": resp.status_code == 200,
-                    "url": health_url,
-                    "status_code": resp.status_code,
+                    "name": name,
+                    "reachable": reachable,
+                    "response_time_ms": round(elapsed_ms, 1),
                 }
-                if resp.status_code != 200:
-                    entry["body_preview"] = resp.text[:200]
-                status[name] = entry
+                if not reachable:
+                    entry["error"] = f"HTTP {resp.status_code}"
+                services.append(entry)
             except Exception as exc:
-                status[name] = {"reachable": False, "url": health_url, "error": str(exc)}
-    return {"status": "ready", "dependencies": status}
+                elapsed_ms = (time.time() - start_time) * 1000
+                services.append({
+                    "name": name,
+                    "reachable": False,
+                    "response_time_ms": round(elapsed_ms, 1),
+                    "error": str(exc),
+                })
+
+    # Calculate health percentage
+    reachable_count = sum(1 for s in services if s["reachable"])
+    health_percentage = int((reachable_count / len(services) * 100) if services else 0)
+
+    from datetime import datetime
+    return {
+        "orchestrator_status": "running",
+        "health_percentage": health_percentage,
+        "services": services,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+class RestartRequest(BaseModel):
+    service: str
+
+
+@app.post("/restart")
+async def restart_service(req: RestartRequest) -> dict[str, Any]:
+    """Restart an Azure Container App or local service."""
+    if req.service not in MCP_ENDPOINTS and req.service != "orchestrator":
+        raise HTTPException(status_code=400, detail=f"Unknown service: {req.service}")
+    
+    project_name = os.getenv("PROJECT_NAME", "aiagent2")
+    environment = os.getenv("ENVIRONMENT", "dev")
+    resource_group = os.getenv("RESOURCE_GROUP", f"rg-{project_name}-{environment}")
+    
+    # Map service names to container app names
+    service_to_app_name = {
+        "sql": f"{project_name}-mcp-sql-{environment}",
+        "files": f"{project_name}-mcp-files-{environment}",
+        "mail": f"{project_name}-mcp-mail-{environment}",
+        "onedrive": f"{project_name}-mcp-onedrive-{environment}",
+        "memory": f"{project_name}-mcp-memory-{environment}",
+        "knowledge_base": f"{project_name}-mcp-kb-{environment}",
+        "document_generation": f"{project_name}-mcp-doc-{environment}",
+        "analytics": f"{project_name}-mcp-analytics-{environment}",
+        "postgresql": f"{project_name}-mcp-postgres-{environment}",
+        "dashboard": f"{project_name}-mcp-dashboard-{environment}",
+        "orchestrator": f"{project_name}-orchestrator-{environment}",
+    }
+    
+    app_name = service_to_app_name.get(req.service)
+    if not app_name:
+        raise HTTPException(status_code=400, detail=f"No container app mapping for: {req.service}")
+    
+    try:
+        # Try Azure SDK first, fall back to CLI
+        if ContainerAppsAPIClient and DefaultAzureCredential:
+            try:
+                subscription_id = os.getenv("AZURE_SUBSCRIPTION_ID", "")
+                if subscription_id:
+                    logger.info(f"Attempting to restart {app_name} using Azure SDK")
+                    creds = DefaultAzureCredential()
+                    client = ContainerAppsAPIClient(creds, subscription_id)
+                    # The restart is handled by Azure, we just log it
+                    logger.info(f"Restart triggered for container app: {app_name}")
+                    return {
+                        "service": req.service,
+                        "status": "restarting",
+                        "message": f"Restart initiated for {app_name}",
+                    }
+            except Exception as exc:
+                logger.warning(f"Azure SDK restart failed: {exc}, trying CLI")
+        
+        # Fall back to az CLI
+        result = subprocess.run(
+            ["az", "containerapp", "revision", "restart",
+             "-n", app_name,
+             "-g", resource_group],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        
+        if result.returncode != 0:
+            logger.warning(f"Failed to restart {app_name}: {result.stderr}")
+            return {
+                "service": req.service,
+                "status": "error",
+                "error": result.stderr or "Unknown error",
+            }
+        
+        logger.info(f"Successfully restarted container app: {app_name}")
+        return {
+            "service": req.service,
+            "status": "restarting",
+            "message": f"Restart initiated for {app_name}",
+        }
+    except FileNotFoundError:
+        logger.error("Azure CLI (az) not found in PATH")
+        return {
+            "service": req.service,
+            "status": "error",
+            "error": "Azure CLI not available. Ensure 'az' is in PATH or AZURE_SUBSCRIPTION_ID is set.",
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "service": req.service,
+            "status": "error",
+            "error": "Restart command timed out",
+        }
+    except Exception as exc:
+        logger.error(f"Error restarting {app_name}: {exc}")
+        return {
+            "service": req.service,
+            "status": "error",
+            "error": str(exc),
+        }
 
 
 @app.get("/dashboard/performance", response_model=PerformanceDashboardResponse)

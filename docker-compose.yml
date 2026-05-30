@@ -202,6 +202,10 @@ services:
       MCP_DOC_URL: http://doc-mcp:8006/mcp
       MCP_ANALYTICS_URL: http://analytics-mcp:8007/mcp
       MCP_DASHBOARD_URL: http://dashboard-mcp:8009/mcp
+      PROJECT_NAME: ${PROJECT_NAME:-aiagent2}
+      ENVIRONMENT: ${ENVIRONMENT:-dev}
+      RESOURCE_GROUP: ${RESOURCE_GROUP:-rg-aiagent2-dev}
+      AZURE_SUBSCRIPTION_ID: ${AZURE_SUBSCRIPTION_ID:-}
     ports:
       - "8000:8000"
     depends_on:
