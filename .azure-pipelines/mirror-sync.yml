@@ -1,0 +1,22 @@
+trigger: none
+
+schedules:
+  - cron: "0 */4 * * *"
+    displayName: Sync GitHub to Azure DevOps Mirror (every 4 hours)
+    branches:
+      include:
+        - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+  - checkout: none
+
+  - script: |
+      echo "Syncing GitHub → Azure DevOps Mirror..."
+      git clone --bare https://github.com/siddonj/evieai.git evieai-mirror.git
+      cd evieai-mirror.git
+      git push --mirror https://dev.azure.com/siddonj/_git/evieai
+      echo "✅ Mirror sync complete"
+    displayName: Mirror Sync GitHub to Azure DevOps
