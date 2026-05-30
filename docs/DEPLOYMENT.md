@@ -15,7 +15,17 @@
 ```bash
 # 1. Set up environment
 cp .env.example .env
-# Edit .env — add AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY
+# Edit .env
+# For Azure OpenAI:
+#   LLM_PROVIDER=azure-openai
+#   AZURE_OPENAI_ENDPOINT=...
+#   AZURE_OPENAI_API_KEY=...
+# For obot.ai:
+#   LLM_PROVIDER=obot-ai
+#   OBOT_BASE_URL=...
+#   OBOT_API_KEY=...
+#   OBOT_MODEL=...
+#   OBOT_API_REQUIRED=false   # only if your self-hosted obot endpoint does not enforce API auth
 
 # 2. Start full stack
 docker compose up --build
@@ -89,6 +99,27 @@ az containerapp update \
   --resource-group rg-aiagent2-dev \
   --image aiagent2acrdev.azurecr.io/orchestrator:latest
 ```
+
+### LLM Provider Cutover (Safe Sequence)
+
+1. Deploy code with `LLM_PROVIDER=azure-openai` (no behavior change).
+2. Set obot vars in your environment/pipeline/terraform vars:
+   - `OBOT_BASE_URL`
+   - `OBOT_API_KEY`
+   - `OBOT_MODEL`
+  - optional: `OBOT_API_REQUIRED=false` for trusted no-auth self-hosted endpoints
+3. Switch `LLM_PROVIDER` to `obot-ai`.
+4. Validate at runtime:
+
+```bash
+curl https://<orchestrator-url>/admin/llm-provider
+```
+
+Expected response should include:
+- `"provider": "obot-ai"`
+- `"supported": true`
+- `"configured": true`
+- `"missing_env_vars": []`
 
 ### Web UI
 

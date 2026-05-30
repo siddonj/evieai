@@ -3525,6 +3525,46 @@ input:checked + .mcp-toggle-slider::before {
   border: 1px solid rgba(220, 38, 38, 0.3);
 }
 
+/* ─── LLM Provider Status ────────────────────────────────────────── */
+
+.llm-status-card {
+  display: grid;
+  gap: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.16);
+  padding: 0.75rem;
+}
+
+.llm-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  color: #d8e3ef;
+}
+
+.llm-status-row strong {
+  color: #ffffff;
+  font-size: 0.92rem;
+}
+
+.llm-endpoint {
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.llm-status-warning {
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid rgba(220, 120, 70, 0.45);
+  color: #ffd9c7;
+  background: rgba(220, 120, 70, 0.18);
+  font-size: 0.84rem;
+}
+
 .detail-value {
   font-size: 0.95rem;
   color: #fff;

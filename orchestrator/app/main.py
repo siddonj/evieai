@@ -17,7 +17,6 @@ from typing import Any, Literal
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from openai import AsyncAzureOpenAI
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
@@ -50,6 +49,7 @@ from app.connector_runtime import (
 )
 from app.connector_sync_store import get_connector_sync_store
 from app.event_signal_store import get_event_signal_store
+from app.llm_provider import LLMConfigError, get_llm_provider_status_from_env, get_llm_runtime_from_env
 from connectors.adapters.webhook_adapter import WebhookAdapter, WebhookEnvelope
 from connectors.registry import ConnectorRegistry
 from connectors.types import Capability, SyncCursor
@@ -913,17 +913,15 @@ async def _stream_chat_response(
             "Do NOT call query_analytics or query_dashboard for this response."
         )
 
-    if not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_API_KEY:
-        yield _sse({"type": "error", "message": "Azure OpenAI not configured. Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY."})
+    try:
+        llm_runtime = get_llm_runtime_from_env()
+    except LLMConfigError as exc:
+        yield _sse({"type": "error", "message": str(exc)})
         return
 
-    openai_client = AsyncAzureOpenAI(
-        azure_endpoint=AZURE_OPENAI_ENDPOINT,
-        api_key=AZURE_OPENAI_API_KEY,
-        api_version="2024-02-01",
-    )
+    openai_client = llm_runtime.client
 
-    yield _sse({"type": "start"})
+    yield _sse({"type": "start", "provider": llm_runtime.provider})
 
     tool_calls_log: list[dict[str, Any]] = []
     mcp_results_log: list[dict[str, Any]] = []
@@ -965,7 +963,7 @@ async def _stream_chat_response(
 
         try:
             stream = await openai_client.chat.completions.create(
-                model=AZURE_OPENAI_DEPLOYMENT,
+                model=llm_runtime.model,
                 messages=messages,
                 tools=_active_tools(disabled_tool_names=blocked_tools),
                 tool_choice="auto",
@@ -2200,6 +2198,21 @@ async def admin_mcp_status() -> dict[str, Any]:
             )
 
     return {"services": rows}
+
+
+@app.get("/admin/llm-provider")
+def admin_llm_provider_status() -> dict[str, Any]:
+    """Return currently selected LLM provider and whether its required env vars are configured."""
+    status = get_llm_provider_status_from_env()
+    return {
+        "provider": status.provider,
+        "supported": status.supported,
+        "configured": status.configured,
+        "model": status.model,
+        "endpoint": status.endpoint,
+        "missing_env_vars": status.missing_env_vars,
+        "error": status.error,
+    }
 
 
 @app.post("/admin/mcp-reset/{service}", response_model=McpResetResponse)

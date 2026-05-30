@@ -1,0 +1,10 @@
+.git
+.gitignore
+.pytest_cache/
+.venv/
+venv/
+__pycache__/
+*.pyc
+web_ui/node_modules/
+web_ui/dist/
+node_modules/

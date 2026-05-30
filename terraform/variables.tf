@@ -101,6 +101,42 @@ variable "alert_email" {
   sensitive   = true
 }
 
+# ─── LLM Provider ────────────────────────────────────────────────────
+variable "llm_provider" {
+  description = "LLM provider used by orchestrator: azure-openai or obot-ai."
+  type        = string
+  default     = "azure-openai"
+  validation {
+    condition     = contains(["azure-openai", "obot-ai"], var.llm_provider)
+    error_message = "llm_provider must be azure-openai or obot-ai."
+  }
+}
+
+variable "obot_base_url" {
+  description = "Base URL for obot.ai OpenAI-compatible endpoint."
+  type        = string
+  default     = ""
+}
+
+variable "obot_model" {
+  description = "Model name used when llm_provider is obot-ai."
+  type        = string
+  default     = "gpt-4o"
+}
+
+variable "obot_api_key" {
+  description = "API key for obot.ai when llm_provider is obot-ai."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "obot_api_required" {
+  description = "Whether obot.ai endpoint requires API key auth. Set false only for trusted self-hosted endpoints."
+  type        = bool
+  default     = true
+}
+
 # ─── Web UI Auth ─────────────────────────────────────────
 variable "jwt_secret" {
   description = "HS256 secret for signing web UI JWT tokens. Generate with: openssl rand -hex 32"

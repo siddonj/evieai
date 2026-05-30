@@ -7,7 +7,7 @@ import { AdminPage } from './AdminPage'
 import type { ChatResponse } from './Cards'
 import { ResultDeck, ToolBadge, LiveToolBadge } from './Cards'
 
-type View = 'chat' | 'settings' | 'performance' | 'network' | 'admin'
+type View = 'chat' | 'settings' | 'service_health' | 'performance' | 'network' | 'admin'
 
 type PerformanceData = {
   generated_at: string
@@ -619,6 +619,10 @@ function ChatView() {
     return <SettingsPage initialTab="data_sources" />
   }
 
+  if (view === 'service_health') {
+    return <SettingsPage initialTab="service_health" />
+  }
+
   if (view === 'admin') {
     return <AdminPage onBack={() => setView('chat')} />
   }
@@ -693,12 +697,14 @@ function ChatView() {
                 ⚙️ Settings
               </button>
             )}
->>>>>>> 7dc38407cbc1d50f2eff6b2a1d2cb7eea9e4a955
+            <button className="status-btn" onClick={() => setView('service_health')} title="Service Health">
+              ⏱️ Services
+            </button>
             <button className="status-btn" onClick={() => setView('performance')} title="Performance Dashboard">
               📊 Dashboard
             </button>
-              <button className="status-btn" onClick={() => setView('network')} title="Network Dashboard">
-                📡 Network Dashboard
+            <button className="status-btn" onClick={() => setView('network')} title="Network Dashboard">
+              📡 Network Dashboard
             </button>
             {hasConversation && (
               <button className="status-btn" onClick={clearChat} title="Clear conversation">

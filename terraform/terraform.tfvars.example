@@ -15,6 +15,13 @@ target_user_upn = "user@yourtenant.onmicrosoft.com"
 # container_app_max_replicas  = 3
 # orchestrator_image_digest   = "sha256:89297011a36540eaf86f5e2b0764d06a5d8b835a45d321e68508df6b0b3a3cf3"
 
+# ─── LLM Provider ─────────────────────────────────────────────────────
+# llm_provider = "azure-openai" # switch to "obot-ai" after setting obot vars
+# obot_base_url = "https://<your-obot-endpoint>/v1"
+# obot_model    = "gpt-4o"
+# obot_api_required = false  # only for trusted self-hosted endpoints with no API auth
+# obot_api_key  = "<set-in-secret-store-or-pipeline-var>"
+
 # ─── Custom Domain ──────────────────────────────────────────────────────
 # ui_custom_domain = "demo.resiq.co"
 # api_custom_domain = "api.resiq.co"

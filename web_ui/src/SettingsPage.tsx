@@ -77,6 +77,16 @@ type ServiceHealthRow = {
   error?: string | null
 }
 
+type LlmProviderStatus = {
+  provider: string
+  supported: boolean
+  configured: boolean
+  model: string
+  endpoint: string | null
+  missing_env_vars: string[]
+  error: string | null
+}
+
 export function SettingsPage({ initialTab = 'data_sources' }: SettingsPageProps) {
   const { logout, user: currentUser } = useAuth()
   const [tab, setTab] = useState<Tab>(initialTab)
@@ -107,6 +117,8 @@ export function SettingsPage({ initialTab = 'data_sources' }: SettingsPageProps)
   const [serviceHealthRows, setServiceHealthRows] = useState<ServiceHealthRow[]>([])
   const [serviceHealthLoading, setServiceHealthLoading] = useState(false)
   const [serviceHealthMessage, setServiceHealthMessage] = useState('')
+  const [llmStatus, setLlmStatus] = useState<LlmProviderStatus | null>(null)
+  const [llmStatusLoading, setLlmStatusLoading] = useState(false)
 
   const activeWriteConnectors = useMemo(
     () => connectors.filter((c) => c.capabilities?.includes('write')),
@@ -120,6 +132,7 @@ export function SettingsPage({ initialTab = 'data_sources' }: SettingsPageProps)
 
   useEffect(() => {
     loadMcpConfig()
+    void loadLlmProviderStatus()
   }, [])
 
   useEffect(() => {
@@ -167,6 +180,18 @@ export function SettingsPage({ initialTab = 'data_sources' }: SettingsPageProps)
       setServers([])
     } finally {
       setServerLoading(false)
+    }
+  }
+
+  async function loadLlmProviderStatus() {
+    setLlmStatusLoading(true)
+    try {
+      const data = await fetchJson<LlmProviderStatus>(`${ORCHESTRATOR_URL}/admin/llm-provider`)
+      setLlmStatus(data)
+    } catch {
+      setLlmStatus(null)
+    } finally {
+      setLlmStatusLoading(false)
     }
   }
 
@@ -390,6 +415,51 @@ export function SettingsPage({ initialTab = 'data_sources' }: SettingsPageProps)
         {tab === 'data_sources' && (
           <>
             {userMessage && <section className="settings-section"><div className="settings-message">{userMessage}</div></section>}
+            <section className="settings-section">
+              <div className="approval-toolbar">
+                <h2>LLM Provider</h2>
+                <button onClick={() => void loadLlmProviderStatus()} disabled={llmStatusLoading}>
+                  {llmStatusLoading ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+              {!llmStatus ? (
+                <div className="settings-hint">Provider status unavailable.</div>
+              ) : (
+                <div className="llm-status-card">
+                  <div className="llm-status-row">
+                    <span>Provider</span>
+                    <strong>{llmStatus.provider || 'unknown'}</strong>
+                  </div>
+                  <div className="llm-status-row">
+                    <span>Model</span>
+                    <strong>{llmStatus.model || 'n/a'}</strong>
+                  </div>
+                  <div className="llm-status-row">
+                    <span>Supported</span>
+                    <span className={`status-pill ${llmStatus.supported ? 'completed' : 'failed'}`}>
+                      {llmStatus.supported ? 'yes' : 'no'}
+                    </span>
+                  </div>
+                  <div className="llm-status-row">
+                    <span>Configured</span>
+                    <span className={`status-pill ${llmStatus.configured ? 'completed' : 'failed'}`}>
+                      {llmStatus.configured ? 'yes' : 'no'}
+                    </span>
+                  </div>
+                  <div className="llm-status-row">
+                    <span>Endpoint</span>
+                    <strong className="llm-endpoint">{llmStatus.endpoint || 'not set'}</strong>
+                  </div>
+                  {llmStatus.missing_env_vars?.length > 0 && (
+                    <div className="llm-status-warning">
+                      Missing env vars: {llmStatus.missing_env_vars.join(', ')}
+                    </div>
+                  )}
+                  {llmStatus.error && <div className="llm-status-warning">{llmStatus.error}</div>}
+                </div>
+              )}
+            </section>
+
             <section className="settings-section">
               <h2>MCP Server Status</h2>
               <p className="settings-hint">Toggle MCP servers on or off. Disabled servers will not be available to the AI agent.</p>
