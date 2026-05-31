@@ -1,12 +1,13 @@
 # ─── Terraform State Bootstrap (One-Time) ─────────────────────────────
-# You must create this storage account manually BEFORE uncommenting backend block.
-# See terraform/README.md for exact commands.
+# Create backend.hcl from backend.hcl.example and run:
+# terraform init -backend-config=backend.hcl
 
 # ─── Deployment ───────────────────────────────────────────────────────
 project_name    = "aiqa"
 environment     = "dev"
 location        = "eastus2"
 sql_admin_password = "ChangeMe123!"
+postgres_admin_password = "ChangeMe123!"
 target_user_upn = "user@yourtenant.onmicrosoft.com"
 
 # ─── Scale / Cost ─────────────────────────────────────────────────────
@@ -40,6 +41,6 @@ target_user_upn = "user@yourtenant.onmicrosoft.com"
 # alert_email = "admin@example.com"  # set to enable Azure Monitor alerting
 
 # ─── Web UI Auth ──────────────────────────────────────────────────────
-# jwt_secret = ""  # required; generate with: openssl rand -hex 32
+jwt_secret = "ChangeMeWithARandom32ByteSecret"
 # default_admin_email    = "admin@evieai.local"
 # default_admin_password = "admin"

@@ -45,6 +45,22 @@ output "sql_connection_string" {
   sensitive   = true
 }
 
+output "postgres_server_fqdn" {
+  description = "Fully qualified domain name of the PostgreSQL flexible server."
+  value       = azurerm_postgresql_flexible_server.main.fqdn
+}
+
+output "postgres_database_name" {
+  description = "Name of the provisioned PostgreSQL database."
+  value       = azurerm_postgresql_flexible_server_database.main.name
+}
+
+output "postgres_dsn" {
+  description = "PostgreSQL DSN for application and seed scripts."
+  value       = azurerm_key_vault_secret.postgres_dsn.value
+  sensitive   = true
+}
+
 output "storage_account_name" {
   description = "Name of the Azure Storage account."
   value       = azurerm_storage_account.main.name

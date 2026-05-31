@@ -34,7 +34,7 @@ resource "azurerm_key_vault" "main" {
   sku_name                   = "standard"
   enable_rbac_authorization  = true
   soft_delete_retention_days = 7
-  purge_protection_enabled   = false
+  purge_protection_enabled   = true
   tags                       = var.tags
 }
 
@@ -93,6 +93,37 @@ resource "azurerm_mssql_database" "main" {
 resource "azurerm_mssql_firewall_rule" "allow_azure" {
   name             = "AllowAzureServices"
   server_id        = azurerm_mssql_server.main.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
+}
+
+# ─── Azure PostgreSQL Flexible Server ───────────────────────────────
+resource "azurerm_postgresql_flexible_server" "main" {
+  name                          = "${var.project_name}-pg-${var.environment}"
+  resource_group_name           = azurerm_resource_group.main.name
+  location                      = azurerm_resource_group.main.location
+  version                       = "16"
+  administrator_login           = "pgadmin"
+  administrator_password        = var.postgres_admin_password
+  zone                          = "1"
+  sku_name                      = var.environment == "prod" ? "GP_Standard_D2ds_v4" : "B_Standard_B1ms"
+  storage_mb                    = 32768
+  backup_retention_days         = 7
+  public_network_access_enabled = true
+
+  tags = var.tags
+}
+
+resource "azurerm_postgresql_flexible_server_database" "main" {
+  name      = "${var.project_name}_db_${var.environment}"
+  server_id = azurerm_postgresql_flexible_server.main.id
+  charset   = "UTF8"
+  collation = "en_US.utf8"
+}
+
+resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure" {
+  name             = "AllowAzureServices"
+  server_id        = azurerm_postgresql_flexible_server.main.id
   start_ip_address = "0.0.0.0"
   end_ip_address   = "0.0.0.0"
 }
@@ -179,6 +210,13 @@ resource "azurerm_key_vault_secret" "openai_key" {
 resource "azurerm_key_vault_secret" "sql_conn" {
   name         = "sql-connection-string"
   value        = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=${azurerm_mssql_database.main.name};Persist Security Info=False;User ID=${azurerm_mssql_server.main.administrator_login};Password=${var.sql_admin_password};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_role_assignment.kv_admin]
+}
+
+resource "azurerm_key_vault_secret" "postgres_dsn" {
+  name         = "postgres-dsn"
+  value        = "postgresql://${azurerm_postgresql_flexible_server.main.administrator_login}:${var.postgres_admin_password}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/${azurerm_postgresql_flexible_server_database.main.name}?sslmode=require"
   key_vault_id = azurerm_key_vault.main.id
   depends_on   = [azurerm_role_assignment.kv_admin]
 }

@@ -10,9 +10,10 @@ This directory contains all Azure infrastructure for the AI Q&A app. It is desig
 4. **Azure Key Vault** — stores all secrets (OpenAI keys, SQL password, Graph credentials)
 5. **Azure OpenAI** — GPT-4o deployment
 6. **Azure SQL Server + Database** — serverless tier for relational data
-7. **Azure Storage Account + File Share** — cloud file storage for File Share MCP
-8. **Azure Container Apps Environment + MCP Apps** — orchestrator (public) + MCP servers (internal), including dashboard views
-9. **Azure Static Web App** — hosts the React chat UI
+7. **Azure PostgreSQL Flexible Server + Database** — operational and analytics workloads
+8. **Azure Storage Account + File Share** — cloud file storage for File Share MCP
+9. **Azure Container Apps Environment + MCP Apps** — orchestrator (public) + MCP servers (internal), including dashboard views
+10. **Azure Static Web App** — hosts the React chat UI
 
 ## Prerequisites
 
@@ -49,6 +50,14 @@ az storage container create \
 
 > **Important:** Replace `aiqatfstate123` with your own unique name.
 
+Create a backend config file from the example:
+
+```bash
+cp backend.hcl.example backend.hcl
+```
+
+Edit `backend.hcl` and set `storage_account_name` and `key` for your environment.
+
 ## Configuration
 
 Copy the example variables file and edit it:
@@ -62,7 +71,9 @@ Edit `terraform.tfvars`:
 - Set `environment` (`dev` or `prod`)
 - Set `location` (e.g. `eastus2`, `swedencentral`, `westus3`)
 - Set `sql_admin_password` (strong password, min 8 chars)
+- Set `postgres_admin_password` (strong password, min 8 chars)
 - Set `target_user_upn` (the O365 user whose mail/files the app will read)
+- Set `jwt_secret` (generate with `openssl rand -hex 32`)
 
 ## Environment Variables (Automatically Configured by Terraform)
 
@@ -118,7 +129,7 @@ See [docs/DEPLOYMENT_CONFIG.md](../docs/DEPLOYMENT_CONFIG.md) for detailed envir
 cd terraform
 
 # Initialize Terraform (downloads providers and configures backend)
-terraform init
+terraform init -backend-config=backend.hcl
 
 # One-time: register Container Apps resource provider if your subscription is not registered yet
 az provider register --namespace Microsoft.App --wait
@@ -143,16 +154,6 @@ terraform destroy
 - `ProvisioningDisabled` when creating Azure SQL Server
   Your subscription cannot provision SQL in that region. Change `location` in `terraform.tfvars` to another supported value (for this repo: `westus3` or `swedencentral`) and re-run `terraform plan` then `terraform apply`.
 
-- `MANIFEST_UNKNOWN` when creating Container Apps
-  The custom Docker images (`mcp-files`, `mcp-mail`, `mcp-onedrive`, `orchestrator`) have not been pushed to ACR yet. The Terraform config currently uses `mcr.microsoft.com/azuredocs/containerapps-helloworld:latest` as a placeholder so infrastructure provisioning can complete. Once you have built and pushed the real images, update the four `image` lines in `main.tf` (search for `TODO: replace placeholder`) from the placeholder back to:
-  ```
-  ${azurerm_container_registry.main.login_server}/mcp-files:latest
-  ${azurerm_container_registry.main.login_server}/mcp-mail:latest
-  ${azurerm_container_registry.main.login_server}/mcp-onedrive:latest
-  ${azurerm_container_registry.main.login_server}/orchestrator:latest
-  ```
-  Then re-run `terraform apply` to roll out the new revisions.
-
 ## After First Deploy
 
 Terraform outputs the following values. Save them — you will need them for local development and GitHub Actions:
@@ -163,6 +164,9 @@ Terraform outputs the following values. Save them — you will need them for loc
 - `key_vault_name` — secret storage
 - `openai_endpoint` — Azure OpenAI base URL
 - `sql_connection_string` — ADO.NET connection string for DAB
+- `postgres_server_fqdn` — PostgreSQL host
+- `postgres_database_name` — PostgreSQL database name
+- `postgres_dsn` — PostgreSQL DSN (sensitive)
 
 ## Day-2 Deployments (Terraform-First)
 
@@ -231,7 +235,8 @@ See `PLAN.md` Section 10.12 for a detailed cost breakdown. At rest with `--min-r
 
 ## Security Notes
 
-- **No secrets in environment variables.** Container Apps use `secretref:` syntax that resolves secrets from Key Vault at runtime via managed identity.
+- **Secrets are managed centrally in Key Vault and container secrets.** Container Apps reference secrets via `secret_name`; Terraform injects secret values from Key Vault and sensitive variables.
 - **Internal ingress only** for all MCP servers. They cannot be reached from the internet.
 - **SQL Server firewall** blocks all IPs except Azure services (required for Container Apps).
+- **PostgreSQL firewall** blocks all IPs except Azure services (required for Container Apps and trusted Azure workloads).
 - **Key Vault** uses RBAC (not legacy access policies) and grants only `Secrets User` role to specific managed identities.

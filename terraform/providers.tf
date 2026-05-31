@@ -12,15 +12,9 @@ terraform {
     }
   }
 
-  # Uncomment and update after completing the one-time backend bootstrap.
-  # See terraform/README.md for instructions.
-  #
-  backend "azurerm" {
-    resource_group_name  = "rg-terraform-state"
-    storage_account_name = "aiagent2tfstate"
-    container_name       = "tfstate"
-    key                  = "aiagent2.tfstate"
-  }
+  # Use partial backend configuration and pass values during terraform init:
+  # terraform init -backend-config=backend.hcl
+  backend "azurerm" {}
 }
 
 provider "azurerm" {
@@ -33,7 +27,7 @@ provider "azurerm" {
 
     key_vault {
       purge_soft_delete_on_destroy    = false
-      recover_soft_deleted_key_vaults = false
+      recover_soft_deleted_key_vaults = true
     }
   }
 }

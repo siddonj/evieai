@@ -48,6 +48,16 @@ variable "sql_admin_password" {
   }
 }
 
+variable "postgres_admin_password" {
+  description = "Strong password for Azure PostgreSQL admin. Min 8 chars, must include upper, lower, number, symbol."
+  type        = string
+  sensitive   = true
+  validation {
+    condition     = length(var.postgres_admin_password) >= 8
+    error_message = "postgres_admin_password must be at least 8 characters."
+  }
+}
+
 variable "target_user_upn" {
   description = "UPN (email) of the Microsoft 365 user whose mail/files the app will access."
   type        = string
