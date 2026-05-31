@@ -236,6 +236,7 @@ See `PLAN.md` Section 10.12 for a detailed cost breakdown. At rest with `--min-r
 ## Security Notes
 
 - **Secrets are managed centrally in Key Vault and container secrets.** Container Apps reference secrets via `secret_name`; Terraform injects secret values from Key Vault and sensitive variables.
+- **Container image pulls use managed identity.** Each Container App has `AcrPull` on ACR; registry admin credentials are not used for runtime pulls.
 - **Internal ingress only** for all MCP servers. They cannot be reached from the internet.
 - **SQL Server firewall** blocks all IPs except Azure services (required for Container Apps).
 - **PostgreSQL firewall** blocks all IPs except Azure services (required for Container Apps and trusted Azure workloads).

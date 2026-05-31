@@ -21,7 +21,7 @@ resource "azurerm_container_registry" "main" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   sku                 = var.environment == "prod" ? "Standard" : "Basic"
-  admin_enabled       = true
+  admin_enabled       = false
   tags                = var.tags
 }
 
@@ -333,15 +333,10 @@ resource "azurerm_container_app" "sql_mcp" {
   }
 
   registry {
-    server               = azurerm_container_registry.main.login_server
-    username             = azurerm_container_registry.main.admin_username
-    password_secret_name = "acr-password"
+    server   = azurerm_container_registry.main.login_server
+    identity = "system"
   }
 
-  secret {
-    name  = "acr-password"
-    value = azurerm_container_registry.main.admin_password
-  }
   secret {
     name  = "sql-connection-string"
     value = azurerm_key_vault_secret.sql_conn.value
@@ -385,15 +380,10 @@ resource "azurerm_container_app" "files_mcp" {
   }
 
   registry {
-    server               = azurerm_container_registry.main.login_server
-    username             = azurerm_container_registry.main.admin_username
-    password_secret_name = "acr-password"
+    server   = azurerm_container_registry.main.login_server
+    identity = "system"
   }
 
-  secret {
-    name  = "acr-password"
-    value = azurerm_container_registry.main.admin_password
-  }
   secret {
     name  = "storage-key"
     value = azurerm_key_vault_secret.storage_key.value
@@ -441,15 +431,10 @@ resource "azurerm_container_app" "mail_mcp" {
   }
 
   registry {
-    server               = azurerm_container_registry.main.login_server
-    username             = azurerm_container_registry.main.admin_username
-    password_secret_name = "acr-password"
+    server   = azurerm_container_registry.main.login_server
+    identity = "system"
   }
 
-  secret {
-    name  = "acr-password"
-    value = azurerm_container_registry.main.admin_password
-  }
   secret {
     name  = "azure-tenant-id"
     value = azurerm_key_vault_secret.tenant_id.value
@@ -517,15 +502,10 @@ resource "azurerm_container_app" "onedrive_mcp" {
   }
 
   registry {
-    server               = azurerm_container_registry.main.login_server
-    username             = azurerm_container_registry.main.admin_username
-    password_secret_name = "acr-password"
+    server   = azurerm_container_registry.main.login_server
+    identity = "system"
   }
 
-  secret {
-    name  = "acr-password"
-    value = azurerm_container_registry.main.admin_password
-  }
   secret {
     name  = "azure-tenant-id"
     value = azurerm_key_vault_secret.tenant_id.value
@@ -593,14 +573,8 @@ resource "azurerm_container_app" "kb_mcp" {
   }
 
   registry {
-    server               = azurerm_container_registry.main.login_server
-    username             = azurerm_container_registry.main.admin_username
-    password_secret_name = "acr-password"
-  }
-
-  secret {
-    name  = "acr-password"
-    value = azurerm_container_registry.main.admin_password
+    server   = azurerm_container_registry.main.login_server
+    identity = "system"
   }
 
   template {
@@ -637,14 +611,8 @@ resource "azurerm_container_app" "memory_mcp" {
   }
 
   registry {
-    server               = azurerm_container_registry.main.login_server
-    username             = azurerm_container_registry.main.admin_username
-    password_secret_name = "acr-password"
-  }
-
-  secret {
-    name  = "acr-password"
-    value = azurerm_container_registry.main.admin_password
+    server   = azurerm_container_registry.main.login_server
+    identity = "system"
   }
 
   template {
@@ -681,14 +649,8 @@ resource "azurerm_container_app" "doc_mcp" {
   }
 
   registry {
-    server               = azurerm_container_registry.main.login_server
-    username             = azurerm_container_registry.main.admin_username
-    password_secret_name = "acr-password"
-  }
-
-  secret {
-    name  = "acr-password"
-    value = azurerm_container_registry.main.admin_password
+    server   = azurerm_container_registry.main.login_server
+    identity = "system"
   }
 
   template {
@@ -725,14 +687,8 @@ resource "azurerm_container_app" "analytics_mcp" {
   }
 
   registry {
-    server               = azurerm_container_registry.main.login_server
-    username             = azurerm_container_registry.main.admin_username
-    password_secret_name = "acr-password"
-  }
-
-  secret {
-    name  = "acr-password"
-    value = azurerm_container_registry.main.admin_password
+    server   = azurerm_container_registry.main.login_server
+    identity = "system"
   }
 
   template {
@@ -769,14 +725,8 @@ resource "azurerm_container_app" "dashboard_mcp" {
   }
 
   registry {
-    server               = azurerm_container_registry.main.login_server
-    username             = azurerm_container_registry.main.admin_username
-    password_secret_name = "acr-password"
-  }
-
-  secret {
-    name  = "acr-password"
-    value = azurerm_container_registry.main.admin_password
+    server   = azurerm_container_registry.main.login_server
+    identity = "system"
   }
 
   template {
@@ -814,14 +764,8 @@ resource "azurerm_container_app" "context_forge" {
   }
 
   registry {
-    server               = azurerm_container_registry.main.login_server
-    username             = azurerm_container_registry.main.admin_username
-    password_secret_name = "acr-password"
-  }
-
-  secret {
-    name  = "acr-password"
-    value = azurerm_container_registry.main.admin_password
+    server   = azurerm_container_registry.main.login_server
+    identity = "system"
   }
 
   template {
@@ -875,14 +819,8 @@ resource "azurerm_container_app" "orchestrator" {
   }
 
   registry {
-    server               = azurerm_container_registry.main.login_server
-    username             = azurerm_container_registry.main.admin_username
-    password_secret_name = "acr-password"
-  }
-
-  secret {
-    name  = "acr-password"
-    value = azurerm_container_registry.main.admin_password
+    server   = azurerm_container_registry.main.login_server
+    identity = "system"
   }
   secret {
     name  = "openai-endpoint"
@@ -1102,6 +1040,74 @@ resource "azurerm_role_assignment" "onedrive_mcp_kv" {
   scope                = azurerm_key_vault.main.id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_container_app.onedrive_mcp.identity[0].principal_id
+}
+
+# ─── Managed Identity → ACR Role Assignments ───────────────────────
+resource "azurerm_role_assignment" "orchestrator_acr_pull" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_container_app.orchestrator.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "sql_mcp_acr_pull" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_container_app.sql_mcp.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "files_mcp_acr_pull" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_container_app.files_mcp.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "mail_mcp_acr_pull" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_container_app.mail_mcp.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "onedrive_mcp_acr_pull" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_container_app.onedrive_mcp.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "kb_mcp_acr_pull" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_container_app.kb_mcp.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "memory_mcp_acr_pull" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_container_app.memory_mcp.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "doc_mcp_acr_pull" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_container_app.doc_mcp.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "analytics_mcp_acr_pull" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_container_app.analytics_mcp.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "dashboard_mcp_acr_pull" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_container_app.dashboard_mcp.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "context_forge_acr_pull" {
+  count                = var.context_forge_enabled ? 1 : 0
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_container_app.context_forge[0].identity[0].principal_id
 }
 
 # ─── Static Web App ───────────────────────────────────────────────────
