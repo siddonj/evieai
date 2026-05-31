@@ -753,6 +753,67 @@ resource "azurerm_container_app" "dashboard_mcp" {
   }
 }
 
+# ─── Context Forge Gateway (Internal) ─────────────────────────────────
+resource "azurerm_container_app" "context_forge" {
+  count                        = var.context_forge_enabled ? 1 : 0
+  name                         = "${var.project_name}-context-forge-${var.environment}"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  resource_group_name          = azurerm_resource_group.main.name
+  revision_mode                = "Single"
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  ingress {
+    external_enabled = false
+    target_port      = var.context_forge_container_port
+    transport        = "http"
+    traffic_weight {
+      latest_revision = true
+      percentage      = 100
+    }
+  }
+
+  registry {
+    server               = azurerm_container_registry.main.login_server
+    username             = azurerm_container_registry.main.admin_username
+    password_secret_name = "acr-password"
+  }
+
+  secret {
+    name  = "acr-password"
+    value = azurerm_container_registry.main.admin_password
+  }
+
+  template {
+    container {
+      name   = "context-forge"
+      image  = var.context_forge_image
+      cpu    = 0.5
+      memory = "1.0Gi"
+      env {
+        name  = "PORT"
+        value = tostring(var.context_forge_container_port)
+      }
+    }
+    min_replicas = var.container_app_min_replicas
+    max_replicas = var.container_app_max_replicas
+  }
+
+  depends_on = [
+    azurerm_container_app.sql_mcp,
+    azurerm_container_app.files_mcp,
+    azurerm_container_app.mail_mcp,
+    azurerm_container_app.onedrive_mcp,
+    azurerm_container_app.memory_mcp,
+    azurerm_container_app.kb_mcp,
+    azurerm_container_app.doc_mcp,
+    azurerm_container_app.analytics_mcp,
+    azurerm_container_app.dashboard_mcp,
+  ]
+}
+
 # ─── Orchestrator (Public-Facing) ─────────────────────────────────────
 resource "azurerm_container_app" "orchestrator" {
   name                         = "${var.project_name}-orchestrator-${var.environment}"
@@ -798,6 +859,13 @@ resource "azurerm_container_app" "orchestrator" {
     content {
       name  = "obot-api-key"
       value = var.obot_api_key
+    }
+  }
+  dynamic "secret" {
+    for_each = var.context_forge_api_key != "" ? [1] : []
+    content {
+      name  = "context-forge-api-key"
+      value = var.context_forge_api_key
     }
   }
 
@@ -877,6 +945,33 @@ resource "azurerm_container_app" "orchestrator" {
       env {
         name  = "MCP_DASHBOARD_URL"
         value = "http://${azurerm_container_app.dashboard_mcp.ingress[0].fqdn}/mcp"
+      }
+      env {
+        name  = "CONTEXT_FORGE_ENABLED"
+        value = var.context_forge_enabled ? "true" : "false"
+      }
+      env {
+        name  = "CONTEXT_FORGE_BASE_URL"
+        value = var.context_forge_base_url_override != "" ? var.context_forge_base_url_override : (var.context_forge_enabled ? "http://${azurerm_container_app.context_forge[0].ingress[0].fqdn}" : "")
+      }
+      env {
+        name  = "CONTEXT_FORGE_TIMEOUT_SECONDS"
+        value = tostring(var.context_forge_timeout_seconds)
+      }
+      env {
+        name  = "CONTEXT_FORGE_FALLBACK_MODE"
+        value = var.context_forge_fallback_mode
+      }
+      env {
+        name  = "CONTEXT_FORGE_CACHE_ENABLED"
+        value = var.context_forge_cache_enabled ? "true" : "false"
+      }
+      dynamic "env" {
+        for_each = var.context_forge_api_key != "" ? [1] : []
+        content {
+          name        = "CONTEXT_FORGE_API_KEY"
+          secret_name = "context-forge-api-key"
+        }
       }
       env {
         name  = "REPORT_OUTPUT_DIR"

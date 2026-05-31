@@ -137,6 +137,59 @@ variable "obot_api_required" {
   default     = true
 }
 
+variable "context_forge_enabled" {
+  description = "Enable Context Forge deployment and route orchestrator MCP calls through the gateway."
+  type        = bool
+  default     = false
+}
+
+variable "context_forge_image" {
+  description = "Container image for Context Forge gateway."
+  type        = string
+  default     = "ghcr.io/ibm/mcp-context-forge:latest"
+}
+
+variable "context_forge_container_port" {
+  description = "Context Forge container port."
+  type        = number
+  default     = 8100
+}
+
+variable "context_forge_base_url_override" {
+  description = "Optional manual gateway URL override; when set, orchestrator uses this URL instead of terraform-managed gateway URL."
+  type        = string
+  default     = ""
+}
+
+variable "context_forge_api_key" {
+  description = "Optional API key used by orchestrator when calling Context Forge."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "context_forge_timeout_seconds" {
+  description = "HTTP timeout for Context Forge calls from orchestrator."
+  type        = number
+  default     = 10
+}
+
+variable "context_forge_fallback_mode" {
+  description = "Fallback behavior when Context Forge fails: mcp or error."
+  type        = string
+  default     = "mcp"
+  validation {
+    condition     = contains(["mcp", "error"], var.context_forge_fallback_mode)
+    error_message = "context_forge_fallback_mode must be mcp or error."
+  }
+}
+
+variable "context_forge_cache_enabled" {
+  description = "Enable cache for Context Forge transport path in orchestrator."
+  type        = bool
+  default     = true
+}
+
 # ─── Web UI Auth ─────────────────────────────────────────
 variable "jwt_secret" {
   description = "HS256 secret for signing web UI JWT tokens. Generate with: openssl rand -hex 32"

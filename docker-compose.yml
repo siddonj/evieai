@@ -181,6 +181,34 @@ services:
       interval: 10s
       retries: 3
 
+  context-forge:
+    image: ghcr.io/ibm/mcp-context-forge:latest
+    environment:
+      PORT: 8100
+    ports:
+      - "8100:8100"
+    depends_on:
+      files-mcp:
+        condition: service_healthy
+      sql-mcp:
+        condition: service_healthy
+      postgresql-mcp:
+        condition: service_healthy
+      memory-mcp:
+        condition: service_healthy
+      kb-mcp:
+        condition: service_healthy
+      doc-mcp:
+        condition: service_healthy
+      analytics-mcp:
+        condition: service_healthy
+      dashboard-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: curl -sf http://localhost:8100/health || exit 1
+      interval: 10s
+      retries: 3
+
   # ─── Orchestrator ────────────────────────────────────────────────
 
   orchestrator:
@@ -202,6 +230,12 @@ services:
       MCP_DOC_URL: http://doc-mcp:8006/mcp
       MCP_ANALYTICS_URL: http://analytics-mcp:8007/mcp
       MCP_DASHBOARD_URL: http://dashboard-mcp:8009/mcp
+      CONTEXT_FORGE_ENABLED: ${CONTEXT_FORGE_ENABLED:-false}
+      CONTEXT_FORGE_BASE_URL: ${CONTEXT_FORGE_BASE_URL:-http://context-forge:8100}
+      CONTEXT_FORGE_API_KEY: ${CONTEXT_FORGE_API_KEY:-}
+      CONTEXT_FORGE_TIMEOUT_SECONDS: ${CONTEXT_FORGE_TIMEOUT_SECONDS:-10}
+      CONTEXT_FORGE_FALLBACK_MODE: ${CONTEXT_FORGE_FALLBACK_MODE:-mcp}
+      CONTEXT_FORGE_CACHE_ENABLED: ${CONTEXT_FORGE_CACHE_ENABLED:-true}
       PROJECT_NAME: ${PROJECT_NAME:-aiagent2}
       ENVIRONMENT: ${ENVIRONMENT:-dev}
       RESOURCE_GROUP: ${RESOURCE_GROUP:-rg-aiagent2-dev}
@@ -224,6 +258,8 @@ services:
       analytics-mcp:
         condition: service_healthy
       dashboard-mcp:
+        condition: service_healthy
+      context-forge:
         condition: service_healthy
     healthcheck:
       test: curl -sf http://localhost:8000/health || exit 1

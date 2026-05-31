@@ -616,7 +616,7 @@ function ChatView() {
   }
 
   if (view === 'settings') {
-    return <SettingsPage initialTab="data_sources" />
+    return <SettingsPage initialTab="service_health" />
   }
 
   if (view === 'service_health') {

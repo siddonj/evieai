@@ -60,6 +60,11 @@ output "orchestrator_url" {
   value       = "https://${azurerm_container_app.orchestrator.ingress[0].fqdn}"
 }
 
+output "context_forge_internal_url" {
+  description = "Internal URL of Context Forge gateway when enabled."
+  value       = var.context_forge_enabled ? "http://${azurerm_container_app.context_forge[0].ingress[0].fqdn}" : null
+}
+
 output "sql_mcp_internal_url" {
   description = "Internal URL of the SQL MCP server."
   value       = "http://${azurerm_container_app.sql_mcp.ingress[0].fqdn}/mcp"

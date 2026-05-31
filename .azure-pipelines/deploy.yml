@@ -80,6 +80,9 @@ stages:
                 latest
                 $(Build.BuildId)
 
+          - script: echo "Using managed/public Context Forge image from Terraform or direct deployment"
+            displayName: Context Forge image source
+
           - task: Docker@2
             displayName: Build file-share MCP
             inputs:
@@ -183,6 +186,18 @@ stages:
           - checkout: self
 
           - task: AzureCLI@2
+            displayName: Update context-forge gateway
+            inputs:
+              azureSubscription: azure-sc
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az containerapp update \
+                  --name aiagent2-context-forge-dev \
+                  --resource-group $(RESOURCE_GROUP) \
+                  --image ghcr.io/ibm/mcp-context-forge:latest || true
+
+          - task: AzureCLI@2
             displayName: Update orchestrator
             inputs:
               azureSubscription: azure-sc
@@ -203,7 +218,11 @@ stages:
                     "JWT_SECRET=$JWT_SECRET" \
                     "AUTH_DB_PATH=/tmp/evieai_auth.db" \
                     "DEFAULT_ADMIN_EMAIL=admin@evieai.local" \
-                    "DEFAULT_ADMIN_PASSWORD=admin"
+                    "DEFAULT_ADMIN_PASSWORD=admin" \
+                    "CONTEXT_FORGE_ENABLED=true" \
+                    "CONTEXT_FORGE_BASE_URL=http://aiagent2-context-forge-dev.internal.azurecontainerapps.io" \
+                    "CONTEXT_FORGE_FALLBACK_MODE=mcp" \
+                    "CONTEXT_FORGE_TIMEOUT_SECONDS=10"
 
           - task: AzureCLI@2
             displayName: Update MCP servers

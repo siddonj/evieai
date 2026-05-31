@@ -341,6 +341,43 @@ button:disabled {
   font-size: 0.88rem;
 }
 
+.gateway-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.65rem;
+}
+
+.gateway-summary-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.16);
+  padding: 0.6rem 0.75rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.gateway-summary-card span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.gateway-summary-card strong {
+  color: #fff;
+}
+
+.gateway-summary-card.wide {
+  grid-column: span 2;
+}
+
+.gateway-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+}
+
 /* ─── Performance Dashboard ─────────────────────────────────────────── */
 
 .dashboard-shell {

@@ -59,7 +59,7 @@ type CircuitState = {
   updated_at: string
 }
 
-type Tab = 'data_sources' | 'approvals' | 'service_health'
+type Tab = 'data_sources' | 'approvals' | 'service_health' | 'gateway'
 
 type SettingsPageProps = {
   initialTab?: Tab
@@ -87,7 +87,50 @@ type LlmProviderStatus = {
   error: string | null
 }
 
-export function SettingsPage({ initialTab = 'data_sources' }: SettingsPageProps) {
+type GatewayConfig = {
+  enabled: boolean
+  configured: boolean
+  base_url: string
+  base_url_masked: string | null
+  auth_mode: string
+  timeout_seconds: number
+  fallback_mode: string
+  cache_enabled: boolean
+  rollout: {
+    state: 'live' | 'canary' | 'paused'
+    canary_traffic_pct: number
+    reason?: string
+    updated_at: string
+  }
+  last_sync_at: string | null
+  disabled_routes: string[]
+  upstreams: Array<{
+    service: string
+    target_url: string
+    enabled: boolean
+  }>
+}
+
+type GatewayHealth = {
+  enabled: boolean
+  configured: boolean
+  reachable_services: number
+  total_services: number
+  health_percentage: number
+  timestamp: string
+  services: Array<{
+    key?: string
+    name?: string
+    service?: string
+    reachable: boolean
+    response_ms?: number
+    response_time_ms?: number
+    status_code?: number | null
+    error?: string | null
+  }>
+}
+
+export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProps) {
   const { logout, user: currentUser } = useAuth()
   const [tab, setTab] = useState<Tab>(initialTab)
   const [userMessage, setUserMessage] = useState('')
@@ -119,6 +162,13 @@ export function SettingsPage({ initialTab = 'data_sources' }: SettingsPageProps)
   const [serviceHealthMessage, setServiceHealthMessage] = useState('')
   const [llmStatus, setLlmStatus] = useState<LlmProviderStatus | null>(null)
   const [llmStatusLoading, setLlmStatusLoading] = useState(false)
+  const [gatewayLoading, setGatewayLoading] = useState(false)
+  const [gatewayMessage, setGatewayMessage] = useState('')
+  const [gatewayConfig, setGatewayConfig] = useState<GatewayConfig | null>(null)
+  const [gatewayHealth, setGatewayHealth] = useState<GatewayHealth | null>(null)
+  const [gatewayReliability, setGatewayReliability] = useState<ReliabilityResponse | null>(null)
+  const [gatewayCanaryPct, setGatewayCanaryPct] = useState(100)
+  const [gatewayRolloutReason, setGatewayRolloutReason] = useState('')
 
   const activeWriteConnectors = useMemo(
     () => connectors.filter((c) => c.capabilities?.includes('write')),
@@ -141,6 +191,9 @@ export function SettingsPage({ initialTab = 'data_sources' }: SettingsPageProps)
     }
     if (tab === 'service_health') {
       void loadServiceHealth()
+    }
+    if (tab === 'gateway') {
+      void loadGatewayAdminData()
     }
   }, [tab])
 
@@ -387,6 +440,82 @@ export function SettingsPage({ initialTab = 'data_sources' }: SettingsPageProps)
     }
   }
 
+  async function loadGatewayAdminData() {
+    setGatewayLoading(true)
+    setGatewayMessage('')
+    try {
+      const [config, health, reliability] = await Promise.all([
+        fetchJson<GatewayConfig>(`${ORCHESTRATOR_URL}/admin/gateway-config`),
+        fetchJson<GatewayHealth>(`${ORCHESTRATOR_URL}/admin/gateway-health`),
+        fetchJson<ReliabilityResponse>(`${ORCHESTRATOR_URL}/admin/gateway-reliability`),
+      ])
+      setGatewayConfig(config)
+      setGatewayHealth(health)
+      setGatewayReliability(reliability)
+      setGatewayCanaryPct(config.rollout?.canary_traffic_pct ?? 100)
+    } catch (err) {
+      setGatewayMessage(err instanceof Error ? err.message : 'Failed to load gateway admin data')
+    } finally {
+      setGatewayLoading(false)
+    }
+  }
+
+  async function toggleGateway(enabled: boolean) {
+    setGatewayMessage('')
+    try {
+      await fetchJson(`${ORCHESTRATOR_URL}/admin/gateway-toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      })
+      setGatewayMessage(`Gateway ${enabled ? 'enabled' : 'disabled'}`)
+      await loadGatewayAdminData()
+    } catch (err) {
+      setGatewayMessage(err instanceof Error ? err.message : 'Failed to toggle gateway')
+    }
+  }
+
+  async function applyGatewayRollout(state: 'live' | 'canary' | 'paused') {
+    setGatewayMessage('')
+    try {
+      await fetchJson(`${ORCHESTRATOR_URL}/admin/gateway-rollout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          state,
+          canary_traffic_pct: gatewayCanaryPct,
+          reason: gatewayRolloutReason || 'Updated from settings',
+        }),
+      })
+      setGatewayMessage(`Gateway rollout set to ${state}`)
+      await loadGatewayAdminData()
+    } catch (err) {
+      setGatewayMessage(err instanceof Error ? err.message : 'Failed to update rollout')
+    }
+  }
+
+  async function syncGateway() {
+    setGatewayMessage('')
+    try {
+      await fetchJson(`${ORCHESTRATOR_URL}/admin/gateway-sync`, { method: 'POST' })
+      setGatewayMessage('Gateway sync triggered')
+      await loadGatewayAdminData()
+    } catch (err) {
+      setGatewayMessage(err instanceof Error ? err.message : 'Failed to sync gateway')
+    }
+  }
+
+  async function resetGateway() {
+    setGatewayMessage('')
+    try {
+      await fetchJson(`${ORCHESTRATOR_URL}/admin/gateway-reset`, { method: 'POST' })
+      setGatewayMessage('Gateway routing cooldown reset')
+      await loadGatewayAdminData()
+    } catch (err) {
+      setGatewayMessage(err instanceof Error ? err.message : 'Failed to reset gateway')
+    }
+  }
+
   return (
     <div className="page">
       <div className="bg-grid" aria-hidden="true" />
@@ -401,11 +530,11 @@ export function SettingsPage({ initialTab = 'data_sources' }: SettingsPageProps)
       <main className="settings-shell">
         {/* Tab Navigation */}
         <div className="settings-tabs">
-          <button className={`settings-tab ${tab === 'data_sources' ? 'active' : ''}`} onClick={() => setTab('data_sources')}>
-            🧩 Service Status
-          </button>
           <button className={`settings-tab ${tab === 'service_health' ? 'active' : ''}`} onClick={() => setTab('service_health')}>
             ⏱️ Service Health
+          </button>
+          <button className={`settings-tab ${tab === 'gateway' ? 'active' : ''}`} onClick={() => setTab('gateway')}>
+            🌉 Gateway
           </button>
           <button className={`settings-tab ${tab === 'approvals' ? 'active' : ''}`} onClick={() => setTab('approvals')}>
             ✅ Approvals
@@ -588,6 +717,132 @@ export function SettingsPage({ initialTab = 'data_sources' }: SettingsPageProps)
                   ))}
                 </tbody>
               </table>
+            </section>
+          </>
+        )}
+
+        {tab === 'gateway' && (
+          <>
+            <section className="settings-section">
+              <div className="approval-toolbar">
+                <h2>Context Forge Gateway</h2>
+                <button onClick={() => void loadGatewayAdminData()} disabled={gatewayLoading}>
+                  {gatewayLoading ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+              {gatewayMessage && <div className="settings-message">{gatewayMessage}</div>}
+
+              {!gatewayConfig ? (
+                <div className="settings-hint">Gateway configuration unavailable.</div>
+              ) : (
+                <div className="gateway-summary-grid">
+                  <div className="gateway-summary-card">
+                    <span>Enabled</span>
+                    <span className={`status-pill ${gatewayConfig.enabled ? 'completed' : 'failed'}`}>{gatewayConfig.enabled ? 'yes' : 'no'}</span>
+                  </div>
+                  <div className="gateway-summary-card">
+                    <span>Configured</span>
+                    <span className={`status-pill ${gatewayConfig.configured ? 'completed' : 'failed'}`}>{gatewayConfig.configured ? 'yes' : 'no'}</span>
+                  </div>
+                  <div className="gateway-summary-card">
+                    <span>Auth</span>
+                    <strong>{gatewayConfig.auth_mode}</strong>
+                  </div>
+                  <div className="gateway-summary-card">
+                    <span>Fallback</span>
+                    <strong>{gatewayConfig.fallback_mode}</strong>
+                  </div>
+                  <div className="gateway-summary-card wide">
+                    <span>Base URL</span>
+                    <strong className="llm-endpoint">{gatewayConfig.base_url_masked || gatewayConfig.base_url || 'not set'}</strong>
+                  </div>
+                  <div className="gateway-summary-card">
+                    <span>Last Sync</span>
+                    <strong>{gatewayConfig.last_sync_at ? new Date(gatewayConfig.last_sync_at).toLocaleString() : 'never'}</strong>
+                  </div>
+                </div>
+              )}
+
+              <div className="gateway-actions-row">
+                <button onClick={() => void toggleGateway(!(gatewayConfig?.enabled ?? false))}>
+                  {gatewayConfig?.enabled ? 'Disable Gateway' : 'Enable Gateway'}
+                </button>
+                <button onClick={() => void syncGateway()}>Sync Registry</button>
+                <button onClick={() => void resetGateway()}>Reset Cooldown</button>
+              </div>
+            </section>
+
+            <section className="settings-section">
+              <div className="approval-toolbar">
+                <h2>Gateway Rollout</h2>
+              </div>
+              <div className="settings-row">
+                <div className="settings-field">
+                  <label>Canary Traffic %</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={gatewayCanaryPct}
+                    onChange={(e) => setGatewayCanaryPct(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                  />
+                </div>
+                <div className="settings-field">
+                  <label>Reason</label>
+                  <input
+                    value={gatewayRolloutReason}
+                    onChange={(e) => setGatewayRolloutReason(e.target.value)}
+                    placeholder="Reason for rollout update"
+                  />
+                </div>
+              </div>
+              <div className="gateway-actions-row">
+                <button onClick={() => void applyGatewayRollout('live')}>Set Live</button>
+                <button onClick={() => void applyGatewayRollout('canary')}>Set Canary</button>
+                <button className="btn-danger" onClick={() => void applyGatewayRollout('paused')}>Pause</button>
+              </div>
+              {gatewayConfig?.rollout && (
+                <div className="settings-hint">
+                  Current rollout: {gatewayConfig.rollout.state} ({gatewayConfig.rollout.canary_traffic_pct}% canary) · updated {new Date(gatewayConfig.rollout.updated_at).toLocaleString()}
+                </div>
+              )}
+            </section>
+
+            <section className="settings-section">
+              <h2>Upstream Service Health</h2>
+              {gatewayHealth?.services?.length ? (
+                <table className="users-table approvals-table">
+                  <thead>
+                    <tr>
+                      <th>Service</th>
+                      <th>Reachable</th>
+                      <th>Status</th>
+                      <th>Response (ms)</th>
+                      <th>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gatewayHealth.services.map((row, idx) => (
+                      <tr key={`${row.key || row.service || row.name || 'svc'}-${idx}`}>
+                        <td>{row.name || row.service || row.key || 'unknown'}</td>
+                        <td><span className={`status-pill ${row.reachable ? 'completed' : 'failed'}`}>{row.reachable ? 'yes' : 'no'}</span></td>
+                        <td>{row.status_code ?? 'n/a'}</td>
+                        <td>{row.response_ms ?? row.response_time_ms ?? 0}</td>
+                        <td>{row.error || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="settings-hint">No upstream health records available.</div>
+              )}
+            </section>
+
+            <section className="settings-section">
+              <h2>Gateway Reliability</h2>
+              <div className="approval-grid">
+                <ReliabilityCard title="Gateway" data={gatewayReliability} />
+              </div>
             </section>
           </>
         )}

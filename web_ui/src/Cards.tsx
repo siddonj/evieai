@@ -161,6 +161,16 @@ export type ChatResponse = {
   mcp_results?: McpResult[]
 }
 
+const DEFAULT_SQL_DEMO_SUMMARY = 'demo mode: returning multifamily & brokerage database'
+
+function isDefaultSqlDemoResult(result: McpResult): boolean {
+  return (
+    (result.service === 'sql' || !!result.metrics || (result.contacts?.length || 0) > 0 || (result.companies?.length || 0) > 0) &&
+    typeof result.summary === 'string' &&
+    result.summary.trim().toLowerCase() === DEFAULT_SQL_DEMO_SUMMARY
+  )
+}
+
 /* ─── Helpers ───────────────────────────────────────────────────── */
 
 function formatBytes(bytes?: number): string {
@@ -706,6 +716,11 @@ export function ErrorCard({ error }: { error: string }) {
 export function ResultDeck({ result }: { result: McpResult }) {
   if (result.error) {
     return <ErrorCard error={result.error} />
+  }
+
+  // Suppress the generic SQL demo card so it does not appear on unrelated requests.
+  if (isDefaultSqlDemoResult(result)) {
+    return null
   }
 
   const files = result.files || (result.items as McpFile[]) || []

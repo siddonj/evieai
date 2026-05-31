@@ -38,6 +38,15 @@ Services available:
 - Orchestrator: `http://localhost:8000`
 - Web UI: `http://localhost:5173`
 - All MCP servers: `http://localhost:8001` through `http://localhost:8008`
+- Context Forge Gateway (optional): `http://localhost:8100`
+
+To enable local gateway mode, set in `.env`:
+
+```bash
+CONTEXT_FORGE_ENABLED=true
+CONTEXT_FORGE_BASE_URL=http://context-forge:8100
+CONTEXT_FORGE_FALLBACK_MODE=mcp
+```
 
 ---
 
@@ -152,6 +161,24 @@ docker push aiagent2acrdev.azurecr.io/<name>:latest
 az containerapp update --name aiagent2-mcp-<name>-dev -g rg-aiagent2-dev --image aiagent2acrdev.azurecr.io/<name>:latest
 ```
 
+### Context Forge Gateway (Azure Container Apps)
+
+Use Terraform for the full automated setup:
+
+```bash
+cd terraform
+terraform plan -var "context_forge_enabled=true"
+terraform apply -var "context_forge_enabled=true"
+```
+
+Optional rollout variables:
+- `context_forge_image` (default `ghcr.io/ibm/mcp-context-forge:latest`)
+- `context_forge_api_key`
+- `context_forge_timeout_seconds`
+- `context_forge_fallback_mode` (`mcp` or `error`)
+
+When enabled, orchestrator routes MCP calls via Context Forge and can auto-fallback to direct MCP mode when configured.
+
 ---
 
 ## CI/CD (Azure DevOps)
@@ -165,7 +192,7 @@ Two pipelines auto-deploy on push to `main`:
 Requires pipeline variables: `ARM_CLIENT_ID`, `ARM_TENANT_ID`, `ARM_SUBSCRIPTION_ID`
 
 ### Build & Deploy Pipeline (`.azure-pipelines/deploy.yml`)
-- **Push to main:** `lint` → `build 9 images` → `push to ACR` → `update Container Apps` → `deploy SWA`
+- **Push to main:** `lint` → `build images` → `update Context Forge` → `update orchestrator + MCP apps` → `deploy SWA`
 
 Requires service connections: `azure-sc`, `acr-sc`  
 Requires variable group: `aiagent2-secrets` (contains `SWA_TOKEN`)
@@ -177,7 +204,12 @@ Requires variable group: `aiagent2-secrets` (contains `SWA_TOKEN`)
 ```bash
 # Health checks
 curl https://api.resiq.co/health
-curl https://api.resiq.co/ready | jq '.dependencies[] | {reachable}'
+curl https://api.resiq.co/ready
+
+# Gateway admin checks
+curl https://api.resiq.co/admin/gateway-config
+curl https://api.resiq.co/admin/gateway-health
+curl https://api.resiq.co/admin/gateway-reliability
 
 # Test chat
 curl -X POST https://api.resiq.co/chat \

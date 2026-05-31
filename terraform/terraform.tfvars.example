@@ -22,6 +22,16 @@ target_user_upn = "user@yourtenant.onmicrosoft.com"
 # obot_api_required = false  # only for trusted self-hosted endpoints with no API auth
 # obot_api_key  = "<set-in-secret-store-or-pipeline-var>"
 
+# ─── Context Forge Gateway ───────────────────────────────────────────
+# context_forge_enabled = true
+# context_forge_image = "ghcr.io/ibm/mcp-context-forge:latest"
+# context_forge_container_port = 8100
+# context_forge_base_url_override = "" # optional manual override
+# context_forge_api_key = "<set-in-secret-store-or-pipeline-var>"
+# context_forge_timeout_seconds = 10
+# context_forge_fallback_mode = "mcp" # mcp | error
+# context_forge_cache_enabled = true
+
 # ─── Custom Domain ──────────────────────────────────────────────────────
 # ui_custom_domain = "demo.resiq.co"
 # api_custom_domain = "api.resiq.co"

@@ -317,6 +317,13 @@ MCP_DOC_URL = os.getenv("MCP_DOC_URL", "http://localhost:8006/mcp")
 MCP_ANALYTICS_URL = os.getenv("MCP_ANALYTICS_URL", "http://localhost:8007/mcp")
 MCP_DASHBOARD_URL = os.getenv("MCP_DASHBOARD_URL", "")
 
+CONTEXT_FORGE_ENABLED = os.getenv("CONTEXT_FORGE_ENABLED", "false").lower() in ("1", "true", "yes")
+CONTEXT_FORGE_BASE_URL = os.getenv("CONTEXT_FORGE_BASE_URL", "").strip()
+CONTEXT_FORGE_API_KEY = os.getenv("CONTEXT_FORGE_API_KEY", "").strip()
+CONTEXT_FORGE_TIMEOUT_SECONDS = float(os.getenv("CONTEXT_FORGE_TIMEOUT_SECONDS", "10"))
+CONTEXT_FORGE_FALLBACK_MODE = os.getenv("CONTEXT_FORGE_FALLBACK_MODE", "mcp").strip().lower()
+CONTEXT_FORGE_CACHE_ENABLED = os.getenv("CONTEXT_FORGE_CACHE_ENABLED", "true").lower() in ("1", "true", "yes")
+
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
 AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
@@ -345,6 +352,17 @@ if MCP_DASHBOARD_URL:
 MCP_ENABLED: dict[str, bool] = dict.fromkeys(MCP_ENDPOINTS, True)
 _MCP_DISABLED_AT: dict[str, float] = {}  # Timestamp when auto-disabled (for auto-recovery)
 MCP_COOLDOWN_SECONDS = 30  # Auto-re-enable after this many seconds
+
+CONTEXT_FORGE_ENABLED_RUNTIME = CONTEXT_FORGE_ENABLED
+_CONTEXT_FORGE_DISABLED_AT: dict[str, float] = {}
+CONTEXT_FORGE_COOLDOWN_SECONDS = 60
+GATEWAY_ROLLOUT_STATE: dict[str, Any] = {
+    "state": "live",
+    "canary_traffic_pct": 100,
+    "reason": "initialized",
+    "updated_at": datetime.utcnow().isoformat() + "Z",
+}
+GATEWAY_LAST_SYNC_AT: str | None = None
 
 _TOOL_NAME_TO_KEY: dict[str, str] = {
     "query_files": "files",
@@ -702,7 +720,7 @@ def _normalize_postgresql_query(query: str, user_message: str) -> str:
 
 # ─── MCP Calling ──────────────────────────────────────────────────────
 
-async def _call_mcp(tool_name: str, query: str, user_id: str | None = None) -> dict[str, Any]:
+async def _call_mcp_direct(tool_name: str, query: str, user_id: str | None = None) -> dict[str, Any]:
     local_bitemporal_tools = {
         "get_connector_freshness",
         "get_entity_lineage",
@@ -813,6 +831,82 @@ async def _call_mcp(tool_name: str, query: str, user_id: str | None = None) -> d
     if "error" not in result:
         cache_set("mcp", result, 60, route, *cache_key)
     return result
+
+
+def _context_forge_enabled() -> bool:
+    return bool(CONTEXT_FORGE_ENABLED_RUNTIME and CONTEXT_FORGE_BASE_URL)
+
+
+def _context_forge_headers() -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    if CONTEXT_FORGE_API_KEY:
+        headers["Authorization"] = f"Bearer {CONTEXT_FORGE_API_KEY}"
+    return headers
+
+
+async def _call_context_forge(tool_name: str, query: str, user_id: str | None = None) -> dict[str, Any]:
+    route = _TOOL_TO_ROUTE[tool_name]
+    now = time.time()
+    disabled_at = _CONTEXT_FORGE_DISABLED_AT.get(route, 0)
+    if disabled_at and now - disabled_at < CONTEXT_FORGE_COOLDOWN_SECONDS:
+        remaining = int(CONTEXT_FORGE_COOLDOWN_SECONDS - (now - disabled_at))
+        if CONTEXT_FORGE_FALLBACK_MODE == "error":
+            return {"error": f"Context Forge temporarily unavailable for {route} — retry in ~{remaining}s."}
+        return await _call_mcp_direct(tool_name, query, user_id)
+
+    cache_key = (query, user_id or "")
+    if CONTEXT_FORGE_CACHE_ENABLED:
+        cached = cache_get("context_forge", route, *cache_key)
+        if cached is not None:
+            return cached
+
+    endpoint = f"{CONTEXT_FORGE_BASE_URL.rstrip('/')}/mcp/query"
+    payload: dict[str, Any] = {
+        "tool_name": tool_name,
+        "service": route,
+        "query": query,
+    }
+    if user_id:
+        payload["user_id"] = user_id
+
+    try:
+        async with httpx.AsyncClient(timeout=CONTEXT_FORGE_TIMEOUT_SECONDS, follow_redirects=False) as client:
+            resp = await client.post(endpoint, json=payload, headers=_context_forge_headers())
+            if resp.status_code in (301, 302, 307, 308) and "location" in resp.headers:
+                resp = await client.post(resp.headers["location"], json=payload, headers=_context_forge_headers())
+            if resp.status_code >= 400:
+                raise MCPError(f"Context Forge returned {resp.status_code}: {resp.text[:200]}")
+            if not resp.content:
+                raise MCPError("Context Forge returned empty body")
+            data = resp.json()
+            # Support both passthrough payloads and wrapped payloads.
+            result = data.get("result") if isinstance(data, dict) and "result" in data else data
+            if isinstance(result, dict) and "error" not in result and CONTEXT_FORGE_CACHE_ENABLED:
+                cache_set("context_forge", result, 60, route, *cache_key)
+            return result if isinstance(result, dict) else {"result": result}
+    except (httpx.ConnectError, httpx.TimeoutException, MCPError) as exc:
+        _CONTEXT_FORGE_DISABLED_AT[route] = time.time()
+        logger.warning("Context Forge failed for %s — cooldown %ss: %s", route, CONTEXT_FORGE_COOLDOWN_SECONDS, exc)
+        if CONTEXT_FORGE_FALLBACK_MODE == "error":
+            return {"error": f"Context Forge error for {route}: {exc!s}"}
+        return await _call_mcp_direct(tool_name, query, user_id)
+    except Exception as exc:  # noqa: BLE001
+        if CONTEXT_FORGE_FALLBACK_MODE == "error":
+            return {"error": f"Context Forge request failed: {type(exc).__name__}: {exc!s}"}
+        return await _call_mcp_direct(tool_name, query, user_id)
+
+
+async def _call_mcp(tool_name: str, query: str, user_id: str | None = None) -> dict[str, Any]:
+    local_bitemporal_tools = {
+        "get_connector_freshness",
+        "get_entity_lineage",
+        "get_confidence_breakdown",
+        "query_as_of",
+        "diff_between",
+    }
+    if _context_forge_enabled() and tool_name in _TOOL_TO_ROUTE and tool_name not in local_bitemporal_tools:
+        return await _call_context_forge(tool_name, query, user_id)
+    return await _call_mcp_direct(tool_name, query, user_id)
 
 
 class MCPError(Exception):
@@ -1117,6 +1211,30 @@ async def ready() -> dict[str, Any]:
     import time
     services: list[dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+        if _context_forge_enabled():
+            gateway_health = f"{CONTEXT_FORGE_BASE_URL.rstrip('/')}/health"
+            started = time.time()
+            try:
+                resp = await client.get(gateway_health, headers=_context_forge_headers())
+                elapsed_ms = (time.time() - started) * 1000
+                services.append(
+                    {
+                        "name": "context_forge",
+                        "reachable": resp.status_code == 200,
+                        "response_time_ms": round(elapsed_ms, 1),
+                        "error": None if resp.status_code == 200 else f"HTTP {resp.status_code}",
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                elapsed_ms = (time.time() - started) * 1000
+                services.append(
+                    {
+                        "name": "context_forge",
+                        "reachable": False,
+                        "response_time_ms": round(elapsed_ms, 1),
+                        "error": str(exc),
+                    }
+                )
         for name, mcp_url in MCP_ENDPOINTS.items():
             health_url = f"{_base(mcp_url)}/health"
             start_time = time.time()
@@ -2150,6 +2268,16 @@ class McpResetResponse(BaseModel):
     reset: bool
 
 
+class GatewayToggleRequest(BaseModel):
+    enabled: bool
+
+
+class GatewayRolloutRequest(BaseModel):
+    state: Literal["live", "canary", "paused"]
+    canary_traffic_pct: int | None = None
+    reason: str | None = None
+
+
 @app.post("/admin/mcp-config")
 def admin_toggle_mcp(payload: McpToggleRequest) -> dict[str, Any]:
     """Enable or disable an MCP server."""
@@ -2162,6 +2290,18 @@ def admin_toggle_mcp(payload: McpToggleRequest) -> dict[str, Any]:
 @app.get("/admin/mcp-status")
 async def admin_mcp_status() -> dict[str, Any]:
     """Return MCP status, reachability, and response time for each configured service."""
+    if _context_forge_enabled():
+        gateway_status_endpoint = f"{CONTEXT_FORGE_BASE_URL.rstrip('/')}/admin/mcp-status"
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                resp = await client.get(gateway_status_endpoint, headers=_context_forge_headers())
+                if resp.status_code == 200:
+                    payload = resp.json()
+                    if isinstance(payload, dict) and isinstance(payload.get("services"), list):
+                        return payload
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Gateway mcp-status fallback to direct probe: %s", exc)
+
     rows: list[dict[str, Any]] = []
     now = time.time()
     async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
@@ -2198,6 +2338,126 @@ async def admin_mcp_status() -> dict[str, Any]:
             )
 
     return {"services": rows}
+
+
+@app.get("/admin/gateway-config")
+def admin_gateway_config() -> dict[str, Any]:
+    return {
+        "enabled": bool(CONTEXT_FORGE_ENABLED_RUNTIME),
+        "configured": bool(CONTEXT_FORGE_BASE_URL),
+        "base_url": CONTEXT_FORGE_BASE_URL,
+        "base_url_masked": (CONTEXT_FORGE_BASE_URL[:24] + "...") if CONTEXT_FORGE_BASE_URL else None,
+        "auth_mode": "bearer" if CONTEXT_FORGE_API_KEY else "none",
+        "timeout_seconds": CONTEXT_FORGE_TIMEOUT_SECONDS,
+        "fallback_mode": CONTEXT_FORGE_FALLBACK_MODE,
+        "cache_enabled": CONTEXT_FORGE_CACHE_ENABLED,
+        "rollout": GATEWAY_ROLLOUT_STATE,
+        "last_sync_at": GATEWAY_LAST_SYNC_AT,
+        "disabled_routes": sorted(_CONTEXT_FORGE_DISABLED_AT.keys()),
+        "upstreams": [
+            {
+                "service": key,
+                "target_url": url,
+                "enabled": MCP_ENABLED.get(key, True),
+            }
+            for key, url in MCP_ENDPOINTS.items()
+        ],
+    }
+
+
+@app.post("/admin/gateway-toggle")
+def admin_gateway_toggle(payload: GatewayToggleRequest) -> dict[str, Any]:
+    global CONTEXT_FORGE_ENABLED_RUNTIME
+    CONTEXT_FORGE_ENABLED_RUNTIME = payload.enabled and bool(CONTEXT_FORGE_BASE_URL)
+    _CONTEXT_FORGE_DISABLED_AT.clear()
+    return {"enabled": CONTEXT_FORGE_ENABLED_RUNTIME}
+
+
+@app.post("/admin/gateway-rollout")
+def admin_gateway_rollout(payload: GatewayRolloutRequest) -> dict[str, Any]:
+    canary_pct = payload.canary_traffic_pct if payload.canary_traffic_pct is not None else GATEWAY_ROLLOUT_STATE.get("canary_traffic_pct", 100)
+    canary_pct = max(0, min(100, int(canary_pct)))
+    GATEWAY_ROLLOUT_STATE.update(
+        {
+            "state": payload.state,
+            "canary_traffic_pct": canary_pct,
+            "reason": payload.reason or "manual update",
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        }
+    )
+    return GATEWAY_ROLLOUT_STATE
+
+
+@app.post("/admin/gateway-sync")
+async def admin_gateway_sync() -> dict[str, Any]:
+    global GATEWAY_LAST_SYNC_AT
+    GATEWAY_LAST_SYNC_AT = datetime.utcnow().isoformat() + "Z"
+    endpoint = f"{CONTEXT_FORGE_BASE_URL.rstrip('/')}/admin/sync"
+    if _context_forge_enabled():
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                resp = await client.post(endpoint, headers=_context_forge_headers())
+                if resp.status_code < 400:
+                    body = resp.json() if resp.content else {}
+                    return {"synced": True, "last_sync_at": GATEWAY_LAST_SYNC_AT, "gateway": body}
+                return {"synced": False, "last_sync_at": GATEWAY_LAST_SYNC_AT, "error": f"HTTP {resp.status_code}", "body": resp.text[:200]}
+        except Exception as exc:  # noqa: BLE001
+            return {"synced": False, "last_sync_at": GATEWAY_LAST_SYNC_AT, "error": str(exc)}
+    return {"synced": True, "last_sync_at": GATEWAY_LAST_SYNC_AT, "note": "Gateway mode disabled; direct MCP mode active."}
+
+
+@app.post("/admin/gateway-reset")
+def admin_gateway_reset() -> dict[str, Any]:
+    _CONTEXT_FORGE_DISABLED_AT.clear()
+    return {
+        "reset": True,
+        "enabled": CONTEXT_FORGE_ENABLED_RUNTIME,
+        "reset_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@app.get("/admin/gateway-health")
+async def admin_gateway_health() -> dict[str, Any]:
+    status = await admin_mcp_status()
+    services = status.get("services", []) if isinstance(status, dict) else []
+    reachable = sum(1 for s in services if isinstance(s, dict) and s.get("reachable"))
+    total = len(services)
+    return {
+        "enabled": CONTEXT_FORGE_ENABLED_RUNTIME,
+        "configured": bool(CONTEXT_FORGE_BASE_URL),
+        "reachable_services": reachable,
+        "total_services": total,
+        "health_percentage": int((reachable / total) * 100) if total else 0,
+        "services": services,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@app.get("/admin/gateway-reliability")
+async def admin_gateway_reliability() -> dict[str, Any]:
+    thresholds = {
+        "max_unreachable_services": int(os.getenv("SLO_MAX_GATEWAY_UNREACHABLE_SERVICES", "1")),
+        "max_response_ms": float(os.getenv("SLO_MAX_GATEWAY_RESPONSE_MS", "1500")),
+    }
+    health = await admin_gateway_health()
+    services = health.get("services", []) if isinstance(health, dict) else []
+    unreachable = sum(1 for s in services if isinstance(s, dict) and not s.get("reachable"))
+    max_response_ms = max((float(s.get("response_ms") or s.get("response_time_ms") or 0) for s in services if isinstance(s, dict)), default=0.0)
+    checks = {
+        "unreachable_services_ok": unreachable <= thresholds["max_unreachable_services"],
+        "response_time_ok": max_response_ms <= thresholds["max_response_ms"],
+    }
+    return {
+        "pass": all(checks.values()),
+        "checks": checks,
+        "thresholds": thresholds,
+        "current": {
+            "unreachable_services": unreachable,
+            "max_response_ms": max_response_ms,
+            "health_percentage": health.get("health_percentage", 0),
+            "gateway_enabled": CONTEXT_FORGE_ENABLED_RUNTIME,
+        },
+    }
 
 
 @app.get("/admin/llm-provider")
