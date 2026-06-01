@@ -6,6 +6,8 @@
 project_name    = "aiqa"
 environment     = "dev"
 location        = "eastus2"
+sql_location    = "centralus"
+redis_connection_string = ""
 sql_admin_password = "ChangeMe123!"
 postgres_admin_password = "ChangeMe123!"
 target_user_upn = "user@yourtenant.onmicrosoft.com"

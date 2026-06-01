@@ -72,7 +72,7 @@ resource "azurerm_cognitive_deployment" "gpt4o" {
 resource "azurerm_mssql_server" "main" {
   name                         = "${var.project_name}-sqlsrv-${var.environment}"
   resource_group_name          = azurerm_resource_group.main.name
-  location                     = azurerm_resource_group.main.location
+  location                     = var.sql_location
   version                      = "12.0"
   administrator_login          = "sqladmin"
   administrator_login_password = var.sql_admin_password
@@ -256,22 +256,9 @@ resource "azurerm_key_vault_secret" "user_id" {
   depends_on   = [azurerm_role_assignment.kv_admin]
 }
 
-# ─── Redis Cache ──────────────────────────────────────────────────────
-
-resource "azurerm_redis_cache" "main" {
-  name                = "${var.project_name}-redis-${var.environment}"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  capacity            = var.environment == "prod" ? 1 : 0
-  family              = "C"
-  sku_name            = var.environment == "prod" ? "Standard" : "Basic"
-  minimum_tls_version = "1.2"
-  tags                = var.tags
-}
-
 resource "azurerm_key_vault_secret" "redis_conn" {
   name         = "redis-connection-string"
-  value        = azurerm_redis_cache.main.primary_connection_string
+  value        = var.redis_connection_string
   key_vault_id = azurerm_key_vault.main.id
   depends_on   = [azurerm_role_assignment.kv_admin]
 }
@@ -317,6 +304,10 @@ resource "azurerm_container_app" "sql_mcp" {
   container_app_environment_id = azurerm_container_app_environment.main.id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
+
+  lifecycle {
+    ignore_changes = all
+  }
 
   identity {
     type = "SystemAssigned"
@@ -364,6 +355,10 @@ resource "azurerm_container_app" "files_mcp" {
   container_app_environment_id = azurerm_container_app_environment.main.id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
+
+  lifecycle {
+    ignore_changes = [secret]
+  }
 
   identity {
     type = "SystemAssigned"
@@ -415,6 +410,10 @@ resource "azurerm_container_app" "mail_mcp" {
   container_app_environment_id = azurerm_container_app_environment.main.id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
+
+  lifecycle {
+    ignore_changes = [secret]
+  }
 
   identity {
     type = "SystemAssigned"
@@ -486,6 +485,10 @@ resource "azurerm_container_app" "onedrive_mcp" {
   container_app_environment_id = azurerm_container_app_environment.main.id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
+
+  lifecycle {
+    ignore_changes = [secret]
+  }
 
   identity {
     type = "SystemAssigned"
@@ -959,7 +962,7 @@ resource "azurerm_container_app" "orchestrator" {
       }
       env {
         name  = "REDIS_URL"
-        value = azurerm_redis_cache.main.primary_connection_string
+        value = var.redis_connection_string
       }
       env {
         name  = "AZURE_STORAGE_ACCOUNT"

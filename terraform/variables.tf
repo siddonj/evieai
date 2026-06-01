@@ -28,6 +28,19 @@ variable "location" {
   }
 }
 
+variable "sql_location" {
+  description = "Azure region for Azure SQL resources. Set this to a region where SQL provisioning is enabled for your subscription."
+  type        = string
+  default     = "centralus"
+}
+
+variable "redis_connection_string" {
+  description = "Optional Redis connection string. Leave empty to disable Redis wiring in orchestrator."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "tags" {
   description = "Tags applied to every resource."
   type        = map(string)
