@@ -1,6 +1,7 @@
+import os
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import os
 
 conn = psycopg2.connect(
     host=os.getenv('POSTGRES_HOST'),

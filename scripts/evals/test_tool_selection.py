@@ -12,7 +12,6 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
-from typing import Optional
 
 import httpx
 
@@ -23,7 +22,7 @@ class TestCase:
     query: str
     expected_tool: str
     category: str
-    explanation: Optional[str] = None
+    explanation: str | None = None
 
 
 # Comprehensive test suite covering all tools
@@ -50,7 +49,7 @@ TEST_CASES = [
         expected_tool="query_files",
         category="employees",
     ),
-    
+
     # Financial reports (should use query_files)
     TestCase(
         query="Show me the Q1 financial report",
@@ -68,7 +67,7 @@ TEST_CASES = [
         expected_tool="query_files",
         category="financial",
     ),
-    
+
     # Product & Strategy (should use query_files)
     TestCase(
         query="What is the product roadmap?",
@@ -86,7 +85,7 @@ TEST_CASES = [
         expected_tool="query_files",
         category="product",
     ),
-    
+
     # Meeting notes (should use query_files)
     TestCase(
         query="Show me executive meeting notes",
@@ -99,7 +98,7 @@ TEST_CASES = [
         category="meetings",
         explanation="Meeting notes are documents in file share"
     ),
-    
+
     # Technical specs (should use query_files)
     TestCase(
         query="Show me the technical specification",
@@ -111,7 +110,7 @@ TEST_CASES = [
         expected_tool="query_files",
         category="technical",
     ),
-    
+
     # Policies & Handbook (should use query_knowledge_base)
     TestCase(
         query="What is our remote work policy?",
@@ -134,7 +133,7 @@ TEST_CASES = [
         expected_tool="query_knowledge_base",
         category="policies",
     ),
-    
+
     # Emails (should use query_mail)
     TestCase(
         query="Show me emails from john",
@@ -151,7 +150,7 @@ TEST_CASES = [
         expected_tool="query_mail",
         category="email",
     ),
-    
+
     # OneDrive (should use query_onedrive)
     TestCase(
         query="Show me files in my OneDrive",
@@ -163,7 +162,7 @@ TEST_CASES = [
         expected_tool="query_onedrive",
         category="onedrive",
     ),
-    
+
     # Real estate / Brokerage (should use query_sql)
     TestCase(
         query="What multifamily properties do we have in Memphis?",
@@ -186,7 +185,7 @@ TEST_CASES = [
         expected_tool="query_analytics",
         category="analytics",
     ),
-    
+
     # Document generation (should use query_document_generation)
     TestCase(
         query="Generate an executive summary",
@@ -206,7 +205,7 @@ TEST_CASES = [
 ]
 
 
-def extract_tool_from_response(response_text: str) -> Optional[str]:
+def extract_tool_from_response(response_text: str) -> str | None:
     """
     Extract the tool name from the response.
     Looks for tool_use blocks or function call patterns.
@@ -229,7 +228,7 @@ def extract_tool_from_response(response_text: str) -> Optional[str]:
         ]:
             if f'"{tool}"' in response_text or f"'{tool}'" in response_text:
                 return tool
-    
+
     # Fallback: look for any tool name in the response
     for tool in [
         "query_files", "query_sql", "query_mail", "query_analytics",
@@ -238,22 +237,22 @@ def extract_tool_from_response(response_text: str) -> Optional[str]:
     ]:
         if tool in response_text.lower():
             return tool
-    
+
     return None
 
 
 async def test_tool_selection(base_url: str = "http://localhost:8000") -> None:
     """Run tool selection tests and report results."""
-    
+
     client = httpx.AsyncClient(timeout=30.0)
     results_by_category = {}
     all_results = []
-    
-    print(f"\n🧪 Testing Tool Selection Accuracy")
+
+    print("\n🧪 Testing Tool Selection Accuracy")
     print(f"📍 Base URL: {base_url}")
     print(f"📊 Total test cases: {len(TEST_CASES)}\n")
     print("=" * 80)
-    
+
     for i, test_case in enumerate(TEST_CASES, 1):
         try:
             # Make streaming chat request
@@ -261,13 +260,13 @@ async def test_tool_selection(base_url: str = "http://localhost:8000") -> None:
                 "message": test_case.query,
                 "history": []
             }
-            
+
             response = await client.post(
                 f"{base_url}/chat",
                 json=payload,
                 headers={"Accept": "text/event-stream"}
             )
-            
+
             if response.status_code != 200:
                 result = {
                     "query": test_case.query,
@@ -289,10 +288,10 @@ async def test_tool_selection(base_url: str = "http://localhost:8000") -> None:
                                 full_response += json.dumps(data)
                         except json.JSONDecodeError:
                             pass
-                
+
                 actual_tool = extract_tool_from_response(full_response)
                 is_correct = actual_tool == test_case.expected_tool
-                
+
                 result = {
                     "query": test_case.query,
                     "expected": test_case.expected_tool,
@@ -300,7 +299,7 @@ async def test_tool_selection(base_url: str = "http://localhost:8000") -> None:
                     "correct": is_correct,
                     "category": test_case.category
                 }
-                
+
                 status = "✅" if is_correct else "❌"
                 print(f"\n{status} Test {i}: {test_case.query[:60]}")
                 if test_case.explanation:
@@ -308,9 +307,9 @@ async def test_tool_selection(base_url: str = "http://localhost:8000") -> None:
                 print(f"   Expected: {test_case.expected_tool}")
                 if not is_correct:
                     print(f"   Got:      {result['actual']}")
-            
+
             all_results.append(result)
-            
+
             # Track by category
             category = test_case.category
             if category not in results_by_category:
@@ -318,7 +317,7 @@ async def test_tool_selection(base_url: str = "http://localhost:8000") -> None:
             results_by_category[category]["total"] += 1
             if result["correct"]:
                 results_by_category[category]["correct"] += 1
-        
+
         except Exception as e:
             print(f"\n⚠️  Test {i} error: {e}")
             all_results.append({
@@ -328,26 +327,26 @@ async def test_tool_selection(base_url: str = "http://localhost:8000") -> None:
                 "correct": False,
                 "error": str(e)
             })
-    
+
     # Summary report
     print("\n" + "=" * 80)
     print("\n📊 SUMMARY BY CATEGORY\n")
-    
+
     total_correct = 0
     total_tests = 0
-    
+
     for category in sorted(results_by_category.keys()):
         stats = results_by_category[category]
         percentage = (stats["correct"] / stats["total"] * 100) if stats["total"] > 0 else 0
         total_correct += stats["correct"]
         total_tests += stats["total"]
-        
+
         status = "✅" if percentage == 100 else "⚠️ " if percentage >= 70 else "❌"
         print(f"{status} {category:20s}: {stats['correct']:2d}/{stats['total']:2d} ({percentage:5.1f}%)")
-    
+
     overall_percentage = (total_correct / total_tests * 100) if total_tests > 0 else 0
     print(f"\n📈 OVERALL: {total_correct}/{total_tests} ({overall_percentage:.1f}%)")
-    
+
     # Detailed failures
     failures = [r for r in all_results if not r["correct"]]
     if failures:
@@ -358,7 +357,7 @@ async def test_tool_selection(base_url: str = "http://localhost:8000") -> None:
             print(f"Expected: {failure['expected']}")
             print(f"Got:      {failure['actual']}")
             print()
-    
+
     # Recommendation
     print("=" * 80)
     if overall_percentage >= 90:
@@ -369,7 +368,7 @@ async def test_tool_selection(base_url: str = "http://localhost:8000") -> None:
     else:
         print("\n❌ Tool selection accuracy is low. Review system prompt and tool descriptions.")
         print("   Focus on the categories with lowest accuracy first.")
-    
+
     await client.aclose()
 
 
@@ -383,9 +382,9 @@ def main():
         default="http://localhost:8000",
         help="Base URL of EvieAI orchestrator (default: http://localhost:8000)"
     )
-    
+
     args = parser.parse_args()
-    
+
     try:
         import asyncio
         asyncio.run(test_tool_selection(args.base_url))

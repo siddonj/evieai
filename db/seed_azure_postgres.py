@@ -11,13 +11,13 @@ Usage:
 """
 
 from __future__ import annotations
-from datetime import date, datetime, timedelta
-from typing import Any
+
 import os
+from datetime import date, timedelta
 
 try:
     import psycopg2
-    from psycopg2.extras import RealDictCursor, execute_batch, execute_values
+    from psycopg2.extras import RealDictCursor, execute_batch
 except ImportError:
     print("Error: psycopg2 not installed. Run: pip install psycopg2-binary")
     exit(1)
@@ -416,7 +416,7 @@ conn.commit()
 
 print("\n✅ Seed complete!")
 cursor.execute("""
-    SELECT 
+    SELECT
         'libraries' as name, COUNT(*) as count FROM library
     UNION ALL
     SELECT 'locations', COUNT(*) FROM location
