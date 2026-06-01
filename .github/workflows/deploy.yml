@@ -57,6 +57,7 @@ jobs:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - run: az account set --subscription 62faf964-7539-4e51-bd6a-6ef0703a4210
       - run: az acr login --name evie62a1acrdev
 
       - name: Build MCP base image
@@ -137,6 +138,7 @@ jobs:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - run: az account set --subscription 62faf964-7539-4e51-bd6a-6ef0703a4210
 
       - name: Deploy orchestrator
         run: |
