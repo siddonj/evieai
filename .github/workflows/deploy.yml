@@ -11,6 +11,7 @@ on:
       - mcp_servers/**
       - web_ui/**
       - .github/workflows/deploy.yml
+      - Dockerfile.base
 
   workflow_dispatch:
 
@@ -58,6 +59,12 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
       - run: az acr login --name aiagent2acrdev
 
+      - name: Build MCP base image
+        run: |
+          docker build -t $ACR_SERVER/evieai-mcp-base:latest \
+            -f Dockerfile.base .
+          docker push $ACR_SERVER/evieai-mcp-base:latest
+
       - name: Build orchestrator
         run: |
           docker build -t $ACR_SERVER/orchestrator:latest \
@@ -75,6 +82,7 @@ jobs:
             ["memory"]=mcp_servers/memory/Dockerfile
             ["doc"]=mcp_servers/document_generation/Dockerfile
             ["analytics"]=mcp_servers/analytics/Dockerfile
+            ["dashboard"]=mcp_servers/dashboard/Dockerfile
           )
           declare -A MCP_CONTEXTS=(
             ["file-share"]="."
@@ -85,9 +93,11 @@ jobs:
             ["memory"]="mcp_servers/memory"
             ["doc"]="mcp_servers/document_generation"
             ["analytics"]="mcp_servers/analytics"
+            ["dashboard"]="mcp_servers/dashboard"
           )
           for name in "${!MCP_DOCKERFILES[@]}"; do
             docker build -t $ACR_SERVER/${name}:latest \
+              --build-arg BASE_IMAGE=$ACR_SERVER/evieai-mcp-base:latest \
               -f "${MCP_DOCKERFILES[$name]}" \
               "${MCP_CONTEXTS[$name]}"
             docker push $ACR_SERVER/${name}:latest
@@ -158,6 +168,7 @@ jobs:
             ["memory"]="aiagent2-mcp-memory-dev"
             ["doc"]="aiagent2-mcp-doc-dev"
             ["analytics"]="aiagent2-mcp-analytics-dev"
+            ["dashboard"]="aiagent2-mcp-dashboard-dev"
           )
           for svc in "${!CA_NAMES[@]}"; do
             az containerapp update \
