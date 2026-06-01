@@ -1,15 +1,6 @@
-FROM python:3.11-slim
-
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app
-
-WORKDIR /app
-
-COPY mcp_servers/file_share/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
-
+FROM evieai-mcp-base:local
+# file_share has no extra deps beyond base (fastapi, uvicorn, pydantic, httpx)
+# Build context is repo root, so COPY paths are relative to .
 COPY mcp_servers/file_share/app /app/app
-
 EXPOSE 8001
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
