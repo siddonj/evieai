@@ -13,6 +13,7 @@ trigger:
       - orchestrator/**
       - mcp_servers/**
       - web_ui/**
+      - Dockerfile.base
 
 pool:
   vmImage: ubuntu-latest
@@ -70,6 +71,17 @@ stages:
               containerRegistry: acr-sc
 
           - task: Docker@2
+            displayName: Build MCP base image
+            inputs:
+              command: buildAndPush
+              repository: evieai-mcp-base
+              dockerfile: Dockerfile.base
+              containerRegistry: acr-sc
+              tags: |
+                latest
+                $(Build.BuildId)
+
+          - task: Docker@2
             displayName: Build orchestrator
             inputs:
               command: buildAndPush
@@ -89,6 +101,7 @@ stages:
               command: buildAndPush
               repository: file-share
               dockerfile: mcp_servers/file_share/Dockerfile
+              arguments: --build-arg BASE_IMAGE=$(ACR_SERVER)/evieai-mcp-base:latest
               containerRegistry: acr-sc
               tags: |
                 latest
@@ -100,6 +113,7 @@ stages:
               command: buildAndPush
               repository: mail
               dockerfile: mcp_servers/o365_mail/Dockerfile
+              arguments: --build-arg BASE_IMAGE=$(ACR_SERVER)/evieai-mcp-base:latest
               containerRegistry: acr-sc
               tags: |
                 latest
@@ -111,6 +125,7 @@ stages:
               command: buildAndPush
               repository: onedrive
               dockerfile: mcp_servers/onedrive/Dockerfile
+              arguments: --build-arg BASE_IMAGE=$(ACR_SERVER)/evieai-mcp-base:latest
               containerRegistry: acr-sc
               tags: |
                 latest
@@ -123,6 +138,7 @@ stages:
               repository: sql
               dockerfile: Dockerfile
               buildContext: mcp_servers/sql
+              arguments: --build-arg BASE_IMAGE=$(ACR_SERVER)/evieai-mcp-base:latest
               containerRegistry: acr-sc
               tags: |
                 latest
@@ -135,6 +151,7 @@ stages:
               repository: kb
               dockerfile: Dockerfile
               buildContext: mcp_servers/knowledge_base
+              arguments: --build-arg BASE_IMAGE=$(ACR_SERVER)/evieai-mcp-base:latest
               containerRegistry: acr-sc
               tags: |
                 latest
@@ -147,6 +164,7 @@ stages:
               repository: memory
               dockerfile: Dockerfile
               buildContext: mcp_servers/memory
+              arguments: --build-arg BASE_IMAGE=$(ACR_SERVER)/evieai-mcp-base:latest
               containerRegistry: acr-sc
               tags: |
                 latest
@@ -159,6 +177,7 @@ stages:
               repository: doc
               dockerfile: Dockerfile
               buildContext: mcp_servers/document_generation
+              arguments: --build-arg BASE_IMAGE=$(ACR_SERVER)/evieai-mcp-base:latest
               containerRegistry: acr-sc
               tags: |
                 latest
@@ -171,6 +190,20 @@ stages:
               repository: analytics
               dockerfile: Dockerfile
               buildContext: mcp_servers/analytics
+              arguments: --build-arg BASE_IMAGE=$(ACR_SERVER)/evieai-mcp-base:latest
+              containerRegistry: acr-sc
+              tags: |
+                latest
+                $(Build.BuildId)
+
+          - task: Docker@2
+            displayName: Build dashboard MCP
+            inputs:
+              command: buildAndPush
+              repository: dashboard
+              dockerfile: Dockerfile
+              buildContext: mcp_servers/dashboard
+              arguments: --build-arg BASE_IMAGE=$(ACR_SERVER)/evieai-mcp-base:latest
               containerRegistry: acr-sc
               tags: |
                 latest
@@ -240,6 +273,7 @@ stages:
                   ["memory"]="memory"
                   ["doc"]="doc"
                   ["analytics"]="analytics"
+                  ["dashboard"]="dashboard"
                 )
                 for svc in "${!CA_NAMES[@]}"; do
                   az containerapp update \

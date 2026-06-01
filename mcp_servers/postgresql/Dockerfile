@@ -1,4 +1,5 @@
-FROM evieai-mcp-base:local
+ARG BASE_IMAGE=evieai-mcp-base:local
+FROM ${BASE_IMAGE}
 # postgresql needs asyncpg and newer versions of uvicorn, pydantic
 RUN uv pip install "uvicorn[standard]==0.34.2" "pydantic==2.11.4" "asyncpg==0.29.0"
 COPY app/ app/

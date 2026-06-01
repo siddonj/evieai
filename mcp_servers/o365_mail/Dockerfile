@@ -1,4 +1,5 @@
-FROM evieai-mcp-base:local
+ARG BASE_IMAGE=evieai-mcp-base:local
+FROM ${BASE_IMAGE}
 # o365_mail needs msal for Microsoft Graph auth
 RUN uv pip install "msal==1.31.0"
 # Build context is repo root, so COPY paths are relative to .

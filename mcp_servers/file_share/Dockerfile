@@ -1,4 +1,5 @@
-FROM evieai-mcp-base:local
+ARG BASE_IMAGE=evieai-mcp-base:local
+FROM ${BASE_IMAGE}
 # file_share has no extra deps beyond base (fastapi, uvicorn, pydantic, httpx)
 # Build context is repo root, so COPY paths are relative to .
 COPY mcp_servers/file_share/app /app/app

@@ -1,4 +1,5 @@
-FROM evieai-mcp-base:local
+ARG BASE_IMAGE=evieai-mcp-base:local
+FROM ${BASE_IMAGE}
 # dashboard has no extra deps beyond base (fastapi, uvicorn, pydantic, httpx)
 COPY app/ app/
 EXPOSE 8009
