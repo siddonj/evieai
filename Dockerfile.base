@@ -1,0 +1,34 @@
+# ─── EvieAI MCP shared base image ────────────────────────────────────────────
+# Build once, inherit in every MCP Dockerfile.  Keeps per-MCP layers tiny.
+#
+# To rebuild the base locally:
+#   docker build -f Dockerfile.base -t evieai-mcp-base:local .
+#
+# In each MCP Dockerfile:
+#   FROM evieai-mcp-base:local        (local dev)
+#   FROM <acr>.azurecr.io/evieai-mcp-base:latest  (CI / Azure)
+# ─────────────────────────────────────────────────────────────────────────────
+FROM python:3.11-slim AS base
+
+# uv — fast Rust-based pip replacement (~10× faster installs, reproducible)
+COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    UV_SYSTEM_PYTHON=1 \
+    UV_NO_CACHE=0
+
+WORKDIR /app
+
+# ── Common packages shared by every MCP ──────────────────────────────────────
+# Pin exact versions so every MCP layer is cache-stable.
+RUN uv pip install \
+    "fastapi==0.115.12" \
+    "uvicorn[standard]==0.30.6" \
+    "pydantic==2.10.6" \
+    "httpx==0.27.2"
+
+# curl for healthchecks (one install, inherited by all MCPs)
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
