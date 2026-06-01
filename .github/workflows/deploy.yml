@@ -19,9 +19,9 @@ permissions:
   contents: read
   id-token: write
 env:
-  ACR_SERVER: aiagent2acrdev.azurecr.io
-  RESOURCE_GROUP: rg-aiagent2-dev
-  ORCHESTRATOR_APP: aiagent2-orchestrator-dev
+  ACR_SERVER: evie62a1acrdev.azurecr.io
+  RESOURCE_GROUP: rg-evie62a1-dev
+  ORCHESTRATOR_APP: evie62a1-orchestrator-dev
 
 jobs:
   lint:
@@ -57,7 +57,7 @@ jobs:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - run: az acr login --name aiagent2acrdev
+      - run: az acr login --name evie62a1acrdev
 
       - name: Build MCP base image
         run: |
@@ -160,15 +160,15 @@ jobs:
       - name: Deploy MCP servers
         run: |
           declare -A CA_NAMES=(
-            ["file-share"]="aiagent2-mcp-files-dev"
-            ["mail"]="aiagent2-mcp-mail-dev"
-            ["onedrive"]="aiagent2-mcp-onedrive-dev"
-            ["sql"]="aiagent2-mcp-sql-dev"
-            ["kb"]="aiagent2-mcp-kb-dev"
-            ["memory"]="aiagent2-mcp-memory-dev"
-            ["doc"]="aiagent2-mcp-doc-dev"
-            ["analytics"]="aiagent2-mcp-analytics-dev"
-            ["dashboard"]="aiagent2-mcp-dashboard-dev"
+            ["file-share"]="evie62a1-mcp-files-dev"
+            ["mail"]="evie62a1-mcp-mail-dev"
+            ["onedrive"]="evie62a1-mcp-onedrive-dev"
+            ["sql"]="evie62a1-mcp-sql-dev"
+            ["kb"]="evie62a1-mcp-kb-dev"
+            ["memory"]="evie62a1-mcp-memory-dev"
+            ["doc"]="evie62a1-mcp-doc-dev"
+            ["analytics"]="evie62a1-mcp-analytics-dev"
+            ["dashboard"]="evie62a1-mcp-dashboard-dev"
           )
           for svc in "${!CA_NAMES[@]}"; do
             az containerapp update \

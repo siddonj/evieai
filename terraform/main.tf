@@ -357,7 +357,7 @@ resource "azurerm_container_app" "files_mcp" {
   revision_mode                = "Single"
 
   lifecycle {
-    ignore_changes = [secret]
+    ignore_changes = all
   }
 
   identity {
@@ -387,7 +387,7 @@ resource "azurerm_container_app" "files_mcp" {
   template {
     container {
       name   = "files"
-      image  = "${azurerm_container_registry.main.login_server}/mcp-files@sha256:0aaae5eaa2d2002ff31afd20bb6e6bc06c7618444682c68bdffeaf1097b4ecaf"
+      image  = "${azurerm_container_registry.main.login_server}/mcp-files:latest"
       cpu    = 0.25
       memory = "0.5Gi"
       env {
@@ -412,7 +412,7 @@ resource "azurerm_container_app" "mail_mcp" {
   revision_mode                = "Single"
 
   lifecycle {
-    ignore_changes = [secret]
+    ignore_changes = all
   }
 
   identity {
@@ -454,7 +454,7 @@ resource "azurerm_container_app" "mail_mcp" {
   template {
     container {
       name   = "mail"
-      image  = "${azurerm_container_registry.main.login_server}/mcp-mail@sha256:b2845be1c878d506aafc9653817a42c817d2dce29a4a9e6700983483644cdea6"
+      image  = "${azurerm_container_registry.main.login_server}/mcp-mail:latest"
       cpu    = 0.25
       memory = "0.5Gi"
       env {
@@ -487,7 +487,7 @@ resource "azurerm_container_app" "onedrive_mcp" {
   revision_mode                = "Single"
 
   lifecycle {
-    ignore_changes = [secret]
+    ignore_changes = all
   }
 
   identity {
@@ -529,7 +529,7 @@ resource "azurerm_container_app" "onedrive_mcp" {
   template {
     container {
       name   = "onedrive"
-      image  = "${azurerm_container_registry.main.login_server}/mcp-onedrive@sha256:55e23d6681a79a925544b2b37a059fd44265a793b30d8af6b60e59decfd32a6e"
+      image  = "${azurerm_container_registry.main.login_server}/mcp-onedrive:latest"
       cpu    = 0.25
       memory = "0.5Gi"
       env {
@@ -806,6 +806,10 @@ resource "azurerm_container_app" "orchestrator" {
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
 
+  lifecycle {
+    ignore_changes = all
+  }
+
   identity {
     type = "SystemAssigned"
   }
@@ -851,7 +855,7 @@ resource "azurerm_container_app" "orchestrator" {
   template {
     container {
       name   = "orchestrator"
-      image  = "${azurerm_container_registry.main.login_server}/orchestrator@${var.orchestrator_image_digest}"
+      image  = "${azurerm_container_registry.main.login_server}/orchestrator:latest"
       cpu    = 1.0
       memory = "2.0Gi"
       env {
