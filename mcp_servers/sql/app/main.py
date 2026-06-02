@@ -1,18 +1,76 @@
-"""SQL MCP server — wraps DAB REST API and exposes /mcp/query with demo fallback."""
+"""SQL MCP server — PostgreSQL direct-connect, DAB REST API, and demo fallback."""
 from __future__ import annotations
 
+import logging
 import os
+from contextlib import asynccontextmanager
 from typing import Any
 
+import asyncpg
 import httpx
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-app = FastAPI(title="mcp-sql", version="0.3.0")
+log = logging.getLogger("mcp-sql")
 
 DAB_BASE = os.getenv("DAB_BASE_URL", "http://localhost:5000")
 DAB_PAGE_SIZE = int(os.getenv("DAB_PAGE_SIZE", "10000"))
 DAB_MAX_ROWS = int(os.getenv("DAB_MAX_ROWS", "200000"))
+POSTGRES_URL = os.getenv("POSTGRES_URL", "")
+
+# ─── PostgreSQL Connection Pool ──────────────────────────────────────
+
+_pg_pool: asyncpg.Pool | None = None
+_db_mode: str = "demo"  # "postgres", "dab", or "demo"
+
+
+async def _get_pg_pool() -> asyncpg.Pool | None:
+    """Create or return cached asyncpg connection pool."""
+    global _pg_pool
+    if not POSTGRES_URL:
+        return None
+    if _pg_pool is not None and not _pg_pool._closed:
+        return _pg_pool
+    try:
+        _pg_pool = await asyncpg.create_pool(POSTGRES_URL, min_size=1, max_size=5)
+        log.info("PostgreSQL pool created successfully")
+        return _pg_pool
+    except Exception as exc:
+        log.warning("PostgreSQL pool creation failed: %s", exc)
+        _pg_pool = None
+        return None
+
+
+async def _fetch_pg_values(pool: asyncpg.Pool, table: str, max_rows: int = 1000) -> list[dict[str, Any]]:
+    """Fetch all rows from a PostgreSQL table, returning list of dicts."""
+    rows = await pool.fetch(f'SELECT * FROM "{table}" LIMIT $1', max_rows)
+    return [dict(r) for r in rows]
+
+
+# Entity name mapping: DAB entity names → PostgreSQL table names
+_ENTITY_TABLE_MAP: dict[str, str] = {
+    "Property": "properties",
+    "Contact": "contacts",
+    "Deal": "deals",
+    "Activity": "activities",
+}
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):  # noqa: ANN201
+    """Startup: initialise PostgreSQL pool if POSTGRES_URL is set."""
+    global _db_mode
+    pool = await _get_pg_pool()
+    if pool:
+        _db_mode = "postgres"
+        log.info("SQL MCP: PostgreSQL mode active")
+    else:
+        _db_mode = "demo"
+        log.info("SQL MCP: demo mode (no POSTGRES_URL)")
+    yield
+
+
+app = FastAPI(title="mcp-sql", version="0.4.0", lifespan=_lifespan)
 
 # ─── Rich Demo Data — Multifamily & Brokerage ───────────────────────
 
@@ -173,11 +231,6 @@ class QueryRequest(BaseModel):
 @app.get("/")
 def root() -> dict[str, str]:
     return {"service": "mcp-sql", "status": "ok"}
-
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "healthy"}
 
 
 @app.get("/mcp")
@@ -375,6 +428,27 @@ async def _fetch_dab_values(
     return values
 
 
+@app.get("/health")
+async def health() -> dict[str, Any]:
+    """Report health and database connection mode."""
+    pg_ok = False
+    if POSTGRES_URL:
+        pool = await _get_pg_pool()
+        if pool:
+            try:
+                async with pool.acquire() as conn:
+                    await conn.fetchval("SELECT 1")
+                pg_ok = True
+            except Exception:
+                pg_ok = False
+    return {
+        "status": "ok",
+        "database": _db_mode,
+        "connected": pg_ok or _db_mode == "demo",
+        "postgres_configured": bool(POSTGRES_URL),
+    }
+
+
 @app.post("/mcp/query")
 async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
     q = payload.query.lower()
@@ -440,7 +514,87 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
 
     results: dict[str, Any] = {"service": "sql", "query": payload.query}
     dab_available = False
+    pg_used = False
 
+    # ── Phase 1: Try PostgreSQL direct-connect ────────────────────────
+    pg_pool = await _get_pg_pool()
+    if pg_pool:
+        try:
+            if fetch_properties:
+                props = await _fetch_pg_values(pg_pool, "properties")
+                if props:
+                    # Apply keyword filters (same logic as demo)
+                    if _keyword_match(q, ["memphis"]):
+                        props = [p for p in props if p.get("city") == "Memphis"]
+                    elif _keyword_match(q, ["germantown"]):
+                        props = [p for p in props if p.get("city") == "Germantown"]
+                    elif _keyword_match(q, ["east memphis"]):
+                        props = [p for p in props if p.get("city") == "Memphis" and str(p.get("zip", "")).startswith("3811")]
+                    if _keyword_match(q, ["active"]):
+                        props = [p for p in props if p.get("status") == "Active"]
+                    results["properties"] = [dict(p) for p in props]
+                    results["properties_summary"] = f"Found {len(props)} properties"
+                    occupied = sum(p.get("units_occupied", 0) or 0 for p in props)
+                    total = sum(p.get("total_units", 0) or 0 for p in props)
+                    results["property_metrics"] = {
+                        "total_properties": len(props),
+                        "total_units": total,
+                        "occupied_units": occupied,
+                        "vacant_units": total - occupied,
+                        "occupancy_rate": round(occupied / total * 100, 1) if total else 0,
+                        "average_rent": round(sum(p.get("average_rent", 0) or 0 for p in props) / len(props), 2) if props else 0,
+                    }
+                    pg_used = True
+            if fetch_contacts:
+                rows = await _fetch_pg_values(pg_pool, "contacts")
+                if rows:
+                    results["contacts"] = [dict(r) for r in rows]
+                    results["contacts_summary"] = f"Found {len(rows)} contacts"
+                    pg_used = True
+            if fetch_deals:
+                rows = await _fetch_pg_values(pg_pool, "deals")
+                if rows:
+                    deals = [dict(r) for r in rows]
+                    for stage in ("LOI", "Underwriting", "Due Diligence", "Closing", "Closed", "Lost"):
+                        if stage.lower() in q:
+                            deals = [d for d in deals if d.get("stage") == stage]
+                            break
+                    if _keyword_match(q, ["active", "open", "pending"]):
+                        deals = [d for d in deals if d.get("status") == "Active"]
+                    elif _keyword_match(q, ["closed", "won"]):
+                        deals = [d for d in deals if d.get("status") == "Closed"]
+                    results["deals"] = deals
+                    results["deals_summary"] = f"Found {len(deals)} deal(s)"
+                    pg_used = True
+            if fetch_activities:
+                rows = await _fetch_pg_values(pg_pool, "activities")
+                if rows:
+                    activities = [dict(r) for r in rows]
+                    if _keyword_match(q, ["open", "pending", "upcoming"]):
+                        activities = [a for a in activities if a.get("status") == "Open"]
+                    elif _keyword_match(q, ["completed", "done"]):
+                        activities = [a for a in activities if a.get("status") == "Completed"]
+                    results["activities"] = activities
+                    results["activities_summary"] = f"Found {len(activities)} activities"
+                    pg_used = True
+            if pg_used:
+                # Add metrics if properties found
+                if fetch_properties and "properties" in results:
+                    props_data = results["properties"]
+                    total_noi = sum(float(p.get("noi", 0) or 0) for p in props_data)
+                    total_value = sum(float(p.get("estimated_value", 0) or 0) for p in props_data)
+                    results["portfolio_metrics"] = {
+                        "total_noi": total_noi,
+                        "total_estimated_value": total_value,
+                        "average_cap_rate": round(sum(float(p.get("cap_rate", 0) or 0) for p in props_data) / len(props_data), 2) if props_data else 0,
+                    }
+                results["data_source"] = "postgresql"
+                return results
+        except Exception as exc:
+            log.warning("PostgreSQL query failed, falling through to DAB: %s", exc)
+            results["pg_error"] = str(exc)
+
+    # ── Phase 2: Try DAB REST API ────────────────────────────────────
     async with httpx.AsyncClient(timeout=15.0) as client:
         if fetch_properties:
             try:
@@ -564,8 +718,12 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
                     "Use dashboard queries for full-history aggregation."
                 )
 
-    # Fall back to demo data if DAB is unavailable
-    if not dab_available:
+    # Fall back to demo data if neither PostgreSQL nor DAB returned data
+    if not dab_available and not pg_used:
+        results["data_source"] = "demo"
         return _demo_response(payload)
+
+    if not dab_available:
+        results["data_source"] = results.get("data_source", "postgresql")
 
     return results
