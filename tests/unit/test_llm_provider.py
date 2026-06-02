@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "orchestr
 
 # Keep tests runnable in bare environments that do not have the openai package installed.
 if "openai" not in sys.modules:
-    sys.modules["openai"] = types.SimpleNamespace(AsyncAzureOpenAI=object, AsyncOpenAI=object)
+    sys.modules["openai"] = types.SimpleNamespace(AsyncAzureOpenAI=object)
 
 from app.llm_provider import LLMConfigError, get_llm_provider_status_from_env, get_llm_runtime_from_env
 
@@ -28,10 +28,6 @@ def clear_llm_env(monkeypatch):
         "AZURE_OPENAI_API_KEY",
         "AZURE_OPENAI_DEPLOYMENT",
         "AZURE_OPENAI_API_VERSION",
-        "OBOT_BASE_URL",
-        "OBOT_API_KEY",
-        "OBOT_API_REQUIRED",
-        "OBOT_MODEL",
     ]:
         monkeypatch.delenv(name, raising=False)
 
@@ -49,26 +45,11 @@ def test_runtime_defaults_to_azure(monkeypatch):
     assert runtime.client.kwargs["azure_endpoint"] == "https://example.openai.azure.com"
 
 
-def test_runtime_uses_obot_alias(monkeypatch):
-    monkeypatch.setenv("LLM_PROVIDER", "obot")
-    monkeypatch.setenv("OBOT_BASE_URL", "https://obot.example.com/v1")
-    monkeypatch.setenv("OBOT_API_KEY", "obot-key")
-    monkeypatch.setenv("OBOT_MODEL", "obot-large")
-    monkeypatch.setattr("app.llm_provider.AsyncOpenAI", DummyClient)
-
-    runtime = get_llm_runtime_from_env()
-
-    assert runtime.provider == "obot-ai"
-    assert runtime.model == "obot-large"
-    assert isinstance(runtime.client, DummyClient)
-    assert runtime.client.kwargs["base_url"] == "https://obot.example.com/v1"
-
-
 def test_runtime_raises_on_missing_required_env(monkeypatch):
-    monkeypatch.setenv("LLM_PROVIDER", "obot-ai")
-    monkeypatch.setenv("OBOT_BASE_URL", "https://obot.example.com/v1")
+    monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
+    monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
 
-    with pytest.raises(LLMConfigError, match="OBOT_API_KEY"):
+    with pytest.raises(LLMConfigError, match="Missing required env var"):
         get_llm_runtime_from_env()
 
 
@@ -100,28 +81,3 @@ def test_status_reports_unsupported_provider(monkeypatch):
     assert status.supported is False
     assert status.configured is False
     assert status.error is not None
-
-
-def test_runtime_allows_obot_without_api_key_when_flag_disabled(monkeypatch):
-    monkeypatch.setenv("LLM_PROVIDER", "obot-ai")
-    monkeypatch.setenv("OBOT_BASE_URL", "https://obot.example.com/v1")
-    monkeypatch.setenv("OBOT_API_REQUIRED", "false")
-    monkeypatch.setattr("app.llm_provider.AsyncOpenAI", DummyClient)
-
-    runtime = get_llm_runtime_from_env()
-
-    assert runtime.provider == "obot-ai"
-    assert runtime.client.kwargs["api_key"] == "local-no-auth"
-
-
-def test_status_ignores_missing_obot_api_key_when_flag_disabled(monkeypatch):
-    monkeypatch.setenv("LLM_PROVIDER", "obot-ai")
-    monkeypatch.setenv("OBOT_BASE_URL", "https://obot.example.com/v1")
-    monkeypatch.setenv("OBOT_API_REQUIRED", "false")
-
-    status = get_llm_provider_status_from_env()
-
-    assert status.provider == "obot-ai"
-    assert status.supported is True
-    assert status.configured is True
-    assert status.missing_env_vars == []

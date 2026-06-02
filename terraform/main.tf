@@ -875,19 +875,9 @@ resource "azurerm_container_app" "orchestrator" {
     name  = "openai-api-key"
     value = azurerm_key_vault_secret.openai_key.value
   }
-  dynamic "secret" {
-    for_each = var.obot_api_key != "" ? ["enabled"] : []
-    content {
-      name  = "obot-api-key"
-      value = var.obot_api_key
-    }
-  }
-  dynamic "secret" {
-    for_each = var.context_forge_api_key != "" ? ["enabled"] : []
-    content {
-      name  = "context-forge-api-key"
-      value = var.context_forge_api_key
-    }
+  secret {
+    name  = "context-forge-api-key"
+    value = var.context_forge_api_key
   }
 
   template {
@@ -911,25 +901,6 @@ resource "azurerm_container_app" "orchestrator" {
       env {
         name  = "LLM_PROVIDER"
         value = var.llm_provider
-      }
-      env {
-        name  = "OBOT_BASE_URL"
-        value = var.obot_base_url
-      }
-      env {
-        name  = "OBOT_MODEL"
-        value = var.obot_model
-      }
-      env {
-        name  = "OBOT_API_REQUIRED"
-        value = var.obot_api_required ? "true" : "false"
-      }
-      dynamic "env" {
-        for_each = var.obot_api_key != "" ? ["enabled"] : []
-        content {
-          name        = "OBOT_API_KEY"
-          secret_name = "obot-api-key"
-        }
       }
       env {
         name  = "MCP_SQL_URL"
@@ -988,7 +959,7 @@ resource "azurerm_container_app" "orchestrator" {
         value = var.context_forge_cache_enabled ? "true" : "false"
       }
       dynamic "env" {
-        for_each = var.context_forge_api_key != "" ? ["enabled"] : []
+        for_each = var.context_forge_api_key != "" ? toset(["enabled"]) : toset([])
         content {
           name        = "CONTEXT_FORGE_API_KEY"
           secret_name = "context-forge-api-key"

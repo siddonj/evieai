@@ -126,38 +126,13 @@ variable "alert_email" {
 
 # ─── LLM Provider ────────────────────────────────────────────────────
 variable "llm_provider" {
-  description = "LLM provider used by orchestrator: azure-openai or obot-ai."
+  description = "LLM provider used by orchestrator: azure-openai."
   type        = string
   default     = "azure-openai"
   validation {
-    condition     = contains(["azure-openai", "obot-ai"], var.llm_provider)
-    error_message = "llm_provider must be azure-openai or obot-ai."
+    condition     = var.llm_provider == "azure-openai"
+    error_message = "llm_provider must be azure-openai."
   }
-}
-
-variable "obot_base_url" {
-  description = "Base URL for obot.ai OpenAI-compatible endpoint."
-  type        = string
-  default     = ""
-}
-
-variable "obot_model" {
-  description = "Model name used when llm_provider is obot-ai."
-  type        = string
-  default     = "gpt-4o"
-}
-
-variable "obot_api_key" {
-  description = "API key for obot.ai when llm_provider is obot-ai."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "obot_api_required" {
-  description = "Whether obot.ai endpoint requires API key auth. Set false only for trusted self-hosted endpoints."
-  type        = bool
-  default     = true
 }
 
 variable "context_forge_enabled" {

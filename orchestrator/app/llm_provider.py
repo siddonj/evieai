@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from openai import AsyncAzureOpenAI, AsyncOpenAI
+from openai import AsyncAzureOpenAI
 
 
 class LLMConfigError(RuntimeError):
@@ -58,19 +58,8 @@ def get_llm_runtime_from_env() -> LLMRuntime:
         )
         return LLMRuntime(provider="azure-openai", model=model, client=client)
 
-    if provider in {"obot", "obot-ai", "obot.ai"}:
-        base_url = _required_env("OBOT_BASE_URL")
-        api_required = _env_flag("OBOT_API_REQUIRED", True)
-        if api_required:
-            api_key = _required_env("OBOT_API_KEY")
-        else:
-            api_key = os.getenv("OBOT_API_KEY", "").strip() or "local-no-auth"
-        model = os.getenv("OBOT_MODEL", "gpt-4o").strip() or "gpt-4o"
-        client = AsyncOpenAI(base_url=base_url, api_key=api_key)
-        return LLMRuntime(provider="obot-ai", model=model, client=client)
-
     raise LLMConfigError(
-        f"Unsupported LLM_PROVIDER '{provider}'. Supported values: azure-openai, obot-ai"
+        f"Unsupported LLM_PROVIDER '{provider}'. Supported values: azure-openai"
     )
 
 
@@ -95,22 +84,6 @@ def get_llm_provider_status_from_env() -> LLMProviderStatus:
             error=None,
         )
 
-    if provider_raw in {"obot", "obot-ai", "obot.ai"}:
-        model = os.getenv("OBOT_MODEL", "gpt-4o").strip() or "gpt-4o"
-        endpoint = os.getenv("OBOT_BASE_URL", "").strip() or None
-        api_required = _env_flag("OBOT_API_REQUIRED", True)
-        required_names = ["OBOT_BASE_URL", "OBOT_API_KEY"] if api_required else ["OBOT_BASE_URL"]
-        missing = [name for name in required_names if not os.getenv(name, "").strip()]
-        return LLMProviderStatus(
-            provider="obot-ai",
-            supported=True,
-            configured=len(missing) == 0,
-            model=model,
-            missing_env_vars=missing,
-            endpoint=endpoint,
-            error=None,
-        )
-
     return LLMProviderStatus(
         provider=provider_raw,
         supported=False,
@@ -118,5 +91,5 @@ def get_llm_provider_status_from_env() -> LLMProviderStatus:
         model="",
         missing_env_vars=[],
         endpoint=None,
-        error=f"Unsupported LLM_PROVIDER '{provider_raw}'. Supported values: azure-openai, obot-ai",
+        error=f"Unsupported LLM_PROVIDER '{provider_raw}'. Supported values: azure-openai",
     )
