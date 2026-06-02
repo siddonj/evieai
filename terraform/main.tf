@@ -801,6 +801,14 @@ resource "azurerm_container_app" "context_forge" {
         name  = "PORT"
         value = tostring(var.context_forge_container_port)
       }
+      startup_probe {
+        failure_count_threshold = 10
+        interval_seconds        = 15
+        timeout                 = 10
+        transport               = "HTTP"
+        port                    = var.context_forge_container_port
+        path                    = "/"
+      }
     }
     min_replicas = var.container_app_min_replicas
     max_replicas = var.container_app_max_replicas
