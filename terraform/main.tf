@@ -793,10 +793,20 @@ resource "azurerm_container_app" "context_forge" {
 
   template {
     container {
-      name   = "context-forge"
-      image  = var.context_forge_image
-      cpu    = 0.5
-      memory = "1.0Gi"
+      name    = "context-forge"
+      image   = var.context_forge_image
+      cpu     = 1.0
+      memory  = "2.0Gi"
+      command = ["gunicorn"]
+      args = [
+        "-c", "gunicorn.config.py",
+        "--worker-class", "uvicorn.workers.UvicornWorker",
+        "--workers", "2",
+        "--bind", "0.0.0.0:8100",
+        "--timeout", "600",
+        "--max-requests", "100000",
+        "mcpgateway.main:app",
+      ]
       env {
         name  = "PORT"
         value = tostring(var.context_forge_container_port)
