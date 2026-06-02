@@ -876,14 +876,14 @@ resource "azurerm_container_app" "orchestrator" {
     value = azurerm_key_vault_secret.openai_key.value
   }
   dynamic "secret" {
-    for_each = var.obot_api_key != "" ? [1] : []
+    for_each = var.obot_api_key != "" ? [true] : []
     content {
       name  = "obot-api-key"
       value = var.obot_api_key
     }
   }
   dynamic "secret" {
-    for_each = var.context_forge_api_key != "" ? [1] : []
+    for_each = var.context_forge_api_key != "" ? [true] : []
     content {
       name  = "context-forge-api-key"
       value = var.context_forge_api_key
@@ -925,7 +925,7 @@ resource "azurerm_container_app" "orchestrator" {
         value = var.obot_api_required ? "true" : "false"
       }
       dynamic "env" {
-        for_each = var.obot_api_key != "" ? [1] : []
+    for_each = var.obot_api_key != "" ? [true] : []
         content {
           name        = "OBOT_API_KEY"
           secret_name = "obot-api-key"
@@ -988,7 +988,7 @@ resource "azurerm_container_app" "orchestrator" {
         value = var.context_forge_cache_enabled ? "true" : "false"
       }
       dynamic "env" {
-        for_each = var.context_forge_api_key != "" ? [1] : []
+    for_each = var.context_forge_api_key != "" ? [true] : []
         content {
           name        = "CONTEXT_FORGE_API_KEY"
           secret_name = "context-forge-api-key"
