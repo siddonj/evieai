@@ -590,6 +590,10 @@ resource "azurerm_container_app" "kb_mcp" {
     min_replicas = var.container_app_min_replicas
     max_replicas = var.container_app_max_replicas
   }
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # ─── Memory / Personal Context MCP Server ─────────────────────────────
@@ -627,6 +631,10 @@ resource "azurerm_container_app" "memory_mcp" {
     }
     min_replicas = var.container_app_min_replicas
     max_replicas = var.container_app_max_replicas
+  }
+
+  lifecycle {
+    ignore_changes = all
   }
 }
 
@@ -666,6 +674,10 @@ resource "azurerm_container_app" "doc_mcp" {
     min_replicas = var.container_app_min_replicas
     max_replicas = var.container_app_max_replicas
   }
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # ─── Analytics MCP Server ───────────────────────────────────────────────
@@ -704,6 +716,10 @@ resource "azurerm_container_app" "analytics_mcp" {
     min_replicas = var.container_app_min_replicas
     max_replicas = var.container_app_max_replicas
   }
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # ─── Dashboard MCP Server ───────────────────────────────────────────────
@@ -741,6 +757,10 @@ resource "azurerm_container_app" "dashboard_mcp" {
     }
     min_replicas = var.container_app_min_replicas
     max_replicas = var.container_app_max_replicas
+  }
+
+  lifecycle {
+    ignore_changes = all
   }
 }
 
