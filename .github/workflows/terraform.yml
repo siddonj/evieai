@@ -48,7 +48,7 @@ jobs:
         run: terraform fmt -check -diff
 
       - name: Terraform init
-        run: terraform init
+        run: terraform init -backend-config=backend.hcl
 
       - name: Terraform validate
         run: terraform validate
