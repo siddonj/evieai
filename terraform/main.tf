@@ -958,12 +958,9 @@ resource "azurerm_container_app" "orchestrator" {
         name  = "CONTEXT_FORGE_CACHE_ENABLED"
         value = var.context_forge_cache_enabled ? "true" : "false"
       }
-      dynamic "env" {
-        for_each = var.context_forge_api_key != "" ? toset(["enabled"]) : toset([])
-        content {
-          name        = "CONTEXT_FORGE_API_KEY"
-          secret_name = "context-forge-api-key"
-        }
+      env {
+        name        = "CONTEXT_FORGE_API_KEY"
+        secret_name = "context-forge-api-key"
       }
       env {
         name  = "REPORT_OUTPUT_DIR"
