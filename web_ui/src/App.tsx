@@ -641,7 +641,7 @@ function ChatView() {
     <div className="page">
       <div className="bg-grid" aria-hidden="true" />
 
-      <header className="hero">
+      <header className="hero hero-chat">
         <div className="evie-brand">
           <div className="evie-mark" aria-hidden="true">
             <span className="mark-segment mark-segment-top" />
@@ -799,10 +799,10 @@ function ChatView() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask about properties, deals, market data, or documents..."
-            rows={2}
+            rows={4}
             disabled={loading}
           />
-          <button onClick={() => sendMessage()} disabled={loading || !input.trim()}>
+          <button className="composer-send" onClick={() => sendMessage()} disabled={loading || !input.trim()}>
             {loading ? 'Thinking…' : 'Send'}
           </button>
           <div className="composer-hint">Enter to send · Shift+Enter for new line</div>
@@ -824,3 +824,4 @@ function AppGate() {
   const { user } = useAuth()
   return user ? <ChatView /> : <LoginPage />
 }
+
