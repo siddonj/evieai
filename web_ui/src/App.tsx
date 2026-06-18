@@ -104,17 +104,18 @@ type LiveTool = {
 
 const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:8000'
 const STORAGE_KEY = 'aiagent_chat_history'
+const IS_DEV_DEMO = import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEV_LOGIN_BYPASS !== 'true'
 
 // Multifamily & brokerage suggested prompts
 const SUGGESTED_PROMPTS = [
-  { icon: '🏢', label: 'Portfolio overview', query: 'Show me our full multifamily portfolio — all properties, total units, occupancy rate, and average rent.' },
-  { icon: '📊', label: 'Deal pipeline', query: 'Show me the full deal pipeline — all active deals, their stages, offer prices, and commission projections.' },
-  { icon: '📈', label: 'Market analytics', query: 'Show me Memphis multifamily market analytics — cap rates, occupancy trends, and new supply.' },
-  { icon: '📄', label: 'Portfolio performance', query: 'Generate a portfolio performance summary with NOI, cap rates, and rent growth across all properties.' },
-  { icon: '🏠', label: 'Properties by status', query: 'List all properties by status — active, under contract, and recently sold.' },
-  { icon: '👥', label: 'Key contacts', query: 'Show me my key contacts — owners, brokers, and investors in the Memphis market.' },
-  { icon: '💰', label: 'Commission tracker', query: 'What is my YTD commission income and how does it compare to last year?' },
-  { icon: '🔍', label: 'Upcoming activities', query: 'What are my upcoming property tours, inspections, and deal deadlines this month?' },
+  { icon: 'PO', label: 'Portfolio overview', query: 'Show me our full multifamily portfolio — all properties, total units, occupancy rate, and average rent.' },
+  { icon: 'DP', label: 'Deal pipeline', query: 'Show me the full deal pipeline — all active deals, their stages, offer prices, and commission projections.' },
+  { icon: 'MA', label: 'Market analytics', query: 'Show me Memphis multifamily market analytics — cap rates, occupancy trends, and new supply.' },
+  { icon: 'PP', label: 'Portfolio performance', query: 'Generate a portfolio performance summary with NOI, cap rates, and rent growth across all properties.' },
+  { icon: 'PS', label: 'Properties by status', query: 'List all properties by status — active, under contract, and recently sold.' },
+  { icon: 'KC', label: 'Key contacts', query: 'Show me my key contacts — owners, brokers, and investors in the Memphis market.' },
+  { icon: 'CT', label: 'Commission tracker', query: 'What is my YTD commission income and how does it compare to last year?' },
+  { icon: 'AA', label: 'Upcoming activities', query: 'What are my upcoming property tours, inspections, and deal deadlines this month?' },
 ]
 
 function loadHistory(): ChatMessage[] {
@@ -654,10 +655,11 @@ function ChatView() {
             <div className="evie-wordmark-tag">MULTIFAMILY AI SOLUTIONS</div>
           </div>
         </div>
-        <p className="eyebrow">AI-Powered Agentic Q&A</p>
-        <h1>Workspace Intelligence Console</h1>
+        {IS_DEV_DEMO && <div className="mode-badge">Demo mode</div>}
+        <p className="eyebrow">AI-Powered Agentic Workspace</p>
+        <h1>Workspace Intelligence</h1>
         <p className="subtitle">
-          Ask natural-language questions across properties, deals, contacts, market data, and documents — the agent routes your query through the right tools and synthesizes a comprehensive answer.
+          Ask natural-language questions across properties, deals, contacts, market data, and documents. Evie routes each request through the right tools and synthesizes a concise answer.
         </p>
       </header>
 
@@ -685,35 +687,35 @@ function ChatView() {
           <span className="status-actions">
             {isAdmin && (
               <>
-                <button className="status-btn" onClick={() => setView('admin')} title="System Health">
-                  🖥️ Admin
+            <button className="status-btn" onClick={() => setView('admin')} title="System Health">
+                  Admin
                 </button>
                 <button className="status-btn" onClick={() => setView('settings')} title="Settings">
-                  ⚙️ Settings
+                  Settings
                 </button>
               </>
             )}
             {!isAdmin && (
               <button className="status-btn" onClick={() => setView('settings')} title="Settings">
-                ⚙️ Settings
+                Settings
               </button>
             )}
             <button className="status-btn" onClick={() => setView('service_health')} title="Service Health">
-              ⏱️ Services
+              Services
             </button>
             <button className="status-btn" onClick={() => setView('performance')} title="Performance Dashboard">
-              📊 Dashboard
+              Dashboard
             </button>
             <button className="status-btn" onClick={() => setView('network')} title="Network Dashboard">
-              📡 Network Dashboard
+              Network
             </button>
             {hasConversation && (
               <button className="status-btn" onClick={clearChat} title="Clear conversation">
-                🗑️ Clear
+                Clear chat
               </button>
             )}
             <button className="status-btn" onClick={logout} title="Logout">
-              🚪 Logout
+              Logout
             </button>
           </span>
         </div>
@@ -825,4 +827,3 @@ function AppGate() {
   const { user } = useAuth()
   return user ? <ChatView /> : <LoginPage />
 }
-

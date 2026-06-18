@@ -3,6 +3,7 @@ import { useAuth } from './auth'
 
 export function LoginPage() {
   const { login, register, isLoading } = useAuth()
+  const isDevDemo = import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEV_LOGIN_BYPASS !== 'true'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -39,7 +40,8 @@ export function LoginPage() {
             </div>
           </div>
           <p className="eyebrow">Private Workspace</p>
-          <h1>Intelligence Console</h1>
+          <h1>Intelligence Workspace</h1>
+          {isDevDemo && <div className="mode-badge">Demo mode</div>}
         </div>
         <form className="login-form" onSubmit={handleSubmit}>
           <div className="login-field">

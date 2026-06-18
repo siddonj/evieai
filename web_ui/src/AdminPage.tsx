@@ -231,7 +231,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
     return (
       <div className="admin-container">
         <div className="dashboard-header">
-          <h1>🖥️ System Health Dashboard</h1>
+          <h1>System Health Dashboard</h1>
           <p>Real-time system monitoring</p>
         </div>
         <div className="dashboard-loading">Loading system status...</div>
@@ -247,7 +247,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
     <div className="admin-container">
       {/* Header */}
       <div className="dashboard-header">
-        <h1>🖥️ System Health Dashboard</h1>
+        <h1>System Health Dashboard</h1>
         <p>Real-time system monitoring</p>
       </div>
 

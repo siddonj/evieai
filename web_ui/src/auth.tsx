@@ -39,6 +39,12 @@ type AuthCtx = {
 }
 
 const AuthContext = createContext<AuthCtx | null>(null)
+const DEV_LOGIN_BYPASS = import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEV_LOGIN_BYPASS !== 'true'
+const DEV_USER: User = {
+  id: 'dev-admin',
+  email: import.meta.env.VITE_DEV_LOGIN_EMAIL || 'admin@evie.ai',
+  role: 'admin',
+}
 
 function normalizeApiError(detail: unknown, fallback: string): string {
   if (typeof detail === 'string' && detail.trim().length > 0) return detail
@@ -60,7 +66,14 @@ function normalizeApiError(detail: unknown, fallback: string): string {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<{ token: string; user: User } | null>(() => loadSession())
+  const [session, setSession] = useState<{ token: string; user: User } | null>(() => {
+    const stored = loadSession()
+    if (stored) return stored
+    if (DEV_LOGIN_BYPASS) {
+      return { token: 'dev-session', user: DEV_USER }
+    }
+    return null
+  })
   const [isLoading, setIsLoading] = useState(false)
 
   const user = session?.user || null
@@ -91,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     clearSession()
-    setSession(null)
+    setSession(DEV_LOGIN_BYPASS ? { token: 'dev-session', user: DEV_USER } : null)
   }, [])
 
   const register = useCallback(

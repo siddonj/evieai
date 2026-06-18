@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -23,7 +24,6 @@ from pydantic import BaseModel, Field
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Config from environment
-JWT_SECRET = os.getenv("JWT_SECRET", os.getenv("AUTH_SECRET", ""))
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
 
@@ -31,6 +31,8 @@ JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
 DEFAULT_ADMIN_EMAIL = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@evieai.local")
 DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin")
 AUTH_DB_PATH = os.getenv("AUTH_DB_PATH", "./data/evieai_auth.db")
+JWT_SECRET_FILE = Path(os.getenv("JWT_SECRET_FILE", "./data/evieai_jwt_secret"))
+ENVIRONMENT = os.getenv("ENVIRONMENT", "dev").strip().lower()
 
 security = HTTPBearer(auto_error=False)
 
@@ -66,6 +68,33 @@ def _verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
+def _is_local_environment() -> bool:
+    return ENVIRONMENT in {"", "dev", "development", "local", "test"}
+
+
+def _load_or_create_jwt_secret() -> str:
+    configured = os.getenv("JWT_SECRET", os.getenv("AUTH_SECRET", "")).strip()
+    if configured:
+        return configured
+
+    if not _is_local_environment():
+        raise RuntimeError("JWT_SECRET environment variable is not set")
+
+    JWT_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if JWT_SECRET_FILE.exists():
+        secret = JWT_SECRET_FILE.read_text(encoding="utf-8").strip()
+        if secret:
+            return secret
+
+    secret = secrets.token_urlsafe(48)
+    JWT_SECRET_FILE.write_text(secret, encoding="utf-8")
+    try:
+        JWT_SECRET_FILE.chmod(0o600)
+    except OSError:
+        pass
+    return secret
+
+
 def _normalize_email(email: str) -> str:
     normalized = (email or "").strip().lower()
     if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
@@ -74,8 +103,6 @@ def _normalize_email(email: str) -> str:
 
 
 def _create_access_token(user_id: str, email: str, role: str) -> str:
-    if not JWT_SECRET:
-        raise RuntimeError("JWT_SECRET environment variable is not set")
     expire = datetime.now(UTC) + timedelta(hours=JWT_EXPIRE_HOURS)
     payload = {
         "sub": user_id,
@@ -84,13 +111,11 @@ def _create_access_token(user_id: str, email: str, role: str) -> str:
         "exp": expire,
         "jti": str(uuid.uuid4()),
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, _load_or_create_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
 def _decode_token(token: str) -> dict:
-    if not JWT_SECRET:
-        raise RuntimeError("JWT_SECRET environment variable is not set")
-    return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    return jwt.decode(token, _load_or_create_jwt_secret(), algorithms=[JWT_ALGORITHM])
 
 
 def _connect() -> sqlite3.Connection:
