@@ -1720,7 +1720,7 @@ class ExportRequest(BaseModel):
 
 
 @app.post("/export")
-async def export_file(payload: ExportRequest) -> dict[str, str]:
+async def export_file(payload: ExportRequest) -> Response:
     service = "document_generation"
     if service not in MCP_ENDPOINTS:
         raise HTTPException(status_code=503, detail="Export service not available")
@@ -1736,12 +1736,12 @@ async def export_file(payload: ExportRequest) -> dict[str, str]:
         if resp.status_code >= 400:
             detail = resp.text[:500]
             raise HTTPException(status_code=resp.status_code, detail=detail)
-        data = resp.json()
-        filename = data.get("filename")
-        if not filename:
-            raise HTTPException(status_code=500, detail="Export failed: no filename returned")
-        download_url = f"/download/{service}/{urllib.parse.quote(filename, safe='')}"
-        return {"filename": filename, "url": download_url}
+        content_type = resp.headers.get("content-type", "application/octet-stream")
+        disposition = resp.headers.get("content-disposition", "")
+        headers: dict[str, str] = {}
+        if disposition:
+            headers["Content-Disposition"] = disposition
+        return Response(content=resp.content, media_type=content_type, headers=headers)
 
 
 # ─── Teams SSO / OBO ─────────────────────────────────────────────────

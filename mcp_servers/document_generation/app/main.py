@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import io
 import re
-import uuid
-from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -12,15 +10,6 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 app = FastAPI(title="mcp-document-generation", version="0.3.0")
-
-# ─── In-Memory File Store ─────────────────────────────────────────────
-
-_FILE_STORE: dict[str, tuple[bytes, str]] = {}  # name -> (content, content_type)
-
-def _store_file(content: bytes, content_type: str, prefix: str, ext: str) -> str:
-    name = f"{prefix}-{uuid.uuid4().hex[:8]}.{ext}"
-    _FILE_STORE[name] = (content, content_type)
-    return name
 
 # ═══════════════════════════════════════════════════════════════════════
 #  DEMO DATA  —  Multifamily & Brokerage Document Templates
@@ -426,10 +415,6 @@ class ExportRequest(BaseModel):
     data: dict[str, Any]
 
 
-class ExportResponse(BaseModel):
-    filename: str
-
-
 # ═══════════════════════════════════════════════════════════════════════
 #  EXPORT — Generators
 # ═══════════════════════════════════════════════════════════════════════
@@ -730,8 +715,8 @@ FORMAT_MAP = {
 }
 
 
-@app.post("/export", response_model=ExportResponse)
-def export_document(payload: ExportRequest) -> dict[str, str]:
+@app.post("/export")
+def export_document(payload: ExportRequest) -> Response:
     fmt_info = FORMAT_MAP.get(payload.format)
     if not fmt_info:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {payload.format}")
@@ -746,19 +731,9 @@ def export_document(payload: ExportRequest) -> dict[str, str]:
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {payload.format}")
 
-    prefix = _sanitize_name(payload.title)
-    filename = _store_file(content, content_type, prefix, ext.lstrip("."))
-    return {"filename": filename}
-
-
-@app.get("/mcp/files/{file_name}/download")
-def download_file(file_name: str) -> Response:
-    entry = _FILE_STORE.get(file_name)
-    if not entry:
-        raise HTTPException(status_code=404, detail="File not found")
-    content, content_type = entry
+    filename = f"{_sanitize_name(payload.title)}{ext}"
     return Response(
         content=content,
         media_type=content_type,
-        headers={"Content-Disposition": f'attachment; filename="{file_name}"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

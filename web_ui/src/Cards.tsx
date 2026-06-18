@@ -208,25 +208,6 @@ function fileIcon(name: string): string {
 
 /* ─── Export Menu ──────────────────────────────────────────────────── */
 
-async function triggerDownload(url: string, filename: string) {
-  const fullUrl = url.startsWith('http') ? url : `${ORCHESTRATOR_URL}${url}`
-  try {
-    const res = await fetch(fullUrl)
-    if (!res.ok) throw new Error(`Download failed: ${res.status}`)
-    const blob = await res.blob()
-    const blobUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = blobUrl
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(blobUrl)
-  } catch {
-    window.open(fullUrl, '_blank')
-  }
-}
-
 export function ExportMenu({ type, title, data }: { type: 'report' | 'table'; title: string; data: any }) {
   const [open, setOpen] = useState(false)
   const [exporting, setExporting] = useState<string | null>(null)
@@ -246,8 +227,18 @@ export function ExportMenu({ type, title, data }: { type: 'report' | 'table'; ti
         body: JSON.stringify({ type, format, title, data }),
       })
       if (!res.ok) throw new Error(`Export failed: ${res.status}`)
-      const result = await res.json()
-      await triggerDownload(result.url, result.filename)
+      const blob = await res.blob()
+      const contentDisposition = res.headers.get('content-disposition') || ''
+      const match = contentDisposition.match(/filename="?(.+?)"?$/)
+      const filename = match ? match[1] : `${title}.${format}`
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(blobUrl)
     } catch (e) {
       console.error('Export error:', e)
     } finally {
