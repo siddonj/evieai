@@ -722,14 +722,22 @@ def export_document(payload: ExportRequest) -> Response:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {payload.format}")
     content_type, ext = fmt_info
 
-    if payload.format == "xlsx":
-        content = _generate_excel(payload)
-    elif payload.format == "docx":
-        content = _generate_docx(payload)
-    elif payload.format == "pdf":
-        content = _generate_pdf(payload)
-    else:
-        raise HTTPException(status_code=400, detail=f"Unsupported format: {payload.format}")
+    try:
+        if payload.format == "xlsx":
+            content = _generate_excel(payload)
+        elif payload.format == "docx":
+            content = _generate_docx(payload)
+        elif payload.format == "pdf":
+            content = _generate_pdf(payload)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported format: {payload.format}")
+    except ImportError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Export library not available: {e.name}. Run: pip install {e.name}",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export generation failed: {e}")
 
     filename = f"{_sanitize_name(payload.title)}{ext}"
     return Response(
