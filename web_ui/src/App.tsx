@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { marked } from 'marked'
 import { AuthProvider, useAuth } from './auth'
 import { LoginPage } from './LoginPage'
-import { SettingsPage } from './SettingsPage'
-import { AdminPage } from './AdminPage'
 import type { ChatResponse } from './Cards'
 import { ResultDeck, ToolBadge, LiveToolBadge } from './Cards'
+
+const SettingsPage = lazy(() => import('./SettingsPage').then(m => ({ default: m.SettingsPage })))
+const AdminPage = lazy(() => import('./AdminPage').then(m => ({ default: m.AdminPage })))
 
 type View = 'chat' | 'settings' | 'service_health' | 'performance' | 'network' | 'admin'
 
@@ -616,15 +617,15 @@ function ChatView() {
   }
 
   if (view === 'settings') {
-    return <SettingsPage initialTab="service_health" />
+    return <Suspense fallback={<div className="dashboard-loading">Loading settings...</div>}><SettingsPage initialTab="service_health" /></Suspense>
   }
 
   if (view === 'service_health') {
-    return <SettingsPage initialTab="service_health" />
+    return <Suspense fallback={<div className="dashboard-loading">Loading health...</div>}><SettingsPage initialTab="service_health" /></Suspense>
   }
 
   if (view === 'admin') {
-    return <AdminPage onBack={() => setView('chat')} />
+    return <Suspense fallback={<div className="dashboard-loading">Loading admin...</div>}><AdminPage onBack={() => setView('chat')} /></Suspense>
   }
 
   if (view === 'performance') {
