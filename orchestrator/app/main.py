@@ -304,6 +304,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 MCP_SQL_URL = os.getenv("MCP_SQL_URL", "http://localhost:5000/mcp")

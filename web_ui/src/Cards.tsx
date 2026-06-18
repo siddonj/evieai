@@ -229,8 +229,8 @@ export function ExportMenu({ type, title, data }: { type: 'report' | 'table'; ti
       if (!res.ok) throw new Error(`Export failed: ${res.status}`)
       const blob = await res.blob()
       const contentDisposition = res.headers.get('content-disposition') || ''
-      const match = contentDisposition.match(/filename="?(.+?)"?$/)
-      const filename = match ? match[1] : `${title}.${format}`
+      const match = contentDisposition.match(/filename="?([^";]+)"?/)
+      const filename = match ? match[1] : `${title.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'export'}.${format}`
       const blobUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = blobUrl
