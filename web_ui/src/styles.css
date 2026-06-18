@@ -198,7 +198,7 @@ button:disabled {
   }
 }
 
-/* ─── Tool Badges ───────────────────────────────────────────────── */
+
 
 .tool-bar {
   display: flex;
@@ -217,7 +217,7 @@ button:disabled {
   border: 1px solid rgba(51, 85, 114, 0.4);
 }
 
-/* ─── Card Panel ──────────────────────────────────────────────────── */
+
 
 .card-panel {
   margin-top: 0.8rem;
@@ -226,7 +226,7 @@ button:disabled {
   gap: 0.7rem;
 }
 
-/* ─── Deck ────────────────────────────────────────────────────────── */
+
 
 .deck {
   border: 1px solid var(--line);
@@ -266,7 +266,7 @@ button:disabled {
   }
 }
 
-/* ─── Settings/Admin Console ───────────────────────────────────────── */
+
 
 .settings-shell {
   margin-top: 1.1rem;
@@ -378,7 +378,7 @@ button:disabled {
   margin-top: 0.8rem;
 }
 
-/* ─── Performance Dashboard ─────────────────────────────────────────── */
+
 
 .dashboard-shell {
   margin-top: 1.2rem;
@@ -928,7 +928,7 @@ button:disabled {
   }
 }
 
-/* ─── Card ───────────────────────────────────────────────────────── */
+
 
 .card {
   border-radius: 8px;
@@ -944,7 +944,7 @@ button:disabled {
   border-color: rgba(237, 176, 89, 0.35);
 }
 
-/* ─── Email Card ─────────────────────────────────────────────────── */
+
 
 .email-card {
   display: flex;
@@ -1019,7 +1019,7 @@ button:disabled {
   overflow: hidden;
 }
 
-/* ─── File Card ──────────────────────────────────────────────────── */
+
 
 .file-card {
   display: flex;
@@ -1102,7 +1102,7 @@ button:disabled {
   color: #8ab4d0;
 }
 
-/* ─── Knowledge Base Card ─────────────────────────────────────── */
+
 
 .kb-grid {
   grid-template-columns: 1fr;
@@ -1220,7 +1220,7 @@ button:disabled {
   color: #8ab4d0;
 }
 
-/* ─── Error Card ─────────────────────────────────────────────────── */
+
 
 .error-card {
   display: flex;
@@ -1240,7 +1240,7 @@ button:disabled {
   color: var(--accent);
 }
 
-/* ─── Scrollbar Styling ────────────────────────────────────────────── */
+
 
 .messages::-webkit-scrollbar {
   width: 6px;
@@ -1259,7 +1259,7 @@ button:disabled {
   background: rgba(51, 85, 114, 0.8);
 }
 
-/* ─── Login Page ─────────────────────────────────────────────────── */
+
 
 .login-page {
   position: relative;
@@ -1364,7 +1364,7 @@ button:disabled {
   color: #fff;
 }
 
-/* ─── Header Actions ─────────────────────────────────────────────── */
+
 
 .header-top {
   display: flex;
@@ -1409,7 +1409,7 @@ button:disabled {
   color: #f0a0a0;
 }
 
-/* ─── Settings Page ────────────────────────────────────────────────── */
+
 
 .settings-hero {
   margin-bottom: 1rem;
@@ -1595,7 +1595,7 @@ button:disabled {
   }
 }
 
-/* ─── Memory Card ────────────────────────────────────────────────── */
+
 
 .memory-grid {
   grid-template-columns: 1fr;
@@ -1734,7 +1734,7 @@ button:disabled {
   max-width: 40%;
 }
 
-/* ─── Document Card ───────────────────────────────────────────────── */
+
 
 .doc-grid {
   grid-template-columns: 1fr;
@@ -1760,7 +1760,7 @@ button:disabled {
   margin-top: 0.1rem;
 }
 
-/* ─── EVIEAI Brand Refresh ───────────────────────────────────────── */
+
 
 :root {
   --bg: #050718;
@@ -2259,7 +2259,7 @@ textarea:focus,
   border: 1px solid rgba(237, 176, 89, 0.2);
 }
 
-/* ─── SQL Data Card ───────────────────────────────────────────────── */
+
 
 .sql-card {
   padding: 0.85rem;
@@ -2452,7 +2452,7 @@ textarea:focus,
   text-align: right;
 }
 
-/* ─── Analytics Card ────────────────────────────────────────────────── */
+
 
 .analytics-grid {
   grid-template-columns: 1fr;
@@ -2639,7 +2639,7 @@ textarea:focus,
   color: var(--accent);
 }
 
-/* ─── Settings Tabs ──────────────────────────────────────────────── */
+
 
 .settings-tabs {
   display: flex;
@@ -2672,7 +2672,7 @@ textarea:focus,
   color: var(--accent);
 }
 
-/* ─── MCP Server List ─────────────────────────────────────────────── */
+
 
 .settings-hint {
   font-size: 0.82rem;
@@ -2730,7 +2730,7 @@ textarea:focus,
   font-family: 'Lato', monospace;
 }
 
-/* Toggle Switch */
+
 .mcp-toggle {
   position: relative;
   display: inline-block;
@@ -2774,7 +2774,7 @@ input:checked + .mcp-toggle-slider::before {
   left: 20px;
 }
 
-/* ─── Admin Dashboard ────────────────────────────────────────────── */
+
 
 .admin-container {
   max-width: 1200px;
@@ -3027,7 +3027,7 @@ input:checked + .mcp-toggle-slider::before {
   font-family: 'Lato', monospace;
 }
 
-/* ─── Alert Styles ─────────────────────────────────────────────────────────────── */
+
 .alerts-section {
   display: flex;
   flex-direction: column;
@@ -3096,7 +3096,7 @@ input:checked + .mcp-toggle-slider::before {
   color: #fff;
 }
 
-/* ─── Chart Section ────────────────────────────────────────────────────────────── */
+
 .chart-section {
   background: rgba(0, 0, 0, 0.15);
   border: 1px solid var(--line);
@@ -3111,7 +3111,7 @@ input:checked + .mcp-toggle-slider::before {
   font-size: 1rem;
 }
 
-/* ─── Enhanced Toolbar ─────────────────────────────────────────────────────────── */
+
 .dashboard-toolbar {
   display: flex;
   justify-content: space-between;
@@ -3171,7 +3171,7 @@ input:checked + .mcp-toggle-slider::before {
   color: var(--muted);
 }
 
-/* ─── Dashboard Header ─────────────────────────────────────────────────────────── */
+
 .dashboard-header {
   margin-bottom: 1.5rem;
 }
@@ -3203,7 +3203,7 @@ input:checked + .mcp-toggle-slider::before {
   color: var(--muted);
 }
 
-/* ─── Health Summary Components ────────────────────────────────────────────────── */
+
 .health-summary {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -3243,7 +3243,7 @@ input:checked + .mcp-toggle-slider::before {
   gap: 1rem;
 }
 
-/* ─── Incident Banner ──────────────────────────────────────────────────────────── */
+
 .incident-banner {
   background: rgba(220, 38, 38, 0.15);
   border: 2px solid #dc2626;
@@ -3287,7 +3287,7 @@ input:checked + .mcp-toggle-slider::before {
   font-weight: 600;
 }
 
-/* ─── Services Grid ────────────────────────────────────────────────────────────── */
+
 .services-grid {
   margin-bottom: 1.5rem;
 }
@@ -3371,7 +3371,7 @@ input:checked + .mcp-toggle-slider::before {
   gap: 0.5rem;
 }
 
-/* ─── Data Source Section ──────────────────────────────────────────────────────── */
+
 .datasource-section {
   margin-top: 1.2rem;
 }
@@ -3417,7 +3417,7 @@ input:checked + .mcp-toggle-slider::before {
   color: #10b981;
 }
 
-/* ─── Modal Styles ─────────────────────────────────────────────────────────────── */
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -3510,7 +3510,7 @@ input:checked + .mcp-toggle-slider::before {
   font-weight: 600;
 }
 
-/* ─── Service Restart Button ─────────────────────────────────────── */
+
 
 .service-content {
   display: flex;
@@ -3562,7 +3562,7 @@ input:checked + .mcp-toggle-slider::before {
   border: 1px solid rgba(220, 38, 38, 0.3);
 }
 
-/* ─── LLM Provider Status ────────────────────────────────────────── */
+
 
 .llm-status-card {
   display: grid;
@@ -3665,7 +3665,7 @@ input:checked + .mcp-toggle-slider::before {
   border-color: rgba(59, 130, 246, 0.5);
 }
 
-/* ─── Responsive Design ────────────────────────────────────────────────────────── */
+
 @media (max-width: 900px) {
   .dashboard-toolbar {
     flex-direction: column;
@@ -3763,7 +3763,7 @@ input:checked + .mcp-toggle-slider::before {
   color: #fff;
 }
 
-/* ─── Data Preview Panel ──────────────────────────────────────────── */
+
 
 .data-preview-panel {
   border: 1px solid var(--line);
@@ -3815,7 +3815,7 @@ input:checked + .mcp-toggle-slider::before {
   line-height: 1.4;
 }
 
-/* ─── Add Data Form ───────────────────────────────────────────────── */
+
 
 .add-data-form {
   display: flex;
@@ -3841,7 +3841,7 @@ input:checked + .mcp-toggle-slider::before {
   border-color: rgba(14, 111, 102, 0.2);
 }
 
-/* ─── Mobile ─────────────────────────────────────────────────────── */
+
 
 @media (max-width: 700px) {
   .page {
@@ -3861,12 +3861,9 @@ input:checked + .mcp-toggle-slider::before {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   NEW DEMO IMPROVEMENTS — Suggested Prompts, Live Tools, Typing,
-   Streaming Cursor, Status Actions, Composer Hint
-   ═══════════════════════════════════════════════════════════════════ */
 
-/* ─── Suggested Prompts ─────────────────────────────────────────── */
+
+
 
 .suggested-prompts {
   display: flex;
@@ -3913,7 +3910,7 @@ input:checked + .mcp-toggle-slider::before {
   white-space: nowrap;
 }
 
-/* ─── Live Tool Badges (streaming) ─────────────────────────────── */
+
 
 .live-tools {
   display: flex;
@@ -3998,7 +3995,7 @@ input:checked + .mcp-toggle-slider::before {
   to { transform: rotate(360deg); }
 }
 
-/* ─── Typing Indicator ──────────────────────────────────────────── */
+
 
 .typing-indicator {
   display: flex;
@@ -4025,7 +4022,7 @@ input:checked + .mcp-toggle-slider::before {
   30% { transform: translateY(-8px); opacity: 1; }
 }
 
-/* ─── Streaming Cursor ──────────────────────────────────────────── */
+
 
 .streaming-cursor {
   display: inline-block;
@@ -4040,7 +4037,7 @@ input:checked + .mcp-toggle-slider::before {
   50% { opacity: 0; }
 }
 
-/* ─── Streaming Bubble ──────────────────────────────────────────── */
+
 
 .bubble.streaming {
   position: relative;
@@ -4059,7 +4056,7 @@ input:checked + .mcp-toggle-slider::before {
   pointer-events: none;
 }
 
-/* ─── Status Bar Actions ─────────────────────────────────────────── */
+
 
 .status-actions {
   display: flex;
@@ -4084,7 +4081,7 @@ input:checked + .mcp-toggle-slider::before {
   background: rgba(255, 255, 255, 0.05);
 }
 
-/* ─── Composer Hint ─────────────────────────────────────────────── */
+
 
 .composer-hint {
   justify-self: start;
@@ -4093,7 +4090,7 @@ input:checked + .mcp-toggle-slider::before {
   margin-bottom: 0.2rem;
 }
 
-/* ─── Prose (markdown rendered) ──────────────────────────────────── */
+
 
 .prose p {
   margin: 0.3rem 0;
@@ -4193,7 +4190,7 @@ input:checked + .mcp-toggle-slider::before {
   margin: 0.6rem 0;
 }
 
-/* ─── Responsive ──────────────────────────────────────────────────── */
+
 
 @media (max-width: 600px) {
   .suggested-prompts {
@@ -4210,7 +4207,7 @@ input:checked + .mcp-toggle-slider::before {
   }
 }
 
-/* ─── Chat Workspace Refresh ─────────────────────────────────────── */
+
 
 body {
   font-family: 'Manrope', 'Segoe UI', sans-serif;
