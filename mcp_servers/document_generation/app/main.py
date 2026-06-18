@@ -1,12 +1,26 @@
-"""Document Generation MCP Server — Multifamily & Brokerage report templates."""
+"""Document Generation MCP Server — Multifamily & Brokerage report templates + export (Excel/Word/PDF)."""
 from __future__ import annotations
 
+import io
+import re
+import uuid
+from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 
-app = FastAPI(title="mcp-document-generation", version="0.2.0")
+app = FastAPI(title="mcp-document-generation", version="0.3.0")
+
+# ─── In-Memory File Store ─────────────────────────────────────────────
+
+_FILE_STORE: dict[str, tuple[bytes, str]] = {}  # name -> (content, content_type)
+
+def _store_file(content: bytes, content_type: str, prefix: str, ext: str) -> str:
+    name = f"{prefix}-{uuid.uuid4().hex[:8]}.{ext}"
+    _FILE_STORE[name] = (content, content_type)
+    return name
 
 # ═══════════════════════════════════════════════════════════════════════
 #  DEMO DATA  —  Multifamily & Brokerage Document Templates
@@ -330,7 +344,7 @@ class QueryRequest(BaseModel):
 
 @app.get("/")
 def root() -> dict[str, str]:
-    return {"service": "mcp-document-generation", "status": "ok", "version": "0.2.0"}
+    return {"service": "mcp-document-generation", "status": "ok", "version": "0.3.0"}
 
 
 @app.get("/health")
@@ -347,7 +361,6 @@ def mcp_info() -> dict[str, str]:
 def mcp_query(payload: QueryRequest) -> dict[str, Any]:
     q = payload.query.lower()
 
-    # Determine document type filter
     type_filter = None
     if any(w in q for w in ("portfolio summary", "portfolio performance", "portfolio overview")):
         type_filter = "portfolio_summary"
@@ -360,14 +373,11 @@ def mcp_query(payload: QueryRequest) -> dict[str, Any]:
     elif any(w in q for w in ("commission report", "commission summary", "gci", "commission")):
         type_filter = "commission_report"
 
-    # Filter by type
     candidates = [d for d in _DOCUMENT_TEMPLATES if (type_filter is None or d["type"] == type_filter)]
 
-    # Score and rank
     scored = [(d, _score(d, q)) for d in candidates]
     scored.sort(key=lambda x: x[1], reverse=True)
 
-    # Return top 2 with positive scores, or top 1 if nothing matched
     results = [d for d, s in scored if s > 0][:2]
     if not results:
         results = [d for d, s in scored[:1]]
@@ -403,3 +413,352 @@ def admin_post_data(payload: dict[str, Any]) -> dict[str, Any]:
         return {"service": "document_generation", "action": "updated", "id": doc["id"], "total": len(_DOCUMENT_TEMPLATES)}
     _DOCUMENT_TEMPLATES.append(doc)
     return {"service": "document_generation", "action": "added", "id": doc["id"], "total": len(_DOCUMENT_TEMPLATES)}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  EXPORT — Models
+# ═══════════════════════════════════════════════════════════════════════
+
+class ExportRequest(BaseModel):
+    type: str  # "report" | "table"
+    format: str  # "xlsx" | "docx" | "pdf"
+    title: str
+    data: dict[str, Any]
+
+
+class ExportResponse(BaseModel):
+    filename: str
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  EXPORT — Generators
+# ═══════════════════════════════════════════════════════════════════════
+
+def _sanitize_name(title: str) -> str:
+    name = re.sub(r"[^a-zA-Z0-9]+", "-", title).strip("-").lower()
+    return name[:60] or "export"
+
+
+def _generate_excel(payload: ExportRequest) -> bytes:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = payload.title[:31] or "Export"
+
+    header_font = Font(bold=True, size=14, color="FFFFFF")
+    header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+    section_font = Font(bold=True, size=12, color="1F4E79")
+    metric_header_font = Font(bold=True, size=10, color="FFFFFF")
+    metric_header_fill = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
+    thin_border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin"),
+    )
+    wrap = Alignment(wrap_text=True, vertical="top")
+
+    if payload.type == "report":
+        data = payload.data
+        sections = data.get("sections", [])
+        action_items = data.get("action_items", [])
+        tags = data.get("tags", [])
+
+        row = 1
+        ws.cell(row=row, column=1, value=payload.title).font = header_font
+        ws.cell(row=row, column=1).fill = header_fill
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+        ws.cell(row=row, column=1).alignment = Alignment(horizontal="center", vertical="center")
+        ws.row_dimensions[row].height = 30
+
+        for section in sections:
+            row += 2
+            ws.cell(row=row, column=1, value=section.get("heading", "")).font = section_font
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+
+            row += 1
+            ws.cell(row=row, column=1, value=section.get("content", "")).alignment = wrap
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+            ws.row_dimensions[row].height = 60
+
+            metrics = section.get("key_metrics", [])
+            if metrics:
+                row += 1
+                for col, h in enumerate(["Metric", "Value", "Trend"], 1):
+                    c = ws.cell(row=row, column=col, value=h)
+                    c.font = metric_header_font
+                    c.fill = metric_header_fill
+                    c.border = thin_border
+                    c.alignment = Alignment(horizontal="center")
+                for m in metrics:
+                    row += 1
+                    ws.cell(row=row, column=1, value=m.get("label", "")).border = thin_border
+                    ws.cell(row=row, column=2, value=m.get("value", "")).border = thin_border
+                    ws.cell(row=row, column=3, value=m.get("trend", "")).border = thin_border
+
+        if action_items:
+            row += 2
+            ws.cell(row=row, column=1, value="Action Items").font = section_font
+            for item in action_items:
+                row += 1
+                ws.cell(row=row, column=1, value=f"  {item}").alignment = wrap
+
+        if tags:
+            row += 2
+            ws.cell(row=row, column=1, value="Tags").font = section_font
+            row += 1
+            ws.cell(row=row, column=1, value=", ".join(tags))
+
+        ws.column_dimensions["A"].width = 30
+        ws.column_dimensions["B"].width = 20
+        ws.column_dimensions["C"].width = 30
+
+    else:
+        headers = payload.data.get("headers", [])
+        rows = payload.data.get("rows", [])
+
+        ws.cell(row=1, column=1, value=payload.title).font = header_font
+        ws.cell(row=1, column=1).fill = header_fill
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max(len(headers), 1))
+        ws.cell(row=1, column=1).alignment = Alignment(horizontal="center")
+        ws.row_dimensions[1].height = 30
+
+        if headers:
+            for col, h in enumerate(headers, 1):
+                c = ws.cell(row=2, column=col, value=h)
+                c.font = metric_header_font
+                c.fill = metric_header_fill
+                c.border = thin_border
+                c.alignment = Alignment(horizontal="center")
+
+        for r_idx, row_data in enumerate(rows, 3 if headers else 2):
+            for c_idx, val in enumerate(row_data, 1):
+                ws.cell(row=r_idx, column=c_idx, value=str(val)).border = thin_border
+
+        for i, h in enumerate(headers, 1):
+            ws.column_dimensions[chr(64 + i) if i <= 26 else f"A{i}"].width = 25
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def _generate_docx(payload: ExportRequest) -> bytes:
+    from docx import Document
+    from docx.shared import Inches, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+
+    doc = Document()
+
+    style = doc.styles["Normal"]
+    style.font.name = "Calibri"
+    style.font.size = Pt(11)
+    style.paragraph_format.space_after = Pt(6)
+
+    title_para = doc.add_heading(payload.title, level=1)
+    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    if payload.type == "report":
+        data = payload.data
+        sections = data.get("sections", [])
+        action_items = data.get("action_items", [])
+        tags = data.get("tags", [])
+
+        for section in sections:
+            doc.add_heading(section.get("heading", ""), level=2)
+            doc.add_paragraph(section.get("content", ""))
+
+            metrics = section.get("key_metrics", [])
+            if metrics:
+                table = doc.add_table(rows=1, cols=3)
+                table.style = "Light Grid Accent 1"
+                table.alignment = WD_TABLE_ALIGNMENT.CENTER
+                hdr = table.rows[0].cells
+                for i, h in enumerate(["Metric", "Value", "Trend"]):
+                    hdr[i].text = h
+                    for p in hdr[i].paragraphs:
+                        for r in p.runs:
+                            r.bold = True
+                            r.font.size = Pt(9)
+                for m in metrics:
+                    row_cells = table.add_row().cells
+                    row_cells[0].text = str(m.get("label", ""))
+                    row_cells[1].text = str(m.get("value", ""))
+                    row_cells[2].text = str(m.get("trend", ""))
+                    for cell in row_cells:
+                        for p in cell.paragraphs:
+                            for r in p.runs:
+                                r.font.size = Pt(9)
+
+                doc.add_paragraph()
+
+        if action_items:
+            doc.add_heading("Action Items", level=2)
+            for item in action_items:
+                doc.add_paragraph(item, style="List Bullet")
+
+        if tags:
+            doc.add_heading("Tags", level=2)
+            doc.add_paragraph(", ".join(tags))
+
+    else:
+        headers = payload.data.get("headers", [])
+        rows = payload.data.get("rows", [])
+
+        if headers:
+            table = doc.add_table(rows=1, cols=len(headers))
+            table.style = "Light Grid Accent 1"
+            table.alignment = WD_TABLE_ALIGNMENT.CENTER
+            hdr = table.rows[0].cells
+            for i, h in enumerate(headers):
+                hdr[i].text = h
+                for p in hdr[i].paragraphs:
+                    for r in p.runs:
+                        r.bold = True
+
+            for row_data in rows:
+                row_cells = table.add_row().cells
+                for i, val in enumerate(row_data):
+                    if i < len(row_cells):
+                        row_cells[i].text = str(val)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def _generate_pdf(payload: ExportRequest) -> bytes:
+    from jinja2 import Template
+    from weasyprint import HTML
+
+    if payload.type == "report":
+        data = payload.data
+        sections = data.get("sections", [])
+        action_items = data.get("action_items", [])
+        tags = data.get("tags", [])
+        table_headers = []
+        table_rows = []
+    else:
+        sections = []
+        action_items = []
+        tags = payload.data.get("tags", [])
+        table_headers = payload.data.get("headers", [])
+        table_rows = payload.data.get("rows", [])
+
+    metric_rows = ""
+    for s in sections:
+        metrics_html = ""
+        for m in s.get("key_metrics", []):
+            metrics_html += f"""
+            <tr>
+                <td style="padding:4px 8px;border:1px solid #ccc;font-size:9pt;">{m.get('label','')}</td>
+                <td style="padding:4px 8px;border:1px solid #ccc;font-size:9pt;font-weight:bold;">{m.get('value','')}</td>
+                <td style="padding:4px 8px;border:1px solid #ccc;font-size:9pt;color:#666;">{m.get('trend','')}</td>
+            </tr>"""
+
+        section_html = f"""
+        <div style="page-break-inside:avoid;margin-bottom:20px;">
+            <h2 style="color:#1F4E79;font-size:14pt;border-bottom:2px solid #1F4E79;padding-bottom:4px;">{s.get('heading','')}</h2>
+            <p style="font-size:10pt;line-height:1.5;color:#333;">{s.get('content','')}</p>
+            {f'<table style="width:100%;border-collapse:collapse;margin-top:8px;">{metrics_html}</table>' if metrics_html else ''}
+        </div>"""
+        metric_rows += section_html
+
+    table_html = ""
+    if table_headers:
+        th = "".join(f"<th style='padding:6px 10px;border:1px solid #ccc;background:#2E75B6;color:#fff;font-size:9pt;text-align:left;'>{h}</th>" for h in table_headers)
+        tr = ""
+        for row in table_rows:
+            td = "".join(f"<td style='padding:4px 8px;border:1px solid #ccc;font-size:9pt;'>{str(v)}</td>" for v in row)
+            tr += f"<tr>{td}</tr>"
+        table_html = f"""
+        <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+            <tr>{th}</tr>
+            {tr}
+        </table>"""
+
+    actions_html = ""
+    if action_items:
+        items = "".join(f"<li style='font-size:10pt;margin-bottom:4px;'>{item}</li>" for item in action_items)
+        actions_html = f"""
+        <div style="page-break-inside:avoid;margin-top:20px;">
+            <h2 style="color:#1F4E79;font-size:14pt;border-bottom:2px solid #1F4E79;padding-bottom:4px;">Action Items</h2>
+            <ul>{items}</ul>
+        </div>"""
+
+    tags_html = ""
+    if tags:
+        tags_html = f"""
+        <div style="page-break-inside:avoid;margin-top:20px;">
+            <h2 style="color:#1F4E79;font-size:14pt;border-bottom:2px solid #1F4E79;padding-bottom:4px;">Tags</h2>
+            <p style="font-size:10pt;color:#666;">{', '.join(tags)}</p>
+        </div>"""
+
+    html_str = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        @page {{ margin: 1.5cm 2cm; }}
+        body {{ font-family: 'Helvetica', 'Arial', sans-serif; color: #333; }}
+    </style>
+</head>
+<body>
+    <h1 style="color:#1F4E79;font-size:18pt;text-align:center;margin-bottom:24px;">{payload.title}</h1>
+    {metric_rows}
+    {table_html}
+    {actions_html}
+    {tags_html}
+</body>
+</html>"""
+
+    pdf_bytes = HTML(string=html_str).write_pdf()
+    return pdf_bytes
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  EXPORT — Endpoints
+# ═══════════════════════════════════════════════════════════════════════
+
+FORMAT_MAP = {
+    "xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx"),
+    "docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx"),
+    "pdf": ("application/pdf", ".pdf"),
+}
+
+
+@app.post("/export", response_model=ExportResponse)
+def export_document(payload: ExportRequest) -> dict[str, str]:
+    fmt_info = FORMAT_MAP.get(payload.format)
+    if not fmt_info:
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {payload.format}")
+    content_type, ext = fmt_info
+
+    if payload.format == "xlsx":
+        content = _generate_excel(payload)
+    elif payload.format == "docx":
+        content = _generate_docx(payload)
+    elif payload.format == "pdf":
+        content = _generate_pdf(payload)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {payload.format}")
+
+    prefix = _sanitize_name(payload.title)
+    filename = _store_file(content, content_type, prefix, ext.lstrip("."))
+    return {"filename": filename}
+
+
+@app.get("/mcp/files/{file_name}/download")
+def download_file(file_name: str) -> Response:
+    entry = _FILE_STORE.get(file_name)
+    if not entry:
+        raise HTTPException(status_code=404, detail="File not found")
+    content, content_type = entry
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={"Content-Disposition": f'attachment; filename="{file_name}"'},
+    )

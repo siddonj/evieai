@@ -1710,6 +1710,40 @@ async def download_file(service: str, file_name: str) -> Response:
         return Response(content=resp.content, media_type=content_type, headers=headers)
 
 
+# ─── Export Proxy ──────────────────────────────────────────────────────
+
+class ExportRequest(BaseModel):
+    type: str  # "report" | "table"
+    format: str  # "xlsx" | "docx" | "pdf"
+    title: str
+    data: dict[str, Any]
+
+
+@app.post("/export")
+async def export_file(payload: ExportRequest) -> dict[str, str]:
+    service = "document_generation"
+    if service not in MCP_ENDPOINTS:
+        raise HTTPException(status_code=503, detail="Export service not available")
+    mcp_base = _base(MCP_ENDPOINTS[service])
+    export_url = f"{mcp_base}/export"
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            export_url,
+            json=payload.model_dump(),
+            headers={"Content-Type": "application/json"},
+        )
+        if resp.status_code >= 400:
+            detail = resp.text[:500]
+            raise HTTPException(status_code=resp.status_code, detail=detail)
+        data = resp.json()
+        filename = data.get("filename")
+        if not filename:
+            raise HTTPException(status_code=500, detail="Export failed: no filename returned")
+        download_url = f"/download/{service}/{urllib.parse.quote(filename, safe='')}"
+        return {"filename": filename, "url": download_url}
+
+
 # ─── Teams SSO / OBO ─────────────────────────────────────────────────
 
 class TeamsTokenRequest(BaseModel):

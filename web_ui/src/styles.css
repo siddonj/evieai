@@ -819,6 +819,100 @@ button:disabled {
   }
 }
 
+/* ─── Export Menu ────────────────────────────────────────────────── */
+
+.card-export {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.export-menu-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.25rem 0.4rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--muted);
+  transition: background 150ms, border-color 150ms, color 150ms;
+  line-height: 1;
+}
+
+.export-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.export-btn-icon {
+  font-size: 0.85rem;
+}
+
+.export-btn-arrow {
+  font-size: 0.6rem;
+}
+
+.export-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  background: rgba(8, 18, 47, 0.98);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.3rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+}
+
+.export-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--ink);
+  text-align: left;
+  transition: background 120ms;
+}
+
+.export-option:hover:not(:disabled) {
+  background: rgba(89, 220, 255, 0.1);
+}
+
+.export-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Card ───────────────────────────────────────────────────────── */
+
 .card {
   border-radius: 8px;
   border: 1px solid var(--line);

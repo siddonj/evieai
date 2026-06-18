@@ -1,4 +1,5 @@
 /* ─── Types ─────────────────────────────────────────────────────── */
+import { useState } from 'react'
 
 const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:8000'
 
@@ -203,6 +204,80 @@ function fileIcon(name: string): string {
     json: '⚙️',
   }
   return map[ext] || '📁'
+}
+
+/* ─── Export Menu ──────────────────────────────────────────────────── */
+
+async function triggerDownload(url: string, filename: string) {
+  const fullUrl = url.startsWith('http') ? url : `${ORCHESTRATOR_URL}${url}`
+  try {
+    const res = await fetch(fullUrl)
+    if (!res.ok) throw new Error(`Download failed: ${res.status}`)
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(blobUrl)
+  } catch {
+    window.open(fullUrl, '_blank')
+  }
+}
+
+export function ExportMenu({ type, title, data }: { type: 'report' | 'table'; title: string; data: any }) {
+  const [open, setOpen] = useState(false)
+  const [exporting, setExporting] = useState<string | null>(null)
+
+  const formats = [
+    { key: 'xlsx', label: 'Excel (.xlsx)', icon: '📊' },
+    { key: 'docx', label: 'Word (.docx)', icon: '📝' },
+    { key: 'pdf', label: 'PDF (.pdf)', icon: '📄' },
+  ]
+
+  const handleExport = async (format: string) => {
+    setExporting(format)
+    try {
+      const res = await fetch(`${ORCHESTRATOR_URL}/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, format, title, data }),
+      })
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`)
+      const result = await res.json()
+      await triggerDownload(result.url, result.filename)
+    } catch (e) {
+      console.error('Export error:', e)
+    } finally {
+      setExporting(null)
+      setOpen(false)
+    }
+  }
+
+  return (
+    <div className="export-menu-wrapper" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}>
+      <button className="export-btn" onClick={() => setOpen(!open)} title="Export" aria-label="Export options">
+        <span className="export-btn-icon">⬇️</span>
+        <span className="export-btn-arrow">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="export-dropdown">
+          {formats.map((f) => (
+            <button
+              key={f.key}
+              className="export-option"
+              onClick={() => handleExport(f.key)}
+              disabled={exporting === f.key}
+            >
+              {exporting === f.key ? <span className="export-spinner">⏳</span> : f.icon} {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 /* ─── Tool Badge ────────────────────────────────────────────────── */
@@ -450,6 +525,12 @@ export function MemoryCard({ result }: { result: McpResult }) {
 export function DocumentCard({ doc }: { doc: GeneratedDocument }) {
   const typeIcon = doc.type === 'executive_summary' ? '📊' : doc.type === 'board_briefing' ? '📋' : doc.type === 'sales_report' ? '💼' : doc.type === 'security_assessment' ? '🔒' : '📄'
 
+  const exportData = {
+    sections: doc.sections || [],
+    action_items: doc.action_items || [],
+    tags: doc.tags || [],
+  }
+
   return (
     <div className="card doc-card">
       <div className="doc-header">
@@ -461,6 +542,9 @@ export function DocumentCard({ doc }: { doc: GeneratedDocument }) {
             <span className="doc-pages">{doc.pages} pages</span>
             <span className="doc-words">{doc.word_count?.toLocaleString()} words</span>
           </div>
+        </div>
+        <div className="card-export">
+          <ExportMenu type="report" title={doc.title || 'Report'} data={exportData} />
         </div>
       </div>
 
@@ -515,6 +599,11 @@ export function AnalyticsCard({ result }: { result: McpResult }) {
   const trends = result.trends || []
   const insights = result.insights || []
 
+  const exportTableData = {
+    headers: ['Name', 'Value', 'Change', 'Period', 'Status', 'Target'],
+    rows: kpis.map((k) => [k.name, k.value, k.change, k.period, k.status, k.target]),
+  }
+
   return (
     <div className="card analytics-card">
       <div className="analytics-header">
@@ -522,6 +611,9 @@ export function AnalyticsCard({ result }: { result: McpResult }) {
         <div className="analytics-meta">
           <div className="analytics-title">{result.category || 'Analytics Dashboard'}</div>
           <div className="analytics-summary">{result.summary}</div>
+        </div>
+        <div className="card-export">
+          <ExportMenu type="table" title={result.category || 'Analytics'} data={exportTableData} />
         </div>
       </div>
 
@@ -603,11 +695,27 @@ export function SqlDataCard({ result }: { result: McpResult }) {
   const companies = result.companies || []
   const metrics = result.metrics
 
+  const sqlTableData = {
+    headers: contacts.length > 0
+      ? ['First Name', 'Last Name', 'Email', 'Phone', 'Company', 'Stage', 'Deal Value']
+      : companies.length > 0
+        ? ['Name', 'Industry', 'Revenue Tier', 'Region', 'Website']
+        : ['Metric', 'Value'],
+    rows: contacts.length > 0
+      ? contacts.map((c) => [c.first_name || '', c.last_name || '', c.email || '', c.phone || '', c.company || '', c.stage || '', c.deal_value != null ? `$${c.deal_value.toLocaleString()}` : ''])
+      : companies.length > 0
+        ? companies.map((c) => [c.name || '', c.industry || '', c.revenue_tier || '', c.region || '', c.website || ''])
+        : Object.entries(metrics || {}).filter(([_, v]) => typeof v === 'string' || typeof v === 'number').map(([k, v]) => [k, String(v)]),
+  }
+
   return (
     <div className="card sql-card">
       <div className="sql-header">
         <span className="sql-icon">🗃️</span>
         <span className="sql-title">{result.summary || 'SQL Database'}</span>
+        <div className="card-export">
+          <ExportMenu type="table" title={result.summary || 'Data Export'} data={sqlTableData} />
+        </div>
       </div>
 
       {metrics && (
