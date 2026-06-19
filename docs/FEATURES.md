@@ -36,6 +36,7 @@
 - **Dark theme UI** — Reduces eye strain in long work sessions
 - **Markdown rendering** — Code blocks, tables, lists rendered beautifully
 - **Tool call visibility** — Badges show which systems were queried ("📧 query_mail", "📊 query_analytics")
+- **Evidence-first work packets** — Chat responses can include a structured summary with reconciliation status, source-based evidence cards, suggested actions, and export affordances
 - **Copy-to-clipboard** — One-click copy of answers for pasting into reports/emails
 - **Mobile responsive** — Works on tablets and phones (web UI)
 
@@ -202,6 +203,7 @@ Board Meeting Briefing — Q2 2026
 - **PDF** — Direct generation (future enhancement)
 - **Email** — Send directly to recipients
 - **Sharing** — Copy link to share with read-only access
+- **Work packet consistency** — Export suggestions can be driven from the same structured packet shown in chat, so summary and evidence stay aligned
 
 ---
 
