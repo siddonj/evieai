@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { marked } from 'marked'
 import { AuthProvider, useAuth } from './auth'
 import { LoginPage } from './LoginPage'
-import type { ChatResponse } from './Cards'
-import { ResultDeck, ToolBadge, LiveToolBadge } from './Cards'
+import { ResultDeck, ToolBadge, LiveToolBadge, type ChatResponse } from './Cards'
+import { WorkPacketPanel } from './WorkPacketPanel'
 
 const SettingsPage = lazy(() => import('./SettingsPage').then(m => ({ default: m.SettingsPage })))
 const AdminPage = lazy(() => import('./AdminPage').then(m => ({ default: m.AdminPage })))
@@ -729,10 +729,15 @@ function ChatView() {
                 className="text prose"
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }}
               />
+              {msg.data?.work_packet && (
+                <div className="message-section">
+                  <WorkPacketPanel packet={msg.data.work_packet} />
+                </div>
+              )}
               {msg.data?.tool_calls && msg.data.tool_calls.length > 0 && (
                 <div className="tool-bar">
                   {msg.data.tool_calls.map((tc, i) => (
-                    <ToolBadge key={i} name={tc.name} />
+                    <ToolBadge key={`${tc.name}-${i}`} name={tc.name} />
                   ))}
                 </div>
               )}
