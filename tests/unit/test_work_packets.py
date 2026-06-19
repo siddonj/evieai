@@ -94,3 +94,38 @@ def test_build_work_packet_confirms_when_sources_share_same_signal():
 
     assert packet["reconciliation"]["status"] == "confirmed"
     assert packet["reconciliation"]["source_count"] == 2
+
+
+def test_build_work_packet_marks_partial_when_only_one_source_returns_evidence():
+    packet = build_work_packet(
+        reply="I found one supporting source.",
+        tool_calls=[],
+        mcp_results=[
+            {
+                "service": "mail",
+                "summary": "Found 3 emails",
+                "messages": [{"subject": "Board update", "from": "ceo@example.com"}],
+            }
+        ],
+    )
+
+    assert packet["reconciliation"]["status"] == "partial"
+    assert packet["evidence"][0]["snippets"] == ["1 email(s)"]
+
+
+def test_build_work_packet_collects_export_and_action_suggestions_from_documents():
+    packet = build_work_packet(
+        reply="Draft board briefing ready.",
+        tool_calls=[{"name": "query_document_generation", "args": {"query": "board briefing"}}],
+        mcp_results=[
+            {
+                "service": "document_generation",
+                "summary": "Generated board briefing",
+                "generated_documents": [{"title": "Board Briefing", "status": "draft"}],
+            }
+        ],
+    )
+
+    assert "pdf" in packet["suggested_exports"]
+    assert packet["suggested_actions"][0]["type"] == "review_document"
+    assert packet["suggested_actions"][0]["label"] == "Review Board Briefing"
