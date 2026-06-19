@@ -156,10 +156,30 @@ export type ToolCall = {
   args?: Record<string, any>
 }
 
+export type WorkPacketEvidence = {
+  source: string
+  title: string
+  summary: string
+  snippets?: string[]
+}
+
+export type WorkPacket = {
+  answer?: { summary?: string }
+  reconciliation?: {
+    status?: 'confirmed' | 'partial' | 'conflicting' | 'inferred'
+    source_count?: number
+    notes?: string[]
+  }
+  evidence?: WorkPacketEvidence[]
+  suggested_actions?: Array<{ type: string; label: string }>
+  suggested_exports?: string[]
+}
+
 export type ChatResponse = {
   reply: string
   tool_calls?: ToolCall[]
   mcp_results?: McpResult[]
+  work_packet?: WorkPacket
 }
 
 const DEFAULT_SQL_DEMO_SUMMARY = 'demo mode: returning multifamily & brokerage database'
