@@ -35,7 +35,7 @@ def test_build_work_packet_groups_evidence_and_sets_conflict_status():
     assert len(packet["evidence"]) == 2
     assert packet["evidence"][0] == {
         "source": "sql",
-        "title": "Sql",
+        "title": "SQL",
         "summary": "SQL pipeline snapshot",
         "signals": ["active_deals_count:9"],
         "snippets": [],
@@ -99,6 +99,22 @@ def test_build_work_packet_confirms_when_sources_share_same_signal():
     assert packet["suggested_exports"] == []
 
 
+def test_build_work_packet_preserves_kb_acronym_in_titles():
+    packet = build_work_packet(
+        reply="Found one policy document.",
+        tool_calls=[],
+        mcp_results=[
+            {
+                "service": "kb",
+                "summary": "Found one policy",
+                "documents": [{"title": "Expense Policy"}],
+            }
+        ],
+    )
+
+    assert packet["evidence"][0]["title"] == "KB"
+
+
 def test_build_work_packet_marks_partial_when_only_one_source_returns_evidence():
     packet = build_work_packet(
         reply="I found one supporting source.",
@@ -121,6 +137,28 @@ def test_build_work_packet_marks_partial_when_only_one_source_returns_evidence()
     assert packet["evidence"][0]["snippets"] == ["1 email(s)"]
     assert packet["evidence"][1]["signals"] == []
     assert packet["evidence"][1]["snippets"] == []
+
+
+def test_build_work_packet_marks_conflicting_when_populated_sources_mix_signals_and_snippets():
+    packet = build_work_packet(
+        reply="One source has metric evidence and another has only email evidence.",
+        tool_calls=[],
+        mcp_results=[
+            {
+                "service": "sql",
+                "summary": "SQL pipeline snapshot",
+                "metrics": {"active_deals_count": 9},
+            },
+            {
+                "service": "mail",
+                "summary": "Found 3 emails",
+                "messages": [{"subject": "Board update", "from": "ceo@example.com"}],
+            },
+        ],
+    )
+
+    assert packet["reconciliation"]["status"] == "conflicting"
+    assert packet["reconciliation"]["source_count"] == 2
 
 
 def test_build_work_packet_collects_export_and_action_suggestions_from_documents():

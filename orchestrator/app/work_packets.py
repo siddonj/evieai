@@ -5,7 +5,8 @@ from typing import Any
 
 def _result_title(result: dict[str, Any]) -> str:
     service = str(result.get("service") or "source")
-    return " ".join(part.title() for part in service.split("_"))
+    acronyms = {"sql": "SQL", "kb": "KB"}
+    return " ".join(acronyms.get(part, part.title()) for part in service.split("_"))
 
 
 def _extract_signals(result: dict[str, Any]) -> list[str]:
@@ -49,7 +50,7 @@ def _reconciliation_status(evidence: list[dict[str, Any]]) -> str:
     if len(populated) <= 1:
         return "partial"
 
-    statuses = {tuple(item.get("signals", [])) for item in populated if item.get("signals")}
+    statuses = {tuple(item.get("signals", [])) for item in populated}
     return "conflicting" if len(statuses) > 1 else "confirmed"
 
 
@@ -57,7 +58,8 @@ def _suggested_actions(mcp_results: list[dict[str, Any]]) -> list[dict[str, str]
     for result in mcp_results:
         docs = result.get("generated_documents")
         if isinstance(docs, list) and docs:
-            title = str((docs[0] or {}).get("title") or "Generated document")
+            first_doc = docs[0] if isinstance(docs[0], dict) else {}
+            title = str(first_doc.get("title") or "Generated document")
             return [{"type": "review_document", "label": f"Review {title}"}]
     return []
 
