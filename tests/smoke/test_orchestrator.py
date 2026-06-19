@@ -90,6 +90,36 @@ async def test_chat_with_tool_calls():
 
 
 @pytest.mark.asyncio
+async def test_chat_with_tool_calls_includes_work_packet():
+    async with httpx.AsyncClient(timeout=45) as client:
+        resp = await client.post(
+            f"{_base_url()}/chat",
+            json={"message": "Show me the sales pipeline", "user_id": "smoke-test"},
+        )
+        assert resp.status_code == 200
+        data = _extract_sse_payload(resp)
+        assert "work_packet" in data
+        assert "answer" in data["work_packet"]
+        assert "reconciliation" in data["work_packet"]
+        assert "evidence" in data["work_packet"]
+
+
+@pytest.mark.asyncio
+async def test_chat_batch_includes_work_packet():
+    async with httpx.AsyncClient(timeout=45) as client:
+        resp = await client.post(
+            f"{_base_url()}/chat/batch",
+            json={"message": "Show me the sales pipeline", "user_id": "smoke-test"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "work_packet" in data
+        assert "answer" in data["work_packet"]
+        assert "reconciliation" in data["work_packet"]
+        assert "evidence" in data["work_packet"]
+
+
+@pytest.mark.asyncio
 async def test_openapi_schema():
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(f"{_base_url()}/openapi.json")

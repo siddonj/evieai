@@ -50,6 +50,7 @@ from app.connector_runtime import (
 from app.connector_sync_store import get_connector_sync_store
 from app.event_signal_store import get_event_signal_store
 from app.llm_provider import LLMConfigError, get_llm_provider_status_from_env, get_llm_runtime_from_env
+from app.work_packets import build_work_packet
 from connectors.adapters.webhook_adapter import WebhookAdapter, WebhookEnvelope
 from connectors.registry import ConnectorRegistry
 from connectors.types import Capability, SyncCursor
@@ -645,6 +646,7 @@ class ChatResponse(BaseModel):
     reply: str
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     mcp_results: list[dict[str, Any]] = Field(default_factory=list)
+    work_packet: dict[str, Any] | None = None
 
 
 class PerformanceDashboardResponse(BaseModel):
@@ -667,6 +669,23 @@ class NetworkDashboardResponse(BaseModel):
 
 def _sse(data: dict[str, Any]) -> str:
     return f"data: {json.dumps(data)}\n\n"
+
+
+def _final_chat_payload(
+    reply: str,
+    tool_calls: list[dict[str, Any]],
+    mcp_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "reply": reply,
+        "tool_calls": tool_calls,
+        "mcp_results": mcp_results,
+        "work_packet": build_work_packet(
+            reply=reply,
+            tool_calls=tool_calls,
+            mcp_results=mcp_results,
+        ),
+    }
 
 
 def _summarize_mcp_result(result: dict[str, Any]) -> str:
@@ -1158,11 +1177,20 @@ async def _stream_chat_response(
             continue  # Next turn — model processes tool results
 
         # No tool calls — final answer
-        yield _sse({"type": "done", "reply": full_reply, "tool_calls": tool_calls_log, "mcp_results": mcp_results_log})
+        yield _sse({"type": "done", **_final_chat_payload(full_reply, tool_calls_log, mcp_results_log)})
         return
 
     # Max turns exhausted
-    yield _sse({"type": "done", "reply": full_reply or "I wasn't able to fully answer after multiple rounds. Please try rephrasing.", "tool_calls": tool_calls_log, "mcp_results": mcp_results_log})
+    yield _sse(
+        {
+            "type": "done",
+            **_final_chat_payload(
+                full_reply or "I wasn't able to fully answer after multiple rounds. Please try rephrasing.",
+                tool_calls_log,
+                mcp_results_log,
+            ),
+        }
+    )
 
 
 async def _collect_batch(generator: AsyncGenerator[str, None]) -> ChatResponse:
@@ -1170,6 +1198,7 @@ async def _collect_batch(generator: AsyncGenerator[str, None]) -> ChatResponse:
     reply = ""
     tool_calls: list[dict[str, Any]] = []
     mcp_results: list[dict[str, Any]] = []
+    work_packet: dict[str, Any] | None = None
     async for event_str in generator:
         for line in event_str.strip().split("\n"):
             if not line.startswith("data: "):
@@ -1182,9 +1211,16 @@ async def _collect_batch(generator: AsyncGenerator[str, None]) -> ChatResponse:
                 reply = event.get("reply", reply)
                 tool_calls = event.get("tool_calls", [])
                 mcp_results = event.get("mcp_results", [])
+                work_packet = event.get("work_packet")
             elif event.get("type") == "error":
                 reply = f"Error: {event.get('message', 'Unknown error')}"
-    return ChatResponse(reply=reply or "No response", tool_calls=tool_calls, mcp_results=mcp_results)
+    final_reply = reply or "No response"
+    return ChatResponse(
+        reply=final_reply,
+        tool_calls=tool_calls,
+        mcp_results=mcp_results,
+        work_packet=work_packet or build_work_packet(final_reply, tool_calls, mcp_results),
+    )
 
 
 # ─── Routes ───────────────────────────────────────────────────────────
