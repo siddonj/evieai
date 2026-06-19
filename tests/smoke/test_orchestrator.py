@@ -130,6 +130,18 @@ async def test_openapi_schema():
 
 
 @pytest.mark.asyncio
+async def test_openapi_schema_mentions_work_packet():
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(f"{_base_url()}/openapi.json")
+        assert resp.status_code == 200
+        schema = resp.json()
+        chat_response = schema["components"]["schemas"]["ChatResponse"]
+        assert "work_packet" in chat_response["properties"]
+        assert schema["paths"]["/chat"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/ChatResponse"
+        assert schema["paths"]["/chat/batch"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/ChatResponse"
+
+
+@pytest.mark.asyncio
 async def test_download_endpoint_404():
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(f"{_base_url()}/download/nonexistent/file.txt")

@@ -120,32 +120,29 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  reply:
-                    type: string
-                    description: Markdown-formatted AI response
-                  tool_calls:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                          example: query_sql
-                        args:
-                          type: object
-                  mcp_results:
-                    type: array
-                    items:
-                      type: object
-                      description: >
-                        MCP server result. Contains service-specific keys:
-                        files, items (file_share), messages (o365_mail),
-                        contacts/companies/metrics (sql),
-                        documents (knowledge_base/document_generation),
-                        kpi_cards/trends/insights (analytics),
-                        profile/preferences/bookmarks (memory)
+                $ref: "#/components/schemas/ChatResponse"
+        "400":
+          description: Invalid input (empty message or exceeds max length)
+        "429":
+          description: Rate limit exceeded (20 req/min per user)
+
+  /chat/batch:
+    post:
+      operationId: chat_batch
+      summary: Send a chat message and get a non-streaming AI response with tool-call results
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatMessage"
+      responses:
+        "200":
+          description: Batch chat response with tool calls and MCP results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
         "400":
           description: Invalid input (empty message or exceeds max length)
         "429":
@@ -269,3 +266,37 @@ components:
           type: string
         content:
           type: string
+    ChatResponse:
+      type: object
+      required: [reply]
+      properties:
+        reply:
+          type: string
+        tool_calls:
+          type: array
+          items:
+            type: object
+        mcp_results:
+          type: array
+          items:
+            type: object
+        work_packet:
+          type: object
+          properties:
+            answer:
+              type: object
+              properties:
+                summary:
+                  type: string
+            reconciliation:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [confirmed, partial, conflicting, inferred]
+                source_count:
+                  type: integer
+            evidence:
+              type: array
+              items:
+                type: object
