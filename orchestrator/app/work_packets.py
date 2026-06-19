@@ -5,8 +5,7 @@ from typing import Any
 
 def _result_title(result: dict[str, Any]) -> str:
     service = str(result.get("service") or "source")
-    acronyms = {"sql": "SQL", "kb": "KB"}
-    return " ".join(acronyms.get(part, part.title()) for part in service.split("_"))
+    return " ".join(part.title() for part in service.split("_"))
 
 
 def _extract_signals(result: dict[str, Any]) -> list[str]:
@@ -63,6 +62,14 @@ def _suggested_actions(mcp_results: list[dict[str, Any]]) -> list[dict[str, str]
     return []
 
 
+def _suggested_exports(mcp_results: list[dict[str, Any]]) -> list[str]:
+    for result in mcp_results:
+        docs = result.get("generated_documents")
+        if isinstance(docs, list) and docs:
+            return ["pdf", "docx"]
+    return []
+
+
 def build_work_packet(
     reply: str,
     tool_calls: list[dict[str, Any]],
@@ -78,6 +85,6 @@ def build_work_packet(
         },
         "evidence": evidence,
         "suggested_actions": _suggested_actions(mcp_results),
-        "suggested_exports": ["pdf", "docx", "xlsx"],
+        "suggested_exports": _suggested_exports(mcp_results),
         "tool_calls": tool_calls,
     }

@@ -38,6 +38,7 @@ def test_build_work_packet_groups_evidence_and_sets_conflict_status():
         "title": "Sql",
         "summary": "SQL pipeline snapshot",
         "signals": ["active_deals_count:9"],
+        "snippets": [],
         "raw": {
             "service": "sql",
             "summary": "SQL pipeline snapshot",
@@ -49,6 +50,7 @@ def test_build_work_packet_groups_evidence_and_sets_conflict_status():
         "title": "Analytics",
         "summary": "Analytics pipeline snapshot",
         "signals": ["active_deals_count:42"],
+        "snippets": [],
         "raw": {
             "service": "analytics",
             "summary": "Analytics pipeline snapshot",
@@ -65,7 +67,7 @@ def test_build_work_packet_groups_evidence_and_sets_conflict_status():
             ],
         },
     }
-    assert packet["suggested_exports"] == ["pdf", "docx", "xlsx"]
+    assert packet["suggested_exports"] == []
     assert packet["tool_calls"] == [{"name": "query_sql", "args": {"query": "pipeline"}}]
 
 
@@ -94,6 +96,7 @@ def test_build_work_packet_confirms_when_sources_share_same_signal():
 
     assert packet["reconciliation"]["status"] == "confirmed"
     assert packet["reconciliation"]["source_count"] == 2
+    assert packet["suggested_exports"] == []
 
 
 def test_build_work_packet_marks_partial_when_only_one_source_returns_evidence():
@@ -105,12 +108,19 @@ def test_build_work_packet_marks_partial_when_only_one_source_returns_evidence()
                 "service": "mail",
                 "summary": "Found 3 emails",
                 "messages": [{"subject": "Board update", "from": "ceo@example.com"}],
+            },
+            {
+                "service": "analytics",
+                "summary": "No matching records",
             }
         ],
     )
 
     assert packet["reconciliation"]["status"] == "partial"
+    assert packet["reconciliation"]["source_count"] == 2
     assert packet["evidence"][0]["snippets"] == ["1 email(s)"]
+    assert packet["evidence"][1]["signals"] == []
+    assert packet["evidence"][1]["snippets"] == []
 
 
 def test_build_work_packet_collects_export_and_action_suggestions_from_documents():
@@ -126,6 +136,6 @@ def test_build_work_packet_collects_export_and_action_suggestions_from_documents
         ],
     )
 
-    assert "pdf" in packet["suggested_exports"]
+    assert packet["suggested_exports"] == ["pdf", "docx"]
     assert packet["suggested_actions"][0]["type"] == "review_document"
     assert packet["suggested_actions"][0]["label"] == "Review Board Briefing"
