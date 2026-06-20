@@ -12,6 +12,7 @@ type DocumentWorkflowPanelProps = {
   action: DocumentAction
   orchestratorUrl: string
   userId?: string
+  authHeader?: string
   workPacketId: string
   sourceSummary: string
   onActionChange: (action: DocumentAction) => void
@@ -21,6 +22,7 @@ export function DocumentWorkflowPanel({
   action,
   orchestratorUrl,
   userId,
+  authHeader,
   workPacketId,
   sourceSummary,
   onActionChange,
@@ -56,7 +58,10 @@ export function DocumentWorkflowPanel({
     try {
       const res = await fetch(`${orchestratorUrl}/document-actions/draft`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authHeader ? { Authorization: authHeader } : {}),
+        },
         body: JSON.stringify({
           user_id: userId,
           work_packet_id: workPacketId,
@@ -84,9 +89,11 @@ export function DocumentWorkflowPanel({
     try {
       const res = await fetch(`${orchestratorUrl}/document-actions/${action.id}/approve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authHeader ? { Authorization: authHeader } : {}),
+        },
         body: JSON.stringify({
-          approved_by: userId || 'guest',
           destination_type: destinationType,
           destination_ref: destinationRef.trim(),
           output_formats: selectedFormats,
@@ -111,6 +118,7 @@ export function DocumentWorkflowPanel({
     try {
       const res = await fetch(`${orchestratorUrl}/document-actions/${action.id}/finalize`, {
         method: 'POST',
+        headers: authHeader ? { Authorization: authHeader } : undefined,
       })
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`)

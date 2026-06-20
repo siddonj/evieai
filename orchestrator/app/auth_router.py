@@ -224,6 +224,14 @@ async def require_auth(credentials: Annotated[HTTPAuthorizationCredentials | Non
     return payload
 
 
+async def require_auth_optional(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],
+) -> dict | None:
+    if not credentials:
+        return None
+    return await require_auth(credentials)
+
+
 async def require_admin(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)]) -> dict:
     payload = await require_auth(credentials)
     if payload.get("role") != "admin":

@@ -416,7 +416,7 @@ function NetworkDashboardView({ userId, onBack }: { userId?: string; onBack: () 
   )
 }
 
-function DocumentsView({ userId, onBack }: { userId?: string; onBack: () => void }) {
+function DocumentsView({ userId, authHeader, onBack }: { userId?: string; authHeader?: string; onBack: () => void }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [documents, setDocuments] = useState<DocumentAction[]>([])
@@ -430,7 +430,9 @@ function DocumentsView({ userId, onBack }: { userId?: string; onBack: () => void
       if (userId) {
         params.set('user_id', userId)
       }
-      const res = await fetch(`${ORCHESTRATOR_URL}/document-actions?${params.toString()}`)
+      const res = await fetch(`${ORCHESTRATOR_URL}/document-actions?${params.toString()}`, {
+        headers: authHeader ? { Authorization: authHeader } : undefined,
+      })
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`)
       }
@@ -446,7 +448,7 @@ function DocumentsView({ userId, onBack }: { userId?: string; onBack: () => void
 
   useEffect(() => {
     void loadDocuments()
-  }, [userId])
+  }, [userId, authHeader])
 
   function updateDocument(nextAction: DocumentAction) {
     setDocuments((prev) => prev.map((action) => (
@@ -483,6 +485,7 @@ function DocumentsView({ userId, onBack }: { userId?: string; onBack: () => void
                   action={action}
                   orchestratorUrl={ORCHESTRATOR_URL}
                   userId={userId}
+                  authHeader={authHeader}
                   workPacketId={action.work_packet_id || `document-${action.id}`}
                   sourceSummary={action.title}
                   onActionChange={updateDocument}
@@ -509,7 +512,8 @@ function nextId(): string {
 }
 
 function ChatView() {
-  const { user, isAdmin, logout } = useAuth()
+  const { user, token, isAdmin, logout } = useAuth()
+  const authHeader = token && token !== 'dev-session' ? `Bearer ${token}` : undefined
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -748,7 +752,7 @@ function ChatView() {
   }
 
   if (view === 'documents') {
-    return <DocumentsView userId={user?.email} onBack={() => setView('chat')} />
+    return <DocumentsView userId={user?.email} authHeader={authHeader} onBack={() => setView('chat')} />
   }
 
   const hasConversation = messages.length > 1
@@ -852,6 +856,7 @@ function ChatView() {
                     action={action}
                     orchestratorUrl={ORCHESTRATOR_URL}
                     userId={user?.email}
+                    authHeader={authHeader}
                     workPacketId={msg.data?.work_packet?.answer?.summary ? `${msg.id}-${action.document_type}` : msg.id}
                     sourceSummary={msg.data?.work_packet?.answer?.summary || msg.text}
                     onActionChange={(nextAction) => updateDocumentAction(msg.id, nextAction)}

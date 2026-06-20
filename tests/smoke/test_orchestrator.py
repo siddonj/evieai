@@ -180,7 +180,6 @@ async def test_document_workflow_approve_and_finalize():
         approved = await client.post(
             f"{_base_url()}/document-actions/{draft_body['id']}/approve",
             json={
-                "approved_by": "smoke-test",
                 "destination_type": "onedrive",
                 "destination_ref": "Reports/Exec",
                 "output_formats": ["pdf", "docx"],
@@ -227,7 +226,6 @@ async def test_chat_document_workflow_end_to_end():
         approved = await client.post(
             f"{_base_url()}/document-actions/{draft_body['id']}/approve",
             json={
-                "approved_by": "smoke-test",
                 "destination_type": "onedrive",
                 "destination_ref": "Reports/Exec",
                 "output_formats": ["pdf", "docx"],
@@ -245,7 +243,7 @@ async def test_chat_document_workflow_end_to_end():
         assert finalized_body["artifacts"][0]["storage_ref"]
         assert finalized_body["artifacts"][0]["size_bytes"] > 0
         assert finalized_body["announcement"]["action_id"]
-        assert finalized_body["announcement"]["status"] == "approved"
+        assert finalized_body["announcement"]["status"] == "completed"
 
 
 @pytest.mark.asyncio

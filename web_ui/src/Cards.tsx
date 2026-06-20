@@ -201,6 +201,7 @@ export type DocumentAction = {
     file_name?: string
     storage_ref?: string
     size_bytes?: number
+    blob_url?: string
   }>
 }
 

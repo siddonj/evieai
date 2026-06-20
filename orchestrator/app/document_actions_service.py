@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from app.blob import DOCUMENT_ARTIFACT_ROOT, write_local_document_artifact
+    from app.blob import DOCUMENT_ARTIFACT_ROOT, upload_report, write_local_document_artifact
     from app.actions_store import ActionsStore
     from app.document_actions_store import DocumentActionsStore
 except ImportError:
-    from orchestrator.app.blob import DOCUMENT_ARTIFACT_ROOT, write_local_document_artifact
+    from orchestrator.app.blob import DOCUMENT_ARTIFACT_ROOT, upload_report, write_local_document_artifact
     from orchestrator.app.actions_store import ActionsStore
     from orchestrator.app.document_actions_store import DocumentActionsStore
 
@@ -119,12 +119,20 @@ class DocumentActionsService:
             file_name=file_name,
             content=content,
         )
-        return {
+        artifact = {
             "format": output_format,
             "file_name": file_name,
             "storage_ref": str(artifact_path),
             "size_bytes": artifact_path.stat().st_size,
         }
+        blob_url = upload_report(
+            name=f"document_artifacts/{record['id']}/{file_name}",
+            content=content,
+            content_type="text/plain",
+        )
+        if blob_url:
+            artifact["blob_url"] = blob_url
+        return artifact
 
     def _render_artifact_content(
         self,
@@ -184,10 +192,22 @@ class DocumentActionsService:
             requires_approval=False,
             requested_by=record.get("approved_by"),
         )
-        action = self.actions_store.get_action_request(created["action_id"])
+        action_id = created["action_id"]
+        completed = self.actions_store.update_action_result(
+            action_id=action_id,
+            status="completed",
+            result={
+                "delivered": True,
+                "channel": "internal_queue",
+                "message": payload["message"],
+                "artifact_count": len(artifacts),
+            },
+            approved_by=record.get("approved_by"),
+        )
         return {
-            "status": (action or {}).get("status", created["status"]),
+            "status": (completed or {}).get("status", created["status"]),
             "type": "document_finalized",
             "channel": "internal_queue",
-            "action_id": created["action_id"],
+            "action_id": action_id,
+            "result": (completed or {}).get("result"),
         }

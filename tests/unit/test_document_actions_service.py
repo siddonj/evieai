@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import orchestrator.app.document_actions_service as document_actions_service_module
+
 from orchestrator.app.actions_store import ActionsStore
 from orchestrator.app.document_actions_service import DocumentActionsService
 from orchestrator.app.document_actions_store import DocumentActionsStore
@@ -73,15 +75,16 @@ def test_service_finalizes_after_approval_and_records_artifacts(tmp_path):
     assert first_artifact_path.exists()
     assert "# Board Report" in first_artifact_path.read_text(encoding="utf-8")
     assert result["destination"]["type"] == "onedrive"
-    assert result["announcement"]["status"] == "approved"
+    assert result["announcement"]["status"] == "completed"
     assert result["announcement"]["id"] > 0
     assert result["announcement"]["action_id"]
     announcement_action = actions_store.get_action_request(result["announcement"]["action_id"])
     assert announcement_action is not None
     assert announcement_action["source_id"] == "document_workflow"
     assert announcement_action["entity_type"] == "announcement"
-    assert announcement_action["status"] == "approved"
+    assert announcement_action["status"] == "completed"
     assert announcement_action["payload"]["document_action_id"] == draft["id"]
+    assert announcement_action["result"]["delivered"] is True
     assert persisted["status"] == "executed"
     assert persisted["executed_at"]
     assert persisted["artifacts"] == result["artifacts"]
@@ -93,3 +96,37 @@ def test_service_finalizes_after_approval_and_records_artifacts(tmp_path):
     assert rerun["announcement"]["id"] == result["announcement"]["id"]
     assert rerun["announcement"]["action_id"] == result["announcement"]["action_id"]
     assert rerun["artifacts"][0]["storage_ref"] == result["artifacts"][0]["storage_ref"]
+
+
+def test_service_promotes_artifact_to_blob_when_available(tmp_path, monkeypatch):
+    store = DocumentActionsStore(db_path=tmp_path / "document_actions.db")
+    actions_store = ActionsStore(str(tmp_path / "actions.db"))
+    artifact_root = tmp_path / "document_artifacts"
+    service = DocumentActionsService(
+        store=store,
+        artifact_root=artifact_root,
+        actions_store=actions_store,
+    )
+    monkeypatch.setattr(
+        document_actions_service_module,
+        "upload_report",
+        lambda name, content, content_type="text/plain": f"https://blob.example/{name}",
+    )
+    draft = service.create_draft(
+        user_id="alice",
+        work_packet_id="wp-blob-1",
+        document_type="executive_briefing",
+        title="Executive Briefing",
+        source_summary="Blob summary",
+    )
+    store.mark_approved(
+        document_action_id=draft["id"],
+        approved_by="alice",
+        destination_type="onedrive",
+        destination_ref="Reports/Exec",
+        output_formats=["pdf"],
+    )
+
+    result = service.finalize(document_action_id=draft["id"])
+
+    assert result["artifacts"][0]["blob_url"] == f"https://blob.example/document_artifacts/{draft['id']}/executive_briefing.pdf"
