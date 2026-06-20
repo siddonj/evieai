@@ -205,6 +205,11 @@ Board Meeting Briefing — Q2 2026
 - **Sharing** — Copy link to share with read-only access
 - **Work packet consistency** — Export suggestions can be driven from the same structured packet shown in chat, so summary and evidence stay aligned
 
+### Governed Document Workflows
+- **Document drafting from work packets** — Executive briefings, board reports, and operational reports can be drafted from grounded chat outcomes.
+- **Approval at finalization** — Drafting stays fast, but final export requires explicit user approval with destination and format selection.
+- **Recorded execution chain** — Approved artifacts can be stored to a selected destination and followed by a recorded announcement action.
+
 ---
 
 ## Administration & Operations

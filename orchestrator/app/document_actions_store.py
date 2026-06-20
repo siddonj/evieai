@@ -69,6 +69,19 @@ class DocumentActionsStore:
                 conn.execute(
                     "ALTER TABLE document_actions ADD COLUMN executed_at TEXT"
                 )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS document_action_announcements (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    document_action_id INTEGER NOT NULL,
+                    announcement_type TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(document_action_id) REFERENCES document_actions(id)
+                )
+                """
+            )
 
     def create_draft(
         self,
@@ -167,6 +180,41 @@ class DocumentActionsStore:
     ) -> dict[str, Any]:
         now = _utc_now()
         with self._connect() as conn:
+            announcement_row = conn.execute(
+                """
+                SELECT * FROM document_action_announcements
+                WHERE document_action_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (document_action_id,),
+            ).fetchone()
+            if announcement_row is None:
+                payload = dict(announcement)
+                payload.setdefault("document_action_id", document_action_id)
+                cur = conn.execute(
+                    """
+                    INSERT INTO document_action_announcements (
+                        document_action_id,
+                        announcement_type,
+                        status,
+                        payload_json,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        document_action_id,
+                        str(payload.get("type", "document_finalized")),
+                        str(payload.get("status", "created")),
+                        _canonical_json(payload),
+                        now,
+                    ),
+                )
+                announcement_row = conn.execute(
+                    "SELECT * FROM document_action_announcements WHERE id = ?",
+                    (cur.lastrowid,),
+                ).fetchone()
+            persisted_announcement = self._announcement_row_to_dict(announcement_row)
             conn.execute(
                 """
                 UPDATE document_actions
@@ -180,7 +228,7 @@ class DocumentActionsStore:
                 (
                     "executed",
                     _canonical_json(artifacts),
-                    _canonical_json(announcement),
+                    _canonical_json(persisted_announcement),
                     now,
                     now,
                     document_action_id,
@@ -201,6 +249,18 @@ class DocumentActionsStore:
         data["artifacts"] = json.loads(data.pop("artifacts_json") or "[]")
         data["announcement"] = json.loads(data.pop("announcement_json") or "null")
         return data
+
+    def _announcement_row_to_dict(self, row: sqlite3.Row | None) -> dict[str, Any]:
+        if row is None:
+            raise KeyError("document action announcement not found")
+
+        payload = json.loads(row["payload_json"] or "{}")
+        payload["id"] = row["id"]
+        payload["document_action_id"] = row["document_action_id"]
+        payload["type"] = row["announcement_type"]
+        payload["status"] = row["status"]
+        payload["created_at"] = row["created_at"]
+        return payload
 
 
 _DOCUMENT_ACTIONS_STORE: DocumentActionsStore | None = None

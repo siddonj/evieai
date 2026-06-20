@@ -62,3 +62,18 @@ def download_report(name: str) -> tuple[bytes, str] | None:
         return stream.readall(), props.content_type or "text/html"
     except Exception:
         return None
+
+
+def build_document_artifact_ref(
+    *,
+    destination_type: str,
+    destination_ref: str,
+    file_name: str,
+) -> str:
+    """Build a stable destination reference for a finalized document artifact."""
+    normalized_destination = destination_ref.strip("/")
+    normalized_type = destination_type.strip().lower() or "artifact"
+
+    if normalized_destination:
+        return f"{normalized_type}://{normalized_destination}/{file_name}"
+    return f"{normalized_type}://{file_name}"

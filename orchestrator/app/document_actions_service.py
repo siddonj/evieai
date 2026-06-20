@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from orchestrator.app.document_actions_store import DocumentActionsStore
+try:
+    from app.blob import build_document_artifact_ref
+    from app.document_actions_store import DocumentActionsStore
+except ImportError:
+    from orchestrator.app.blob import build_document_artifact_ref
+    from orchestrator.app.document_actions_store import DocumentActionsStore
 
 
 class DocumentActionsService:
@@ -27,8 +32,39 @@ class DocumentActionsService:
             draft_markdown=draft_markdown,
         )
 
+    def approve(
+        self,
+        *,
+        document_action_id: int,
+        approved_by: str,
+        destination_type: str,
+        destination_ref: str,
+        output_formats: list[str],
+    ) -> dict[str, Any]:
+        return self.store.mark_approved(
+            document_action_id=document_action_id,
+            approved_by=approved_by,
+            destination_type=destination_type,
+            destination_ref=destination_ref,
+            output_formats=output_formats,
+        )
+
     def finalize(self, *, document_action_id: int) -> dict[str, Any]:
         record = self.store.get(document_action_id)
+        destination = {
+            "type": record["destination_type"],
+            "ref": record["destination_ref"],
+        }
+
+        if record["status"] == "executed":
+            return {
+                "status": "executed",
+                "document_action": record,
+                "artifacts": record["artifacts"],
+                "destination": destination,
+                "announcement": record["announcement"],
+            }
+
         if record["status"] != "approved":
             return {
                 "status": "blocked",
@@ -39,16 +75,18 @@ class DocumentActionsService:
             {
                 "format": output_format,
                 "file_name": f"{record['title'].replace(' ', '_').lower()}.{output_format}",
+                "storage_ref": build_document_artifact_ref(
+                    destination_type=str(record["destination_type"] or "artifact"),
+                    destination_ref=str(record["destination_ref"] or ""),
+                    file_name=f"{record['title'].replace(' ', '_').lower()}.{output_format}",
+                ),
             }
             for output_format in record["output_formats"]
         ]
-        destination = {
-            "type": record["destination_type"],
-            "ref": record["destination_ref"],
-        }
         announcement = {
             "status": "created",
             "type": "document_finalized",
+            "channel": "internal_queue",
         }
         executed = self.store.mark_executed(
             document_action_id=document_action_id,
@@ -58,7 +96,7 @@ class DocumentActionsService:
         return {
             "status": "executed",
             "document_action": executed,
-            "artifacts": artifacts,
+            "artifacts": executed["artifacts"],
             "destination": destination,
-            "announcement": announcement,
+            "announcement": executed["announcement"],
         }

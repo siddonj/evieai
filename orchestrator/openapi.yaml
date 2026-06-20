@@ -148,6 +148,78 @@ paths:
         "429":
           description: Rate limit exceeded (20 req/min per user)
 
+  /document-actions/draft:
+    post:
+      operationId: create_document_draft
+      summary: Create a governed document draft from a work packet summary
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, work_packet_id, document_type, title, source_summary]
+              properties:
+                user_id:
+                  type: string
+                work_packet_id:
+                  type: string
+                document_type:
+                  type: string
+                title:
+                  type: string
+                source_summary:
+                  type: string
+      responses:
+        "200":
+          description: Draft document action created
+
+  /document-actions/{document_action_id}/approve:
+    post:
+      operationId: approve_document_draft
+      summary: Approve document finalization metadata
+      parameters:
+        - name: document_action_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approved_by, destination_type, destination_ref, output_formats]
+              properties:
+                approved_by:
+                  type: string
+                destination_type:
+                  type: string
+                destination_ref:
+                  type: string
+                output_formats:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Draft approved for finalization
+
+  /document-actions/{document_action_id}/finalize:
+    post:
+      operationId: finalize_document_draft
+      summary: Finalize an approved governed document
+      parameters:
+        - name: document_action_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Finalization result
+
   /download/{service}/{file_name}:
     get:
       operationId: download_file
@@ -300,3 +372,22 @@ components:
               type: array
               items:
                 type: object
+        document_actions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              status:
+                type: string
+              document_type:
+                type: string
+              title:
+                type: string
+              draft_version:
+                type: integer
+              destination_type:
+                type: string
+              destination_ref:
+                type: string

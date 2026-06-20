@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { marked } from 'marked'
 import { AuthProvider, useAuth } from './auth'
+import { DocumentWorkflowPanel } from './DocumentWorkflowPanel'
 import { LoginPage } from './LoginPage'
 import { ResultDeck, ToolBadge, LiveToolBadge, type ChatResponse } from './Cards'
 import { WorkPacketPanel } from './WorkPacketPanel'
@@ -729,6 +730,11 @@ function ChatView() {
                 className="text prose"
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }}
               />
+              {msg.data?.document_actions?.map((action) => (
+                <div key={action.id} className="message-section">
+                  <DocumentWorkflowPanel action={action} />
+                </div>
+              ))}
               {msg.data?.work_packet && (
                 <div className="message-section">
                   <WorkPacketPanel packet={msg.data.work_packet} />

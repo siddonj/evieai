@@ -175,11 +175,28 @@ export type WorkPacket = {
   suggested_exports?: string[]
 }
 
+export type DocumentAction = {
+  id: number
+  status: 'draft' | 'approved' | 'executed' | 'blocked'
+  document_type: string
+  title: string
+  draft_version?: number
+  destination_type?: string
+  destination_ref?: string
+  output_formats?: string[]
+  artifacts?: Array<{
+    format?: string
+    file_name?: string
+    storage_ref?: string
+  }>
+}
+
 export type ChatResponse = {
   reply: string
   tool_calls?: ToolCall[]
   mcp_results?: McpResult[]
   work_packet?: WorkPacket
+  document_actions?: DocumentAction[]
 }
 
 const DEFAULT_SQL_DEMO_SUMMARY = 'demo mode: returning multifamily & brokerage database'

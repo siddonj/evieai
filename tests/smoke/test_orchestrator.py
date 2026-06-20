@@ -117,6 +117,8 @@ async def test_chat_batch_includes_work_packet():
         assert "answer" in data["work_packet"]
         assert "reconciliation" in data["work_packet"]
         assert "evidence" in data["work_packet"]
+        assert "document_actions" in data
+        assert len(data["document_actions"]) == 3
 
 
 @pytest.mark.asyncio
@@ -137,8 +139,70 @@ async def test_openapi_schema_mentions_work_packet():
         schema = resp.json()
         chat_response = schema["components"]["schemas"]["ChatResponse"]
         assert "work_packet" in chat_response["properties"]
+        assert "document_actions" in chat_response["properties"]
         assert schema["paths"]["/chat"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/ChatResponse"
         assert schema["paths"]["/chat/batch"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/ChatResponse"
+
+
+@pytest.mark.asyncio
+async def test_document_workflow_draft_endpoint():
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            f"{_base_url()}/document-actions/draft",
+            json={
+                "user_id": "smoke-test",
+                "work_packet_id": "wp-1",
+                "document_type": "executive_briefing",
+                "title": "Executive Briefing",
+                "source_summary": "Summary",
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "draft"
+
+
+@pytest.mark.asyncio
+async def test_document_workflow_approve_and_finalize():
+    async with httpx.AsyncClient(timeout=20) as client:
+        draft = await client.post(
+            f"{_base_url()}/document-actions/draft",
+            json={
+                "user_id": "smoke-test",
+                "work_packet_id": "wp-1",
+                "document_type": "executive_briefing",
+                "title": "Executive Briefing",
+                "source_summary": "Summary",
+            },
+        )
+        draft_body = draft.json()
+
+        approved = await client.post(
+            f"{_base_url()}/document-actions/{draft_body['id']}/approve",
+            json={
+                "approved_by": "smoke-test",
+                "destination_type": "onedrive",
+                "destination_ref": "Reports/Exec",
+                "output_formats": ["pdf", "docx"],
+            },
+        )
+        assert approved.status_code == 200
+
+        finalized = await client.post(f"{_base_url()}/document-actions/{draft_body['id']}/finalize")
+        assert finalized.status_code == 200
+        body = finalized.json()
+        assert body["status"] == "executed"
+
+
+@pytest.mark.asyncio
+async def test_openapi_schema_mentions_document_actions():
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(f"{_base_url()}/openapi.json")
+        assert resp.status_code == 200
+        schema = resp.json()
+        assert "/document-actions/draft" in schema["paths"]
+        assert "/document-actions/{document_action_id}/approve" in schema["paths"]
+        assert "/document-actions/{document_action_id}/finalize" in schema["paths"]
 
 
 @pytest.mark.asyncio

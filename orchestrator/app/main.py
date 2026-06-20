@@ -48,6 +48,7 @@ from app.connector_runtime import (
     load_connector_config,
 )
 from app.connector_sync_store import get_connector_sync_store
+from app.document_actions_router import router as document_actions_router
 from app.event_signal_store import get_event_signal_store
 from app.llm_provider import LLMConfigError, get_llm_provider_status_from_env, get_llm_runtime_from_env
 from app.work_packets import build_work_packet
@@ -647,6 +648,7 @@ class ChatResponse(BaseModel):
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     mcp_results: list[dict[str, Any]] = Field(default_factory=list)
     work_packet: dict[str, Any] | None = None
+    document_actions: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class PerformanceDashboardResponse(BaseModel):
@@ -676,16 +678,44 @@ def _final_chat_payload(
     tool_calls: list[dict[str, Any]],
     mcp_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    work_packet = build_work_packet(
+        reply=reply,
+        tool_calls=tool_calls,
+        mcp_results=mcp_results,
+    )
     return {
         "reply": reply,
         "tool_calls": tool_calls,
         "mcp_results": mcp_results,
-        "work_packet": build_work_packet(
-            reply=reply,
-            tool_calls=tool_calls,
-            mcp_results=mcp_results,
-        ),
+        "work_packet": work_packet,
+        "document_actions": _suggest_document_actions(work_packet),
     }
+
+
+def _suggest_document_actions(work_packet: dict[str, Any]) -> list[dict[str, Any]]:
+    reconciliation = work_packet.get("reconciliation") or {}
+    if int(reconciliation.get("source_count") or 0) <= 0:
+        return []
+
+    summary = str((work_packet.get("answer") or {}).get("summary") or "").strip()
+    if not summary:
+        return []
+
+    templates = [
+        ("executive_briefing", "Executive Briefing"),
+        ("board_report", "Board Report"),
+        ("operational_report", "Operational Report"),
+    ]
+    return [
+        {
+            "id": -(index + 1),
+            "status": "draft",
+            "document_type": document_type,
+            "title": title,
+            "draft_version": 1,
+        }
+        for index, (document_type, title) in enumerate(templates)
+    ]
 
 
 def _summarize_mcp_result(result: dict[str, Any]) -> str:
@@ -1199,6 +1229,7 @@ async def _collect_batch(generator: AsyncGenerator[str, None]) -> ChatResponse:
     tool_calls: list[dict[str, Any]] = []
     mcp_results: list[dict[str, Any]] = []
     work_packet: dict[str, Any] | None = None
+    document_actions: list[dict[str, Any]] = []
     async for event_str in generator:
         for line in event_str.strip().split("\n"):
             if not line.startswith("data: "):
@@ -1212,14 +1243,17 @@ async def _collect_batch(generator: AsyncGenerator[str, None]) -> ChatResponse:
                 tool_calls = event.get("tool_calls", [])
                 mcp_results = event.get("mcp_results", [])
                 work_packet = event.get("work_packet")
+                document_actions = event.get("document_actions", [])
             elif event.get("type") == "error":
                 reply = f"Error: {event.get('message', 'Unknown error')}"
     final_reply = reply or "No response"
+    final_work_packet = work_packet or build_work_packet(final_reply, tool_calls, mcp_results)
     return ChatResponse(
         reply=final_reply,
         tool_calls=tool_calls,
         mcp_results=mcp_results,
-        work_packet=work_packet or build_work_packet(final_reply, tool_calls, mcp_results),
+        work_packet=final_work_packet,
+        document_actions=document_actions or _suggest_document_actions(final_work_packet),
     )
 
 
@@ -2589,3 +2623,4 @@ async def admin_post_mcp_data(service: str, payload: dict[str, Any]) -> dict[str
 
 
 app.include_router(auth_router)
+app.include_router(document_actions_router)
