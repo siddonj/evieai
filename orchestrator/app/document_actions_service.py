@@ -1,18 +1,25 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Any
 
 try:
-    from app.blob import build_document_artifact_ref
+    from app.blob import DOCUMENT_ARTIFACT_ROOT, write_local_document_artifact
     from app.document_actions_store import DocumentActionsStore
 except ImportError:
-    from orchestrator.app.blob import build_document_artifact_ref
+    from orchestrator.app.blob import DOCUMENT_ARTIFACT_ROOT, write_local_document_artifact
     from orchestrator.app.document_actions_store import DocumentActionsStore
 
 
 class DocumentActionsService:
-    def __init__(self, store: DocumentActionsStore) -> None:
+    def __init__(
+        self,
+        store: DocumentActionsStore,
+        artifact_root: Path | str | None = None,
+    ) -> None:
         self.store = store
+        self.artifact_root = Path(artifact_root or os.getenv("DOCUMENT_ARTIFACT_ROOT", DOCUMENT_ARTIFACT_ROOT))
 
     def create_draft(
         self,
@@ -72,15 +79,7 @@ class DocumentActionsService:
                 "document_action_id": document_action_id,
             }
         artifacts = [
-            {
-                "format": output_format,
-                "file_name": f"{record['title'].replace(' ', '_').lower()}.{output_format}",
-                "storage_ref": build_document_artifact_ref(
-                    destination_type=str(record["destination_type"] or "artifact"),
-                    destination_ref=str(record["destination_ref"] or ""),
-                    file_name=f"{record['title'].replace(' ', '_').lower()}.{output_format}",
-                ),
-            }
+            self._write_artifact(record=record, output_format=output_format)
             for output_format in record["output_formats"]
         ]
         announcement = {
@@ -100,3 +99,42 @@ class DocumentActionsService:
             "destination": destination,
             "announcement": executed["announcement"],
         }
+
+    def _write_artifact(
+        self,
+        *,
+        record: dict[str, Any],
+        output_format: str,
+    ) -> dict[str, Any]:
+        file_name = f"{record['title'].replace(' ', '_').lower()}.{output_format}"
+        content = self._render_artifact_content(record=record, output_format=output_format)
+        artifact_path = write_local_document_artifact(
+            artifact_root=self.artifact_root,
+            document_action_id=int(record["id"]),
+            file_name=file_name,
+            content=content,
+        )
+        return {
+            "format": output_format,
+            "file_name": file_name,
+            "storage_ref": str(artifact_path),
+            "size_bytes": artifact_path.stat().st_size,
+        }
+
+    def _render_artifact_content(
+        self,
+        *,
+        record: dict[str, Any],
+        output_format: str,
+    ) -> bytes:
+        destination_line = f"Destination: {record.get('destination_type') or 'local'} / {record.get('destination_ref') or 'n/a'}"
+        format_line = f"Format: {output_format}"
+        content = "\n".join(
+            [
+                record["draft_markdown"].rstrip(),
+                "",
+                destination_line,
+                format_line,
+            ]
+        )
+        return content.encode("utf-8")

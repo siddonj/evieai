@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 STORAGE_ACCOUNT = os.getenv("AZURE_STORAGE_ACCOUNT", "")
 STORAGE_KEY = os.getenv("AZURE_STORAGE_KEY", "")
 CONTAINER = "reports"
+DOCUMENT_ARTIFACT_ROOT = os.getenv("DOCUMENT_ARTIFACT_ROOT", "data/document_artifacts")
 
 
 def _get_client() -> Any | None:
@@ -77,3 +79,19 @@ def build_document_artifact_ref(
     if normalized_destination:
         return f"{normalized_type}://{normalized_destination}/{file_name}"
     return f"{normalized_type}://{file_name}"
+
+
+def write_local_document_artifact(
+    *,
+    artifact_root: Path | str | None,
+    document_action_id: int,
+    file_name: str,
+    content: bytes,
+) -> Path:
+    """Write a finalized governed document artifact to local storage."""
+    root = Path(artifact_root or DOCUMENT_ARTIFACT_ROOT)
+    artifact_dir = root / str(document_action_id)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = artifact_dir / file_name
+    artifact_path.write_bytes(content)
+    return artifact_path

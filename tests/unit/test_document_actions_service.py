@@ -39,7 +39,8 @@ def test_service_blocks_finalization_before_approval(tmp_path):
 
 def test_service_finalizes_after_approval_and_records_artifacts(tmp_path):
     store = DocumentActionsStore(db_path=tmp_path / "document_actions.db")
-    service = DocumentActionsService(store=store)
+    artifact_root = tmp_path / "document_artifacts"
+    service = DocumentActionsService(store=store, artifact_root=artifact_root)
     draft = service.create_draft(
         user_id="alice",
         work_packet_id="wp-1",
@@ -57,10 +58,14 @@ def test_service_finalizes_after_approval_and_records_artifacts(tmp_path):
 
     result = service.finalize(document_action_id=draft["id"])
     persisted = store.get(draft["id"])
+    first_artifact_path = artifact_root / str(draft["id"]) / "board_report.pdf"
 
     assert result["status"] == "executed"
     assert result["artifacts"][0]["format"] == "pdf"
-    assert result["artifacts"][0]["storage_ref"] == "onedrive://Reports/Board/board_report.pdf"
+    assert result["artifacts"][0]["storage_ref"] == str(first_artifact_path)
+    assert result["artifacts"][0]["size_bytes"] == first_artifact_path.stat().st_size
+    assert first_artifact_path.exists()
+    assert "# Board Report" in first_artifact_path.read_text(encoding="utf-8")
     assert result["destination"]["type"] == "onedrive"
     assert result["announcement"]["status"] == "created"
     assert result["announcement"]["id"] > 0
@@ -73,3 +78,4 @@ def test_service_finalizes_after_approval_and_records_artifacts(tmp_path):
 
     assert rerun["status"] == "executed"
     assert rerun["announcement"]["id"] == result["announcement"]["id"]
+    assert rerun["artifacts"][0]["storage_ref"] == result["artifacts"][0]["storage_ref"]
