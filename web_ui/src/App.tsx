@@ -526,7 +526,7 @@ function DocumentsView({
       <div className="bg-grid" aria-hidden="true" />
       <header className="hero">
         <p className="eyebrow">Governed Workflows</p>
-        <h1>Documents</h1>
+        <h1>Workflow library</h1>
         <p className="subtitle">
           Reopen governed document workflows, inspect artifacts, and continue approvals outside chat.
         </p>
@@ -534,13 +534,13 @@ function DocumentsView({
 
       <div className="dashboard-shell">
         <div className="dashboard-toolbar">
-          <button className="status-btn" onClick={onBack}>← Back to Chat</button>
-          <button className="status-btn" onClick={() => void loadDocuments()} disabled={loading}>⟳ Refresh</button>
+          <button className="status-btn" onClick={onBack}>Back to chat</button>
+          <button className="status-btn" onClick={() => void loadDocuments()} disabled={loading}>Refresh</button>
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
-        {loading && !documents.length && <div className="dashboard-loading">Loading document workflows...</div>}
-        {!loading && !documents.length && <div className="dashboard-loading">No document workflows yet.</div>}
+        {loading && !documents.length && <div className="dashboard-loading">Loading workflows...</div>}
+        {!loading && !documents.length && <div className="dashboard-loading">No workflows yet.</div>}
 
         {documents.length > 0 && (
           <div className="messages">
@@ -608,7 +608,7 @@ function OutboxView({
       <div className="bg-grid" aria-hidden="true" />
       <header className="hero">
         <p className="eyebrow">Downstream Handoffs</p>
-        <h1>Outbox</h1>
+        <h1>Delivery outbox</h1>
         <p className="subtitle">
           Visible completion feed for governed document announcements and downstream workflow handoffs.
         </p>
@@ -616,13 +616,13 @@ function OutboxView({
 
       <div className="dashboard-shell">
         <div className="dashboard-toolbar">
-          <button className="status-btn" onClick={onBack}>← Back to Chat</button>
-          <button className="status-btn" onClick={() => void loadOutbox()} disabled={loading}>⟳ Refresh</button>
+          <button className="status-btn" onClick={onBack}>Back to chat</button>
+          <button className="status-btn" onClick={() => void loadOutbox()} disabled={loading}>Refresh</button>
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
-        {loading && !actions.length && <div className="dashboard-loading">Loading outbox...</div>}
-        {!loading && !actions.length && <div className="dashboard-loading">No announcement actions yet.</div>}
+        {loading && !actions.length && <div className="dashboard-loading">Loading delivery feed...</div>}
+        {!loading && !actions.length && <div className="dashboard-loading">No delivery events yet.</div>}
 
         {actions.length > 0 && (
           <div className="messages">
@@ -703,20 +703,20 @@ function ReportViewer({
       <div className="bg-grid" aria-hidden="true" />
       <header className="hero report-hero">
         <p className="eyebrow">Presentation View</p>
-        <h1>{document?.title || 'Report viewer'}</h1>
+        <h1>{document?.title || 'Document report'}</h1>
         <p className="subtitle">
-          {document ? `Polished review surface for ${formatDocumentType(document.document_type)} with governed status, formal exports, and downstream handoff visibility.` : 'Loading governed report view.'}
+          {document ? `Review ${formatDocumentType(document.document_type)} with governed status, formal exports, and downstream handoff visibility.` : 'Loading governed report view.'}
         </p>
       </header>
 
       <div className="dashboard-shell report-shell">
         <div className="dashboard-toolbar">
-          <button className="status-btn" onClick={onBack}>← Back</button>
-          <button className="status-btn" onClick={() => void loadDocument()} disabled={loading}>⟳ Refresh</button>
+          <button className="status-btn" onClick={onBack}>Back</button>
+          <button className="status-btn" onClick={() => void loadDocument()} disabled={loading}>Refresh</button>
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
-        {loading && !document && <div className="dashboard-loading">Loading report...</div>}
+        {loading && !document && <div className="dashboard-loading">Loading document report...</div>}
 
         {document && (
           <>

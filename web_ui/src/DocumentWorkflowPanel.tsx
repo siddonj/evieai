@@ -3,9 +3,9 @@ import type { DocumentAction } from './Cards'
 
 const STATUS_LABELS: Record<DocumentAction['status'], string> = {
   draft: 'Draft ready',
-  approved: 'Approved for finalization',
+  approved: 'Ready to finalize',
   executed: 'Finalized',
-  blocked: 'Approval required',
+  blocked: 'Needs approval',
 }
 
 type DocumentWorkflowPanelProps = {
@@ -46,6 +46,8 @@ export function DocumentWorkflowPanel({
   const canFinalize = action.id > 0 && action.status === 'approved'
   const canExportPackage = action.id > 0 && action.status === 'executed'
   const canViewReport = action.id > 0 && action.status === 'executed'
+  const destinationLabel = destinationType.split('_').join(' ')
+  const formatSummary = selectedFormats.length > 0 ? selectedFormats.join(', ') : 'No formats selected'
 
   function toggleFormat(format: string) {
     setSelectedFormats((prev) => (
@@ -181,17 +183,24 @@ export function DocumentWorkflowPanel({
       } : undefined}
     >
       <div className="result-card-header">
-        <strong>{action.title}</strong>
-        <span>{STATUS_LABELS[action.status] ?? action.status}</span>
+        <div className="result-card-heading">
+          <strong>{action.title}</strong>
+          <span>{action.document_type.split('_').join(' ')}</span>
+        </div>
+        <span className={`workflow-pill ${action.status}`}>
+          {STATUS_LABELS[action.status] ?? action.status}
+        </span>
       </div>
-      <p>{action.document_type.split('_').join(' ')}</p>
+      <p className="result-card-summary">
+        {sourceSummary}
+      </p>
       {isSuggested && (
         <div className="tool-bar">
           <button className="status-btn" onClick={(event) => {
             event.stopPropagation()
             void handleCreateDraft()
           }} disabled={busy === 'create' || !userId}>
-            {busy === 'create' ? 'Creating…' : 'Create Draft'}
+            {busy === 'create' ? 'Starting…' : 'Start workflow'}
           </button>
         </div>
       )}
@@ -199,17 +208,17 @@ export function DocumentWorkflowPanel({
         <div className="result-grid">
           <article className="mini-card">
             <span>Destination</span>
-            <strong>{destinationType}</strong>
+            <strong>{destinationLabel}</strong>
             <input
               value={destinationRef}
               onChange={(event) => setDestinationRef(event.target.value)}
-              placeholder="Reports/Board"
+              placeholder="Folder, channel, or target record"
               disabled={action.status === 'approved' || action.status === 'executed' || busy !== null}
             />
           </article>
           <article className="mini-card">
             <span>Formats</span>
-            <strong>{selectedFormats.join(', ') || 'Select formats'}</strong>
+            <strong>{formatSummary}</strong>
             <div className="tool-bar">
               {['pdf', 'docx', 'xlsx'].map((format) => (
                 <button
@@ -221,7 +230,7 @@ export function DocumentWorkflowPanel({
                   }}
                   disabled={action.status === 'approved' || action.status === 'executed' || busy !== null}
                 >
-                  {selectedFormats.includes(format) ? `✓ ${format}` : format}
+                  {selectedFormats.includes(format) ? `Selected ${format}` : format}
                 </button>
               ))}
             </div>
@@ -256,7 +265,7 @@ export function DocumentWorkflowPanel({
             }}
             disabled={!canApprove || !destinationRef.trim() || selectedFormats.length === 0 || busy !== null}
           >
-            {busy === 'approve' ? 'Approving…' : 'Approve'}
+            {busy === 'approve' ? 'Approving…' : 'Approve draft'}
           </button>
           <button
             className="status-btn"
@@ -266,7 +275,7 @@ export function DocumentWorkflowPanel({
             }}
             disabled={!canFinalize || busy !== null}
           >
-            {busy === 'finalize' ? 'Finalizing…' : 'Finalize'}
+            {busy === 'finalize' ? 'Finalizing…' : 'Finalize packet'}
           </button>
           <button
             className="status-btn"
@@ -276,7 +285,7 @@ export function DocumentWorkflowPanel({
             }}
             disabled={!canExportPackage || busy !== null}
           >
-            {busy === 'export' ? 'Exporting…' : 'Export package'}
+            {busy === 'export' ? 'Exporting…' : 'Build export package'}
           </button>
           <button
             className="status-btn"
@@ -288,7 +297,7 @@ export function DocumentWorkflowPanel({
             }}
             disabled={!canViewReport}
           >
-            View report
+            Open report
           </button>
         </div>
       )}
