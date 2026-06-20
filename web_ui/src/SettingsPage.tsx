@@ -454,7 +454,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
       setGatewayReliability(reliability)
       setGatewayCanaryPct(config.rollout?.canary_traffic_pct ?? 100)
     } catch (err) {
-      setGatewayMessage(err instanceof Error ? err.message : 'Failed to load gateway admin data')
+      setGatewayMessage(err instanceof Error ? err.message : 'Failed to load routing settings')
     } finally {
       setGatewayLoading(false)
     }
@@ -471,7 +471,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
       setGatewayMessage(`Routing ${enabled ? 'enabled' : 'disabled'}`)
       await loadGatewayAdminData()
     } catch (err) {
-      setGatewayMessage(err instanceof Error ? err.message : 'Failed to toggle gateway')
+      setGatewayMessage(err instanceof Error ? err.message : 'Failed to update routing')
     }
   }
 
@@ -501,7 +501,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
       setGatewayMessage('Routing sync triggered')
       await loadGatewayAdminData()
     } catch (err) {
-      setGatewayMessage(err instanceof Error ? err.message : 'Failed to sync gateway')
+      setGatewayMessage(err instanceof Error ? err.message : 'Failed to sync routing')
     }
   }
 
@@ -512,7 +512,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
       setGatewayMessage('Routing cooldown reset')
       await loadGatewayAdminData()
     } catch (err) {
-      setGatewayMessage(err instanceof Error ? err.message : 'Failed to reset gateway')
+      setGatewayMessage(err instanceof Error ? err.message : 'Failed to reset routing')
     }
   }
 
@@ -544,9 +544,9 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             {userMessage && <section className="settings-section"><div className="settings-message">{userMessage}</div></section>}
             <section className="settings-section">
               <div className="approval-toolbar">
-              <h2>Model access</h2>
+                <h2>Model access</h2>
                 <button onClick={() => void loadLlmProviderStatus()} disabled={llmStatusLoading}>
-                  {llmStatusLoading ? 'Refreshing...' : 'Refresh'}
+                  {llmStatusLoading ? 'Updating...' : 'Update now'}
                 </button>
               </div>
               {!llmStatus ? (
@@ -679,10 +679,10 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
               <div className="approval-toolbar">
                 <h2>Service health</h2>
                 <button onClick={() => void loadServiceHealth()} disabled={serviceHealthLoading}>
-                  {serviceHealthLoading ? 'Refreshing...' : 'Refresh'}
+                  {serviceHealthLoading ? 'Updating...' : 'Update now'}
                 </button>
               </div>
-                <p className="settings-hint">
+              <p className="settings-hint">
                 Live status, response time, and reset controls for each service.
               </p>
               {serviceHealthMessage && <div className="settings-message">{serviceHealthMessage}</div>}
@@ -725,7 +725,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
               <div className="approval-toolbar">
                 <h2>Routing</h2>
                 <button onClick={() => void loadGatewayAdminData()} disabled={gatewayLoading}>
-                  {gatewayLoading ? 'Refreshing...' : 'Refresh'}
+                  {gatewayLoading ? 'Updating...' : 'Update now'}
                 </button>
               </div>
               {gatewayMessage && <div className="settings-message">{gatewayMessage}</div>}
@@ -790,7 +790,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                   <input
                     value={gatewayRolloutReason}
                     onChange={(e) => setGatewayRolloutReason(e.target.value)}
-                    placeholder="Reason for rollout update"
+                    placeholder="Reason for routing update"
                   />
                 </div>
               </div>
@@ -807,7 +807,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             </section>
 
             <section className="settings-section">
-              <h2>Upstream service health</h2>
+              <h2>Upstream service status</h2>
               {gatewayHealth?.services?.length ? (
                 <table className="users-table approvals-table">
                   <thead>
@@ -837,7 +837,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             </section>
 
             <section className="settings-section">
-                <h2>Routing reliability</h2>
+              <h2>Routing reliability</h2>
               <div className="approval-grid">
                 <ReliabilityCard title="Routing" data={gatewayReliability} />
               </div>
@@ -851,7 +851,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
               <div className="approval-toolbar">
                 <h2>Write-back reliability</h2>
                 <button onClick={() => void loadApprovalAdminData()} disabled={actionsLoading}>
-                  {actionsLoading ? 'Refreshing...' : 'Refresh'}
+                  {actionsLoading ? 'Updating...' : 'Update now'}
                 </button>
               </div>
               {actionsError && <div className="settings-message">{actionsError}</div>}
@@ -859,7 +859,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
 
               <div className="approval-grid">
                 <ReliabilityCard title="Actions" data={actionReliability} />
-                <ReliabilityCard title="Connector Sync" data={syncReliability} />
+                <ReliabilityCard title="Sync reliability" data={syncReliability} />
               </div>
             </section>
 
@@ -884,7 +884,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
               </div>
               {circuitState && (
                 <div className="settings-hint">
-                  last update: {new Date(circuitState.updated_at).toLocaleString()} {circuitState.reason ? `· ${circuitState.reason}` : ''}
+                  Last updated: {new Date(circuitState.updated_at).toLocaleString()} {circuitState.reason ? `· ${circuitState.reason}` : ''}
                 </div>
               )}
             </section>

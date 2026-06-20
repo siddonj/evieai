@@ -267,7 +267,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
             Live updates (5s)
           </label>
           <button className="toolbar-button" onClick={() => void fetchHealth()} disabled={loading}>
-            {loading ? 'Refreshing...' : 'Refresh'}
+            {loading ? 'Updating...' : 'Update now'}
           </button>
           <button className="toolbar-button" onClick={onBack}>
             Back to chat

@@ -267,7 +267,9 @@ function PerformanceDashboardView({ userId, onBack }: { userId?: string; onBack:
       <div className="dashboard-shell">
         <div className="dashboard-toolbar">
           <button className="status-btn" onClick={onBack}>Back to chat</button>
-          <button className="status-btn" onClick={() => void loadDashboard()} disabled={loading}>Refresh</button>
+          <button className="status-btn" onClick={() => void loadDashboard()} disabled={loading}>
+            {loading ? 'Updating...' : 'Update now'}
+          </button>
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
@@ -384,7 +386,9 @@ function NetworkDashboardView({ userId, onBack }: { userId?: string; onBack: () 
       <div className="dashboard-shell">
         <div className="dashboard-toolbar">
           <button className="status-btn" onClick={onBack}>Back to chat</button>
-          <button className="status-btn" onClick={() => void loadDashboard()} disabled={loading}>Refresh</button>
+          <button className="status-btn" onClick={() => void loadDashboard()} disabled={loading}>
+            {loading ? 'Updating...' : 'Update now'}
+          </button>
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
@@ -533,7 +537,9 @@ function DocumentsView({
       <div className="dashboard-shell">
         <div className="dashboard-toolbar">
           <button className="status-btn" onClick={onBack}>Back to chat</button>
-          <button className="status-btn" onClick={() => void loadDocuments()} disabled={loading}>Refresh</button>
+          <button className="status-btn" onClick={() => void loadDocuments()} disabled={loading}>
+            {loading ? 'Updating...' : 'Update now'}
+          </button>
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
@@ -615,7 +621,9 @@ function OutboxView({
       <div className="dashboard-shell">
         <div className="dashboard-toolbar">
           <button className="status-btn" onClick={onBack}>Back to chat</button>
-          <button className="status-btn" onClick={() => void loadOutbox()} disabled={loading}>Refresh</button>
+          <button className="status-btn" onClick={() => void loadOutbox()} disabled={loading}>
+            {loading ? 'Updating...' : 'Update now'}
+          </button>
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
@@ -710,7 +718,9 @@ function ReportViewer({
       <div className="dashboard-shell report-shell">
         <div className="dashboard-toolbar">
           <button className="status-btn" onClick={onBack}>Back to chat</button>
-          <button className="status-btn" onClick={() => void loadDocument()} disabled={loading}>Refresh</button>
+          <button className="status-btn" onClick={() => void loadDocument()} disabled={loading}>
+            {loading ? 'Updating...' : 'Update now'}
+          </button>
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
@@ -1121,10 +1131,10 @@ function ChatView() {
               </button>
               ))}
             </div>
-          <div className="section-label-row">
-            <span className="section-label">Quick prompts</span>
-            <span className="section-label-meta">{SUGGESTED_PROMPTS.length} shortcuts</span>
-          </div>
+            <div className="section-label-row">
+              <span className="section-label">Quick prompts</span>
+              <span className="section-label-meta">{SUGGESTED_PROMPTS.length} shortcuts</span>
+            </div>
 
           <div className="suggested-prompts">
             {SUGGESTED_PROMPTS.map((p) => (
