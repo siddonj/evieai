@@ -195,6 +195,12 @@ export type DocumentAction = {
     type?: string
     action_id?: string
     created_at?: string
+    result?: {
+      delivered?: boolean
+      channel?: string
+      message?: string
+      artifact_count?: number
+    }
   }
   artifacts?: Array<{
     format?: string

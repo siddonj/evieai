@@ -246,9 +246,18 @@ export function DocumentWorkflowPanel({
             <article key={`${artifact.file_name || artifact.format || 'artifact'}-${index}`} className="mini-card">
               <span>{artifact.format || 'artifact'}</span>
               <strong>{artifact.file_name || 'Generated file'}</strong>
-              <p>{artifact.storage_ref || 'Stored'}</p>
+              <p>{artifact.blob_url || artifact.storage_ref || 'Stored'}</p>
             </article>
           ))}
+        </div>
+      ) : null}
+      {action.announcement?.action_id ? (
+        <div className="result-grid">
+          <article className="mini-card">
+            <span>Announcement</span>
+            <strong>{action.announcement.status || 'queued'}</strong>
+            <p>{action.announcement.result?.message || action.announcement.action_id}</p>
+          </article>
         </div>
       ) : null}
       {error ? <p>{error}</p> : null}

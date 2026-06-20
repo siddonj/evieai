@@ -13,7 +13,32 @@ type DocumentsResponse = {
   items: DocumentAction[]
 }
 
-type View = 'chat' | 'settings' | 'service_health' | 'performance' | 'network' | 'admin' | 'documents'
+type ActionRow = {
+  action_id: string
+  source_id: string
+  entity_type: string
+  status: string
+  created_at: string
+  updated_at: string
+  payload?: {
+    title?: string
+    document_type?: string
+    message?: string
+    artifact_count?: number
+  }
+  result?: {
+    delivered?: boolean
+    channel?: string
+    message?: string
+    artifact_count?: number
+  } | null
+}
+
+type ActionsResponse = {
+  actions: ActionRow[]
+}
+
+type View = 'chat' | 'settings' | 'service_health' | 'performance' | 'network' | 'admin' | 'documents' | 'outbox'
 
 type PerformanceData = {
   generated_at: string
@@ -499,6 +524,87 @@ function DocumentsView({ userId, authHeader, onBack }: { userId?: string; authHe
   )
 }
 
+function OutboxView({ authHeader, onBack }: { authHeader?: string; onBack: () => void }) {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [actions, setActions] = useState<ActionRow[]>([])
+
+  async function loadOutbox() {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`${ORCHESTRATOR_URL}/actions?source_id=document_workflow&limit=50`, {
+        headers: authHeader ? { Authorization: authHeader } : undefined,
+      })
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`)
+      }
+      const payload = await res.json() as ActionsResponse
+      const outbox = (payload.actions || []).filter((action) => action.entity_type === 'announcement')
+      setActions(outbox)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      setError(`Could not load announcement outbox: ${message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadOutbox()
+  }, [authHeader])
+
+  return (
+    <div className="page">
+      <div className="bg-grid" aria-hidden="true" />
+      <header className="hero">
+        <p className="eyebrow">Downstream Handoffs</p>
+        <h1>Outbox</h1>
+        <p className="subtitle">
+          Visible completion feed for governed document announcements and downstream workflow handoffs.
+        </p>
+      </header>
+
+      <div className="dashboard-shell">
+        <div className="dashboard-toolbar">
+          <button className="status-btn" onClick={onBack}>← Back to Chat</button>
+          <button className="status-btn" onClick={() => void loadOutbox()} disabled={loading}>⟳ Refresh</button>
+        </div>
+
+        {error && <div className="dashboard-error">{error}</div>}
+        {loading && !actions.length && <div className="dashboard-loading">Loading outbox...</div>}
+        {!loading && !actions.length && <div className="dashboard-loading">No announcement actions yet.</div>}
+
+        {actions.length > 0 && (
+          <div className="messages">
+            {actions.map((action) => (
+              <section key={action.action_id} className="result-card">
+                <div className="result-card-header">
+                  <strong>{action.payload?.title || 'Document announcement'}</strong>
+                  <span>{action.status}</span>
+                </div>
+                <p>{action.payload?.document_type?.split('_').join(' ') || 'announcement'}</p>
+                <div className="result-grid">
+                  <article className="mini-card">
+                    <span>Delivery</span>
+                    <strong>{action.result?.delivered ? 'Delivered' : 'Pending'}</strong>
+                    <p>{action.result?.channel || 'internal_queue'}</p>
+                  </article>
+                  <article className="mini-card">
+                    <span>Message</span>
+                    <strong>{action.result?.artifact_count || action.payload?.artifact_count || 0} artifact(s)</strong>
+                    <p>{action.result?.message || action.payload?.message || 'Announcement queued'}</p>
+                  </article>
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function saveHistory(msgs: ChatMessage[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs.slice(-50))) // keep last 50
@@ -755,6 +861,10 @@ function ChatView() {
     return <DocumentsView userId={user?.email} authHeader={authHeader} onBack={() => setView('chat')} />
   }
 
+  if (view === 'outbox') {
+    return <OutboxView authHeader={authHeader} onBack={() => setView('chat')} />
+  }
+
   const hasConversation = messages.length > 1
 
   return (
@@ -829,6 +939,9 @@ function ChatView() {
             </button>
             <button className="status-btn" onClick={() => setView('documents')} title="Document Workflows">
               Documents
+            </button>
+            <button className="status-btn" onClick={() => setView('outbox')} title="Workflow Outbox">
+              Outbox
             </button>
             {hasConversation && (
               <button className="status-btn" onClick={clearChat} title="Clear conversation">
