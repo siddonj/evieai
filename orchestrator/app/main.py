@@ -451,11 +451,11 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "query_sql",
-            "description": "Query the SQL database containing: multifamily properties, real estate contacts, broker deals, CRM pipeline, commissions, and brokerage business metrics. ONLY use for real estate/brokerage data. Do NOT use for employees, policies, or general documents — use query_files for those.",
+            "description": "Query the SQL database containing: multifamily properties, real estate contacts, broker deals, work orders, CRM pipeline, commissions, and brokerage business metrics. ONLY use for real estate/brokerage and property-operations data. Do NOT use for employees, policies, or general documents — use query_files for those.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Natural language query for real estate/brokerage data, e.g. 'multifamily properties in Memphis', 'deals in closing stage', 'top agents by commission'."},
+                    "query": {"type": "string", "description": "Natural language query for real estate, brokerage, or property operations data, e.g. 'multifamily properties in Memphis', 'deals in closing stage', 'open work orders', 'top agents by commission'."},
                 },
                 "required": ["query"],
             },
@@ -768,6 +768,29 @@ def _normalize_postgresql_query(query: str, user_message: str) -> str:
     return raw
 
 
+def _is_work_order_intent(message: str) -> bool:
+    lower = message.lower()
+    return any(
+        k in lower
+        for k in (
+            "work order",
+            "work orders",
+            "maintenance request",
+            "maintenance requests",
+            "service request",
+            "service requests",
+            "ticket",
+            "tickets",
+            "repair",
+            "repairs",
+        )
+    )
+
+
+def _work_order_query() -> str:
+    return "open work orders"
+
+
 # ─── MCP Calling ──────────────────────────────────────────────────────
 
 async def _call_mcp_direct(tool_name: str, query: str, user_id: str | None = None) -> dict[str, Any]:
@@ -1012,6 +1035,7 @@ async def _stream_chat_response(
         "query_files for employee rosters, financial reports, product roadmaps, meeting notes, and documents, "
         "query_mail for emails, query_onedrive for OneDrive files, "
         "query_sql for CRM/contacts/companies/pipeline/metrics, "
+        "query_sql for open work orders, maintenance requests, service tickets, and repairs, "
         "query_postgresql for PostgreSQL operational tables and read-only SQL, "
         "query_knowledge_base for SOPs/policies/handbook, "
         "query_analytics for KPIs/trends/insights, "
@@ -1024,6 +1048,7 @@ async def _stream_chat_response(
         "\n• User: 'Show me meeting notes from May' → Use: query_files (returns Meeting-Notes)"
         "\n• User: 'Who are our top sales people by commission?' → Use: query_analytics or query_sql (brokerage data)"
         "\n• User: 'What properties do we have in Memphis?' → Use: query_sql (multifamily/real estate database)"
+        "\n• User: 'Show me the open work orders' → Use: query_sql (property maintenance queue)"
         "\n• User: 'What is our remote work policy?' → Use: query_knowledge_base (company policies)"
         "\n• User: 'Send me the latest email from john' → Use: query_mail (Outlook mailbox)"
         "\n• User: 'Generate an executive summary' → Use: query_document_generation (creates documents)"
@@ -1048,6 +1073,7 @@ async def _stream_chat_response(
         "packet loss", "throughput", "access point", "incident", "uptime",
     )
     network_intent = any(k in payload.message.lower() for k in network_keywords)
+    work_order_intent = _is_work_order_intent(payload.message)
     blocked_tools: set[str] = {"query_analytics", "query_dashboard"} if network_intent else set()
 
     if network_intent:
@@ -1055,6 +1081,12 @@ async def _stream_chat_response(
             "\n\nNetwork telemetry mode is active for this request. "
             "Use query_sql for network telemetry facts. "
             "Do NOT call query_analytics or query_dashboard for this response."
+        )
+    elif work_order_intent:
+        messages[0]["content"] += (
+            "\n\nWork order mode is active for this request. "
+            "Use query_sql for open work orders, maintenance requests, service tickets, and repairs. "
+            "Do NOT answer from memory or generalize from unrelated data sources."
         )
 
     try:
@@ -1099,6 +1131,32 @@ async def _stream_chat_response(
         messages.append({
             "role": "tool",
             "tool_call_id": "forced_query_sql_network",
+            "content": json.dumps(forced_result),
+        })
+    elif work_order_intent:
+        forced_name = "query_sql"
+        forced_query = _work_order_query()
+        forced_label = _TOOL_LABELS.get(forced_name, forced_name)
+        yield _sse({"type": "tool", "name": forced_name, "label": forced_label, "status": "calling"})
+        forced_result = await _call_mcp(forced_name, forced_query, payload.user_id)
+        forced_result = _augment_files_with_urls(forced_result, _TOOL_TO_ROUTE.get(forced_name, ""))
+        forced_summary = _summarize_mcp_result(forced_result)
+        yield _sse({"type": "tool", "name": forced_name, "label": forced_label, "status": "done", "summary": forced_summary})
+
+        tool_calls_log.append({"name": forced_name, "args": {"query": forced_query, "forced": True}})
+        mcp_results_log.append(forced_result)
+        messages.append({
+            "role": "assistant",
+            "content": "I retrieved live work-order data from SQL and will summarize it.",
+            "tool_calls": [{
+                "id": "forced_query_sql_work_orders",
+                "type": "function",
+                "function": {"name": forced_name, "arguments": json.dumps({"query": forced_query})},
+            }],
+        })
+        messages.append({
+            "role": "tool",
+            "tool_call_id": "forced_query_sql_work_orders",
             "content": json.dumps(forced_result),
         })
 

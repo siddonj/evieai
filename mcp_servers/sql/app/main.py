@@ -207,6 +207,17 @@ _DEMO_R1_DEVICE_DAILY_METRICS = [
     {"id": 7008, "device_id": 301, "metric_date": "2026-05-26", "uptime_pct": 98.58, "latency_ms": 23.4, "packet_loss_pct": 1.22, "throughput_mbps": 231.4, "incidents": 4},
 ]
 
+_DEMO_WORK_ORDERS = [
+    {"id": 1, "property_id": 1, "unit_id": 14, "resident_id": 41, "category": "HVAC", "priority": "High", "status": "Open", "description": "Unit 14 thermostat not responding", "submitted_at": "2026-06-18T08:15:00", "completed_at": None, "assigned_vendor": "CoolBreeze Services", "estimated_cost": 325.0, "actual_cost": None},
+    {"id": 2, "property_id": 2, "unit_id": 22, "resident_id": 57, "category": "Plumbing", "priority": "Medium", "status": "Open", "description": "Kitchen sink drain is slow", "submitted_at": "2026-06-18T09:30:00", "completed_at": None, "assigned_vendor": "Mid-South Plumbing", "estimated_cost": 180.0, "actual_cost": None},
+    {"id": 3, "property_id": 3, "unit_id": 8, "resident_id": 18, "category": "Electrical", "priority": "High", "status": "In Progress", "description": "Bedroom outlet not working", "submitted_at": "2026-06-17T15:45:00", "completed_at": None, "assigned_vendor": "BrightSpark Electric", "estimated_cost": 210.0, "actual_cost": None},
+    {"id": 4, "property_id": 4, "unit_id": 3, "resident_id": 9, "category": "Appliance", "priority": "Low", "status": "Completed", "description": "Dishwasher seal replacement", "submitted_at": "2026-06-14T11:20:00", "completed_at": "2026-06-15T14:10:00", "assigned_vendor": "Reliable Appliance", "estimated_cost": 95.0, "actual_cost": 88.0},
+    {"id": 5, "property_id": 5, "unit_id": None, "resident_id": None, "category": "Exterior", "priority": "Medium", "status": "Open", "description": "Pool gate latch repair", "submitted_at": "2026-06-18T12:05:00", "completed_at": None, "assigned_vendor": "NorthStar Facilities", "estimated_cost": 140.0, "actual_cost": None},
+    {"id": 6, "property_id": 6, "unit_id": 71, "resident_id": 144, "category": "HVAC", "priority": "High", "status": "Open", "description": "AC blowing warm air", "submitted_at": "2026-06-19T07:50:00", "completed_at": None, "assigned_vendor": "CoolBreeze Services", "estimated_cost": 410.0, "actual_cost": None},
+    {"id": 7, "property_id": 7, "unit_id": 12, "resident_id": 29, "category": "Plumbing", "priority": "Medium", "status": "Completed", "description": "Bathroom faucet replacement", "submitted_at": "2026-06-12T10:00:00", "completed_at": "2026-06-13T16:30:00", "assigned_vendor": "Mid-South Plumbing", "estimated_cost": 120.0, "actual_cost": 112.0},
+    {"id": 8, "property_id": 8, "unit_id": 44, "resident_id": 96, "category": "Electrical", "priority": "Low", "status": "Open", "description": "Bedroom light flickering", "submitted_at": "2026-06-19T08:40:00", "completed_at": None, "assigned_vendor": "BrightSpark Electric", "estimated_cost": 165.0, "actual_cost": None},
+]
+
 # ─── Pre-computed analytics ───────────────────────────────────────────
 
 _TOTAL_PROPERTIES = len(_DEMO_PROPERTIES)
@@ -242,6 +253,14 @@ def _keyword_match(q: str, words: list[str]) -> bool:
     return any(w in q for w in words)
 
 
+def _filter_work_orders(rows: list[dict[str, Any]], q: str) -> list[dict[str, Any]]:
+    if _keyword_match(q, ["open", "pending", "in progress", "active"]):
+        return [row for row in rows if str(row.get("status", "")).lower() in {"open", "pending", "in progress", "active"}]
+    if _keyword_match(q, ["closed", "completed", "done", "resolved"]):
+        return [row for row in rows if str(row.get("status", "")).lower() in {"closed", "completed", "done", "resolved"}]
+    return rows
+
+
 def _demo_response(payload: QueryRequest) -> dict[str, Any]:
     """Return rich multifamily demo data when DAB is unavailable."""
     q = payload.query.lower()
@@ -269,6 +288,10 @@ def _demo_response(payload: QueryRequest) -> dict[str, Any]:
         "appraisal", "meeting", "call", "follow", "upcoming",
         "schedule", "calendar", "task", "open item"
     ])
+    fetch_work_orders = _keyword_match(q, [
+        "work order", "work orders", "maintenance", "service request",
+        "service requests", "ticket", "tickets", "repair", "repairs",
+    ])
     fetch_metrics = _keyword_match(q, [
         "total", "sum", "average", "how many", "count", "pipeline",
         "kpi", "metric", "portfolio", "performance", "summary",
@@ -280,7 +303,7 @@ def _demo_response(payload: QueryRequest) -> dict[str, Any]:
     ])
 
     # Default: return everything if nothing specific matched
-    if not any([fetch_properties, fetch_contacts, fetch_deals, fetch_activities, fetch_metrics, fetch_r1]):
+    if not any([fetch_properties, fetch_contacts, fetch_deals, fetch_activities, fetch_work_orders, fetch_metrics, fetch_r1]):
         fetch_properties = True
         fetch_deals = True
         fetch_metrics = True
@@ -352,6 +375,11 @@ def _demo_response(payload: QueryRequest) -> dict[str, Any]:
             activities = [a for a in activities if a["status"] == "Completed"]
         results["activities"] = activities
         results["activities_summary"] = f"Found {len(activities)} activities"
+
+    if fetch_work_orders:
+        work_orders = _filter_work_orders(_DEMO_WORK_ORDERS, q)
+        results["work_orders"] = work_orders
+        results["work_orders_summary"] = f"Found {len(work_orders)} work orders"
 
     if fetch_metrics or (fetch_deals and _keyword_match(q, ["pipeline", "total", "value", "summary"])):
         results["metrics"] = {
@@ -664,6 +692,7 @@ async def mcp_query(payload: QueryRequest) -> dict[str, Any]:
             try:
                 results["work_orders"] = await _fetch_dab_values(client, "WorkOrder")
                 if results["work_orders"]:
+                    results["work_orders"] = _filter_work_orders(results["work_orders"], q)
                     results["work_orders_summary"] = f"Found {len(results['work_orders'])} work orders"
                     dab_available = True
             except Exception as exc:
