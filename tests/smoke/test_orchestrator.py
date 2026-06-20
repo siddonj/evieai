@@ -195,6 +195,60 @@ async def test_document_workflow_approve_and_finalize():
 
 
 @pytest.mark.asyncio
+async def test_chat_document_workflow_end_to_end():
+    async with httpx.AsyncClient(timeout=45) as client:
+        chat = await client.post(
+            f"{_base_url()}/chat/batch",
+            json={"message": "Show me the sales pipeline", "user_id": "smoke-test"},
+        )
+        assert chat.status_code == 200
+        chat_body = chat.json()
+        assert "work_packet" in chat_body
+        assert "document_actions" in chat_body
+        assert len(chat_body["document_actions"]) > 0
+
+        suggested = chat_body["document_actions"][0]
+        work_packet = chat_body["work_packet"]
+
+        draft = await client.post(
+            f"{_base_url()}/document-actions/draft",
+            json={
+                "user_id": "smoke-test",
+                "work_packet_id": f"smoke-chat-{suggested['document_type']}",
+                "document_type": suggested["document_type"],
+                "title": suggested["title"],
+                "source_summary": work_packet["answer"]["summary"],
+            },
+        )
+        assert draft.status_code == 200
+        draft_body = draft.json()
+        assert draft_body["status"] == "draft"
+
+        approved = await client.post(
+            f"{_base_url()}/document-actions/{draft_body['id']}/approve",
+            json={
+                "approved_by": "smoke-test",
+                "destination_type": "onedrive",
+                "destination_ref": "Reports/Exec",
+                "output_formats": ["pdf", "docx"],
+            },
+        )
+        assert approved.status_code == 200
+        approved_body = approved.json()
+        assert approved_body["status"] == "approved"
+
+        finalized = await client.post(f"{_base_url()}/document-actions/{draft_body['id']}/finalize")
+        assert finalized.status_code == 200
+        finalized_body = finalized.json()
+        assert finalized_body["status"] == "executed"
+        assert len(finalized_body["artifacts"]) == 2
+        assert finalized_body["artifacts"][0]["storage_ref"]
+        assert finalized_body["artifacts"][0]["size_bytes"] > 0
+        assert finalized_body["announcement"]["action_id"]
+        assert finalized_body["announcement"]["status"] == "approved"
+
+
+@pytest.mark.asyncio
 async def test_openapi_schema_mentions_document_actions():
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(f"{_base_url()}/openapi.json")

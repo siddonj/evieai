@@ -5,12 +5,16 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from app.actions_store import get_actions_store
 from app.document_actions_service import DocumentActionsService
 from app.document_actions_store import get_document_actions_store
 
 
 router = APIRouter(prefix="/document-actions", tags=["document-actions"])
-DOCUMENT_ACTIONS_SERVICE = DocumentActionsService(store=get_document_actions_store())
+DOCUMENT_ACTIONS_SERVICE = DocumentActionsService(
+    store=get_document_actions_store(),
+    actions_store=get_actions_store(),
+)
 
 
 class CreateDraftRequest(BaseModel):
