@@ -314,7 +314,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
               }}
             >
               <div className="health-percentage">{health.health_percentage}%</div>
-              <div className="health-label">Health</div>
+              <div className="health-label">Overall health</div>
             </div>
 
             <div className="kpi-cards">
@@ -325,7 +325,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
               <div className="kpi-card">
                 <div className="kpi-icon">Coverage</div>
-                <div className="kpi-label">Active Services</div>
+                <div className="kpi-label">Reachable services</div>
                 <div className="kpi-value">
                   {reachableCount}/{totalCount}
                 </div>
@@ -431,7 +431,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
           {/* Incident Banner */}
           {downServices >= INCIDENT_THRESHOLD && (
             <div className="incident-banner">
-              <span className="incident-icon">Alert</span>
+              <span className="incident-icon">Incident</span>
               <span className="incident-text">
                 {downServices} services are currently unavailable
               </span>
@@ -440,7 +440,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
           {/* Data Sources */}
           <div className="datasource-section">
-            <h2>Data sources</h2>
+            <h2>Reference sources</h2>
             <div className="datasource-grid">
               {[
                 { name: 'Real Estate DB', status: 'Available' },

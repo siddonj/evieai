@@ -544,7 +544,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             {userMessage && <section className="settings-section"><div className="settings-message">{userMessage}</div></section>}
             <section className="settings-section">
               <div className="approval-toolbar">
-              <h2>Model provider</h2>
+              <h2>Model access</h2>
                 <button onClick={() => void loadLlmProviderStatus()} disabled={llmStatusLoading}>
                   {llmStatusLoading ? 'Refreshing...' : 'Refresh'}
                 </button>
@@ -588,8 +588,8 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             </section>
 
             <section className="settings-section">
-              <h2>MCP server status</h2>
-              <p className="settings-hint">Toggle MCP services on or off. Disabled services are hidden from the agent.</p>
+              <h2>Service inventory</h2>
+              <p className="settings-hint">Toggle services on or off. Disabled services are hidden from the agent.</p>
               {serverLoading ? (
                 <div className="settings-loading">Loading service inventory...</div>
               ) : (
@@ -626,7 +626,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             {/* Data Preview Panel */}
             {Object.keys(dataPreview).length > 0 && (
               <section className="settings-section">
-                <h2>Data preview</h2>
+                <h2>Service data preview</h2>
                 {Object.entries(dataPreview).map(([service, data]) => (
                   <div key={service} className="data-preview-panel">
                     <div className="data-preview-header">
@@ -640,7 +640,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             )}
 
             <section className="settings-section">
-              <h2>Add data to an MCP service</h2>
+              <h2>Add data to a service</h2>
               <p className="settings-hint">
                 Upload new documents, user context, templates, or analytics records. Select a service and paste JSON.
               </p>
