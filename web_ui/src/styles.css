@@ -1151,9 +1151,19 @@ h1 {
   color: var(--muted);
 }
 
-.status > span:first-child {
+.status-meta {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.status-meta > span:first-child {
   color: #dfe8f4;
   font-size: 0.92rem;
+}
+
+.status-subcopy {
+  color: #8fa3bc;
+  font-size: 0.8rem;
 }
 
 .status-actions {
@@ -1325,6 +1335,21 @@ h1 {
   background: rgba(255, 255, 255, 0.025);
 }
 
+.composer-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.composer-title {
+  color: #8eb6ff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
 textarea,
 .settings-field input,
 .settings-field select,
@@ -1371,6 +1396,11 @@ textarea:focus,
 .login-btn:hover {
   background: linear-gradient(135deg, rgba(227, 180, 104, 1), rgba(245, 209, 138, 1));
   color: #08101a;
+}
+
+.composer-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .composer-hint {
@@ -1672,6 +1702,19 @@ textarea:focus,
 
   .status-btn {
     flex: 1 1 auto;
+  }
+
+  .composer-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .composer-actions {
+    justify-content: stretch;
+  }
+
+  .composer-send {
+    width: 100%;
   }
 
   .bubble {

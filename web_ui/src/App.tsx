@@ -1139,44 +1139,47 @@ function ChatView() {
       <div className="chat-shell">
         {/* Status Bar */}
         <div className="status">
-          <span>{statusText}</span>
+          <div className="status-meta">
+            <span>{statusText}</span>
+            <span className="status-subcopy">{user?.email || 'Local session'}</span>
+          </div>
           <span className="status-actions">
             {isAdmin && (
               <>
-            <button className="status-btn" onClick={() => setView('admin')} title="System Health">
+            <button className="status-btn" onClick={() => setView('admin')} title="Open operations dashboard">
                   Admin
                 </button>
-                <button className="status-btn" onClick={() => setView('settings')} title="Settings">
+                <button className="status-btn" onClick={() => setView('settings')} title="Open settings">
                   Settings
                 </button>
               </>
             )}
             {!isAdmin && (
-              <button className="status-btn" onClick={() => setView('settings')} title="Settings">
+              <button className="status-btn" onClick={() => setView('settings')} title="Open settings">
                 Settings
               </button>
             )}
-            <button className="status-btn" onClick={() => setView('service_health')} title="Service Health">
+            <button className="status-btn" onClick={() => setView('service_health')} title="Open service health">
               Services
             </button>
-            <button className="status-btn" onClick={() => setView('performance')} title="Performance Dashboard">
+            <button className="status-btn" onClick={() => setView('performance')} title="Open performance dashboard">
               Dashboard
             </button>
-            <button className="status-btn" onClick={() => setView('network')} title="Network Dashboard">
+            <button className="status-btn" onClick={() => setView('network')} title="Open network dashboard">
               Network
             </button>
-            <button className="status-btn" onClick={() => setView('documents')} title="Document Workflows">
+            <button className="status-btn" onClick={() => setView('documents')} title="Open document workflows">
               Documents
             </button>
-            <button className="status-btn" onClick={() => setView('outbox')} title="Workflow Outbox">
+            <button className="status-btn" onClick={() => setView('outbox')} title="Open workflow outbox">
               Outbox
             </button>
             {hasConversation && (
-              <button className="status-btn" onClick={clearChat} title="Clear conversation">
+              <button className="status-btn" onClick={clearChat} title="Clear conversation history">
                 Clear chat
               </button>
             )}
-            <button className="status-btn" onClick={logout} title="Logout">
+            <button className="status-btn" onClick={logout} title="Sign out">
               Logout
             </button>
           </span>
@@ -1289,6 +1292,10 @@ function ChatView() {
 
         {/* Composer */}
         <div className="composer">
+          <div className="composer-top">
+            <div className="composer-title">Compose request</div>
+            <div className="composer-hint">Enter to send · Shift+Enter for new line</div>
+          </div>
           <textarea
             ref={inputRef}
             value={input}
@@ -1298,10 +1305,11 @@ function ChatView() {
             rows={4}
             disabled={loading}
           />
-          <button className="composer-send" onClick={() => sendMessage()} disabled={loading || !input.trim()}>
-            {loading ? 'Thinking…' : 'Send'}
-          </button>
-          <div className="composer-hint">Enter to send · Shift+Enter for new line</div>
+          <div className="composer-actions">
+            <button className="composer-send" onClick={() => sendMessage()} disabled={loading || !input.trim()}>
+              {loading ? 'Thinking…' : 'Send request'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
