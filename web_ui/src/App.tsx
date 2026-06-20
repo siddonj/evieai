@@ -160,14 +160,14 @@ const SUGGESTED_PROMPTS = [
 const PLAYBOOKS: Playbook[] = [
   {
     id: 'portfolio-performance-review',
-    eyebrow: 'Hero playbook',
+    eyebrow: 'Primary workflow',
     title: 'Portfolio performance review',
     question: 'Generate a portfolio performance review with NOI, occupancy, rent trends, risk flags, and an export-ready executive summary.',
     outputs: ['Governed draft', 'Presentation report', 'PDF / DOCX / XLSX package'],
   },
   {
     id: 'board-packet',
-    eyebrow: 'Secondary scenario',
+    eyebrow: 'Secondary workflow',
     title: 'Board packet',
     question: 'Prepare a board packet summarizing portfolio health, key risks, capital priorities, and next-quarter actions.',
     outputs: ['Board-ready narrative', 'Approval workflow', 'Formal export package'],
@@ -1090,7 +1090,7 @@ function ChatView() {
           </div>
         </div>
         {IS_DEV_DEMO && <div className="mode-badge">Demo mode</div>}
-        <p className="eyebrow">AI-Powered Agentic Workspace</p>
+        <p className="eyebrow">Operations workspace</p>
         <h1>Workspace Intelligence</h1>
         <p className="subtitle">
           Ask natural-language questions across properties, deals, contacts, market data, and documents. Evie routes each request through the right tools and synthesizes a concise answer.
@@ -1100,6 +1100,10 @@ function ChatView() {
       {/* Suggested Prompts */}
       {showPrompts && !loading && (
         <>
+          <div className="section-label-row">
+            <span className="section-label">Recommended workflows</span>
+            <span className="section-label-meta">{PLAYBOOKS.length} options</span>
+          </div>
           <div className="playbook-grid">
             {PLAYBOOKS.map((playbook) => (
               <button
@@ -1117,7 +1121,11 @@ function ChatView() {
                   ))}
                 </div>
               </button>
-            ))}
+              ))}
+            </div>
+          <div className="section-label-row">
+            <span className="section-label">Quick prompts</span>
+            <span className="section-label-meta">{SUGGESTED_PROMPTS.length} shortcuts</span>
           </div>
 
           <div className="suggested-prompts">

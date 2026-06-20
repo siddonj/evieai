@@ -1093,6 +1093,28 @@ h1 {
   margin: 16px 0 18px;
 }
 
+.section-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 1.15rem 0 0.7rem;
+}
+
+.section-label {
+  color: #8eb6ff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.section-label-meta {
+  color: #95a8bf;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 .prompt-chip {
   display: flex;
   align-items: center;
@@ -1102,15 +1124,15 @@ h1 {
   padding: 13px 14px;
   border-radius: 18px;
   border: 1px solid rgba(160, 177, 201, 0.16);
-  background: rgba(255, 255, 255, 0.035);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.03));
   color: var(--ink);
   box-shadow: none;
   text-align: left;
 }
 
 .prompt-chip:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(217, 169, 106, 0.34);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.045));
+  border-color: rgba(132, 183, 255, 0.28);
   transform: translateY(-1px);
 }
 
@@ -1125,13 +1147,14 @@ h1 {
   font-weight: 800;
   letter-spacing: 0.12em;
   color: #0d1420;
-  background: linear-gradient(135deg, rgba(217, 169, 106, 0.95), rgba(132, 183, 255, 0.95));
+  background: linear-gradient(135deg, rgba(132, 183, 255, 0.95), rgba(118, 214, 155, 0.88));
   flex: none;
 }
 
 .prompt-label {
   font-size: 0.92rem;
   font-weight: 600;
+  line-height: 1.35;
 }
 
 .chat-shell {
@@ -5021,6 +5044,11 @@ input:checked + .mcp-toggle-slider::before {
   .live-tool-summary {
     max-width: 80px;
   }
+
+  .section-label-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 
@@ -5241,13 +5269,13 @@ h1 {
 
 .playbook-card {
   display: grid;
-  gap: 0.7rem;
-  padding: 1rem 1.05rem;
-  border-radius: 18px;
-  border: 1px solid rgba(110, 194, 255, 0.2);
+  gap: 0.75rem;
+  padding: 1.05rem 1.1rem;
+  border-radius: 20px;
+  border: 1px solid rgba(160, 177, 201, 0.16);
   background:
-    linear-gradient(145deg, rgba(8, 23, 52, 0.96), rgba(17, 47, 102, 0.84)),
-    radial-gradient(circle at top right, rgba(45, 212, 191, 0.18), transparent 34%);
+    linear-gradient(145deg, rgba(8, 19, 40, 0.96), rgba(13, 32, 68, 0.86)),
+    radial-gradient(circle at top right, rgba(132, 183, 255, 0.12), transparent 34%);
   color: #eef4ff;
   text-align: left;
   box-shadow: 0 18px 32px rgba(3, 8, 24, 0.24);
@@ -5255,10 +5283,10 @@ h1 {
 
 .playbook-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(217, 169, 106, 0.34);
+  border-color: rgba(132, 183, 255, 0.3);
   background:
-    linear-gradient(145deg, rgba(10, 29, 62, 0.98), rgba(22, 56, 118, 0.9)),
-    radial-gradient(circle at top right, rgba(45, 212, 191, 0.22), transparent 38%);
+    linear-gradient(145deg, rgba(10, 24, 48, 0.98), rgba(18, 42, 88, 0.92)),
+    radial-gradient(circle at top right, rgba(132, 183, 255, 0.18), transparent 38%);
 }
 
 .playbook-eyebrow {
@@ -5266,12 +5294,12 @@ h1 {
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #82dfff;
+  color: #8eb6ff;
 }
 
 .playbook-card strong {
-  font-size: 1.12rem;
-  line-height: 1.1;
+  font-size: 1.08rem;
+  line-height: 1.15;
 }
 
 .playbook-card p {
@@ -5284,13 +5312,14 @@ h1 {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+  margin-top: 0.15rem;
 }
 
 .playbook-pill {
   padding: 0.34rem 0.58rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(160, 177, 201, 0.14);
+  background: rgba(255, 255, 255, 0.04);
   color: #eff5ff;
   font-size: 0.76rem;
 }
