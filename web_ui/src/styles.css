@@ -5331,10 +5331,10 @@ h1 {
 .report-hero {
   position: relative;
   overflow: hidden;
-  padding: 1.5rem;
+  padding: 1.55rem 1.6rem 1.45rem;
   background:
-    linear-gradient(135deg, rgba(12, 25, 52, 0.94), rgba(24, 61, 129, 0.88)),
-    radial-gradient(circle at top right, rgba(217, 169, 106, 0.18), transparent 36%);
+    linear-gradient(135deg, rgba(8, 18, 39, 0.96), rgba(20, 44, 89, 0.9)),
+    radial-gradient(circle at top right, rgba(132, 183, 255, 0.16), transparent 36%);
 }
 
 .report-shell {
@@ -5350,10 +5350,12 @@ h1 {
 .report-stat {
   display: grid;
   gap: 0.35rem;
-  padding: 1rem;
-  border-radius: 18px;
-  border: 1px solid rgba(110, 194, 255, 0.18);
-  background: rgba(7, 18, 39, 0.72);
+  padding: 1rem 1.05rem;
+  border-radius: 20px;
+  border: 1px solid rgba(160, 177, 201, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.03)),
+    rgba(7, 18, 39, 0.72);
 }
 
 .report-stat span {
@@ -5361,7 +5363,7 @@ h1 {
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #8ddfff;
+  color: #8eb6ff;
 }
 
 .report-stat strong {
@@ -5390,7 +5392,7 @@ h1 {
 
 .report-timeline-item {
   padding-left: 1rem;
-  border-left: 2px solid rgba(130, 223, 255, 0.28);
+  border-left: 2px solid rgba(132, 183, 255, 0.28);
 }
 
 .report-timeline-item strong {
@@ -5421,6 +5423,10 @@ h1 {
 
   .report-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .report-hero {
+    padding: 1.2rem 1.1rem 1.15rem;
   }
 }
 

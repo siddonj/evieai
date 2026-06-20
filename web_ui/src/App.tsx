@@ -700,32 +700,32 @@ function ReportViewer({
     <div className="page report-viewer-page">
       <div className="bg-grid" aria-hidden="true" />
       <header className="hero report-hero">
-        <p className="eyebrow">Presentation View</p>
-        <h1>{document?.title || 'Document report'}</h1>
+        <p className="eyebrow">Document review</p>
+        <h1>{document?.title || 'Executive report'}</h1>
         <p className="subtitle">
-          {document ? `Review ${formatDocumentType(document.document_type)} with governed status, formal exports, and downstream handoff visibility.` : 'Loading governed report view.'}
+          {document ? `Review the approved narrative, artifacts, export package, and downstream handoff state for ${formatDocumentType(document.document_type)}.` : 'Loading governed report view.'}
         </p>
       </header>
 
       <div className="dashboard-shell report-shell">
         <div className="dashboard-toolbar">
-          <button className="status-btn" onClick={onBack}>Back</button>
+          <button className="status-btn" onClick={onBack}>Back to chat</button>
           <button className="status-btn" onClick={() => void loadDocument()} disabled={loading}>Refresh</button>
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
-        {loading && !document && <div className="dashboard-loading">Loading document report...</div>}
+        {loading && !document && <div className="dashboard-loading">Loading executive report...</div>}
 
         {document && (
           <>
             <div className="report-summary-grid">
               <article className="report-stat">
-                <span>Workflow</span>
+                <span>Status</span>
                 <strong>{document.status}</strong>
                 <p>{formatDocumentType(document.document_type)}</p>
               </article>
               <article className="report-stat">
-                <span>Final artifacts</span>
+                <span>Artifacts</span>
                 <strong>{document.artifacts?.length || 0}</strong>
                 <p>{document.artifacts?.map((artifact) => artifact.format).filter(Boolean).join(', ') || 'Awaiting finalization'}</p>
               </article>
@@ -735,7 +735,7 @@ function ReportViewer({
                 <p>{document.export_package?.artifacts?.map((artifact) => artifact.format).filter(Boolean).join(', ') || 'PDF, DOCX, XLSX when ready'}</p>
               </article>
               <article className="report-stat">
-                <span>Handoff</span>
+                <span>Delivery</span>
                 <strong>{document.announcement?.status || 'pending'}</strong>
                 <p>{document.announcement?.result?.message || 'Announcement visible in outbox after finalization'}</p>
               </article>
@@ -751,7 +751,7 @@ function ReportViewer({
               </section>
 
               <section className="dashboard-panel report-panel">
-                <h3>Workflow timeline</h3>
+                <h3>Lifecycle timeline</h3>
                 <div className="report-timeline">
                   <div className="report-timeline-item">
                     <strong>Drafted</strong>
@@ -774,7 +774,7 @@ function ReportViewer({
             </div>
 
             <section className="dashboard-panel report-panel">
-              <h3>Artifacts and deliverables</h3>
+              <h3>Files and deliverables</h3>
               <div className="result-grid">
                 {(document.artifacts || []).map((artifact, index) => (
                   <article key={`${artifact.file_name || artifact.format || 'artifact'}-${index}`} className="mini-card">
