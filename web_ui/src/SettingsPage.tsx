@@ -59,7 +59,7 @@ type CircuitState = {
   updated_at: string
 }
 
-type Tab = 'data_sources' | 'approvals' | 'service_health' | 'gateway'
+type Tab = 'data_sources' | 'approvals' | 'service_health' | 'routing'
 
 type SettingsPageProps = {
   initialTab?: Tab
@@ -87,7 +87,7 @@ type LlmProviderStatus = {
   error: string | null
 }
 
-type GatewayConfig = {
+type RoutingConfig = {
   enabled: boolean
   configured: boolean
   base_url: string
@@ -111,7 +111,7 @@ type GatewayConfig = {
   }>
 }
 
-type GatewayHealth = {
+type RoutingHealth = {
   enabled: boolean
   configured: boolean
   reachable_services: number
@@ -162,13 +162,13 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
   const [serviceHealthMessage, setServiceHealthMessage] = useState('')
   const [llmStatus, setLlmStatus] = useState<LlmProviderStatus | null>(null)
   const [llmStatusLoading, setLlmStatusLoading] = useState(false)
-  const [gatewayLoading, setGatewayLoading] = useState(false)
-  const [gatewayMessage, setGatewayMessage] = useState('')
-  const [gatewayConfig, setGatewayConfig] = useState<GatewayConfig | null>(null)
-  const [gatewayHealth, setGatewayHealth] = useState<GatewayHealth | null>(null)
-  const [gatewayReliability, setGatewayReliability] = useState<ReliabilityResponse | null>(null)
-  const [gatewayCanaryPct, setGatewayCanaryPct] = useState(100)
-  const [gatewayRolloutReason, setGatewayRolloutReason] = useState('')
+  const [routingLoading, setRoutingLoading] = useState(false)
+  const [routingMessage, setRoutingMessage] = useState('')
+  const [routingConfig, setRoutingConfig] = useState<RoutingConfig | null>(null)
+  const [routingHealth, setRoutingHealth] = useState<RoutingHealth | null>(null)
+  const [routingReliability, setRoutingReliability] = useState<ReliabilityResponse | null>(null)
+  const [routingCanaryPct, setRoutingCanaryPct] = useState(100)
+  const [routingRolloutReason, setRoutingRolloutReason] = useState('')
 
   const activeWriteConnectors = useMemo(
     () => connectors.filter((c) => c.capabilities?.includes('write')),
@@ -192,8 +192,8 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
     if (tab === 'service_health') {
       void loadServiceHealth()
     }
-    if (tab === 'gateway') {
-      void loadGatewayAdminData()
+    if (tab === 'routing') {
+      void loadRoutingAdminData()
     }
   }, [tab])
 
@@ -440,79 +440,79 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
     }
   }
 
-  async function loadGatewayAdminData() {
-    setGatewayLoading(true)
-    setGatewayMessage('')
+  async function loadRoutingAdminData() {
+    setRoutingLoading(true)
+    setRoutingMessage('')
     try {
       const [config, health, reliability] = await Promise.all([
-        fetchJson<GatewayConfig>(`${ORCHESTRATOR_URL}/admin/gateway-config`),
-        fetchJson<GatewayHealth>(`${ORCHESTRATOR_URL}/admin/gateway-health`),
+        fetchJson<RoutingConfig>(`${ORCHESTRATOR_URL}/admin/gateway-config`),
+        fetchJson<RoutingHealth>(`${ORCHESTRATOR_URL}/admin/gateway-health`),
         fetchJson<ReliabilityResponse>(`${ORCHESTRATOR_URL}/admin/gateway-reliability`),
       ])
-      setGatewayConfig(config)
-      setGatewayHealth(health)
-      setGatewayReliability(reliability)
-      setGatewayCanaryPct(config.rollout?.canary_traffic_pct ?? 100)
+      setRoutingConfig(config)
+      setRoutingHealth(health)
+      setRoutingReliability(reliability)
+      setRoutingCanaryPct(config.rollout?.canary_traffic_pct ?? 100)
     } catch (err) {
-      setGatewayMessage(err instanceof Error ? err.message : 'Failed to load routing settings')
+      setRoutingMessage(err instanceof Error ? err.message : 'Failed to load routing settings')
     } finally {
-      setGatewayLoading(false)
+      setRoutingLoading(false)
     }
   }
 
-  async function toggleGateway(enabled: boolean) {
-    setGatewayMessage('')
+  async function toggleRouting(enabled: boolean) {
+    setRoutingMessage('')
     try {
       await fetchJson(`${ORCHESTRATOR_URL}/admin/gateway-toggle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled }),
       })
-      setGatewayMessage(`Routing ${enabled ? 'enabled' : 'disabled'}`)
-      await loadGatewayAdminData()
+      setRoutingMessage(`Routing ${enabled ? 'enabled' : 'disabled'}`)
+      await loadRoutingAdminData()
     } catch (err) {
-      setGatewayMessage(err instanceof Error ? err.message : 'Failed to update routing')
+      setRoutingMessage(err instanceof Error ? err.message : 'Failed to update routing')
     }
   }
 
-  async function applyGatewayRollout(state: 'live' | 'canary' | 'paused') {
-    setGatewayMessage('')
+  async function applyRoutingRollout(state: 'live' | 'canary' | 'paused') {
+    setRoutingMessage('')
     try {
       await fetchJson(`${ORCHESTRATOR_URL}/admin/gateway-rollout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           state,
-          canary_traffic_pct: gatewayCanaryPct,
-          reason: gatewayRolloutReason || 'Updated from settings',
+          canary_traffic_pct: routingCanaryPct,
+          reason: routingRolloutReason || 'Updated from settings',
         }),
       })
-      setGatewayMessage(`Routing rollout set to ${state}`)
-      await loadGatewayAdminData()
+      setRoutingMessage(`Routing rollout set to ${state}`)
+      await loadRoutingAdminData()
     } catch (err) {
-      setGatewayMessage(err instanceof Error ? err.message : 'Failed to update rollout')
+      setRoutingMessage(err instanceof Error ? err.message : 'Failed to update rollout')
     }
   }
 
-  async function syncGateway() {
-    setGatewayMessage('')
+  async function syncRouting() {
+    setRoutingMessage('')
     try {
       await fetchJson(`${ORCHESTRATOR_URL}/admin/gateway-sync`, { method: 'POST' })
-      setGatewayMessage('Routing sync triggered')
-      await loadGatewayAdminData()
+      setRoutingMessage('Routing sync triggered')
+      await loadRoutingAdminData()
     } catch (err) {
-      setGatewayMessage(err instanceof Error ? err.message : 'Failed to sync routing')
+      setRoutingMessage(err instanceof Error ? err.message : 'Failed to sync routing')
     }
   }
 
-  async function resetGateway() {
-    setGatewayMessage('')
+  async function resetRouting() {
+    setRoutingMessage('')
     try {
       await fetchJson(`${ORCHESTRATOR_URL}/admin/gateway-reset`, { method: 'POST' })
-      setGatewayMessage('Routing cooldown reset')
-      await loadGatewayAdminData()
+      setRoutingMessage('Routing cooldown reset')
+      await loadRoutingAdminData()
     } catch (err) {
-      setGatewayMessage(err instanceof Error ? err.message : 'Failed to reset routing')
+      setRoutingMessage(err instanceof Error ? err.message : 'Failed to reset routing')
     }
   }
 
@@ -531,7 +531,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
           <button className={`settings-tab ${tab === 'service_health' ? 'active' : ''}`} onClick={() => setTab('service_health')}>
             Service health
           </button>
-          <button className={`settings-tab ${tab === 'gateway' ? 'active' : ''}`} onClick={() => setTab('gateway')}>
+          <button className={`settings-tab ${tab === 'routing' ? 'active' : ''}`} onClick={() => setTab('routing')}>
             Routing
           </button>
           <button className={`settings-tab ${tab === 'approvals' ? 'active' : ''}`} onClick={() => setTab('approvals')}>
@@ -614,7 +614,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                           onClick={() => previewData(s.key)}
                           disabled={previewLoading === s.key}
                         >
-                  {previewLoading === s.key ? 'Loading...' : 'View data'}
+                          {previewLoading === s.key ? 'Loading...' : 'View data'}
                         </button>
                       )}
                     </div>
@@ -719,54 +719,54 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
           </>
         )}
 
-        {tab === 'gateway' && (
+        {tab === 'routing' && (
           <>
             <section className="settings-section">
               <div className="approval-toolbar">
                 <h2>Routing</h2>
-                <button onClick={() => void loadGatewayAdminData()} disabled={gatewayLoading}>
-                  {gatewayLoading ? 'Updating...' : 'Update now'}
+                <button onClick={() => void loadRoutingAdminData()} disabled={routingLoading}>
+                  {routingLoading ? 'Updating...' : 'Update now'}
                 </button>
               </div>
-              {gatewayMessage && <div className="settings-message">{gatewayMessage}</div>}
+              {routingMessage && <div className="settings-message">{routingMessage}</div>}
 
-              {!gatewayConfig ? (
+              {!routingConfig ? (
                 <div className="settings-hint">Routing configuration unavailable.</div>
               ) : (
                 <div className="gateway-summary-grid">
                   <div className="gateway-summary-card">
                     <span>Enabled</span>
-                    <span className={`status-pill ${gatewayConfig.enabled ? 'completed' : 'failed'}`}>{gatewayConfig.enabled ? 'yes' : 'no'}</span>
+                    <span className={`status-pill ${routingConfig.enabled ? 'completed' : 'failed'}`}>{routingConfig.enabled ? 'yes' : 'no'}</span>
                   </div>
                   <div className="gateway-summary-card">
                     <span>Configured</span>
-                    <span className={`status-pill ${gatewayConfig.configured ? 'completed' : 'failed'}`}>{gatewayConfig.configured ? 'yes' : 'no'}</span>
+                    <span className={`status-pill ${routingConfig.configured ? 'completed' : 'failed'}`}>{routingConfig.configured ? 'yes' : 'no'}</span>
                   </div>
                   <div className="gateway-summary-card">
                     <span>Auth mode</span>
-                    <strong>{gatewayConfig.auth_mode}</strong>
+                    <strong>{routingConfig.auth_mode}</strong>
                   </div>
                   <div className="gateway-summary-card">
                     <span>Fallback mode</span>
-                    <strong>{gatewayConfig.fallback_mode}</strong>
+                    <strong>{routingConfig.fallback_mode}</strong>
                   </div>
                   <div className="gateway-summary-card wide">
                     <span>Base URL</span>
-                    <strong className="llm-endpoint">{gatewayConfig.base_url_masked || gatewayConfig.base_url || 'not set'}</strong>
+                    <strong className="llm-endpoint">{routingConfig.base_url_masked || routingConfig.base_url || 'not set'}</strong>
                   </div>
                   <div className="gateway-summary-card">
                     <span>Last sync</span>
-                    <strong>{gatewayConfig.last_sync_at ? new Date(gatewayConfig.last_sync_at).toLocaleString() : 'never'}</strong>
+                    <strong>{routingConfig.last_sync_at ? new Date(routingConfig.last_sync_at).toLocaleString() : 'never'}</strong>
                   </div>
                 </div>
               )}
 
               <div className="gateway-actions-row">
-                <button onClick={() => void toggleGateway(!(gatewayConfig?.enabled ?? false))}>
-                  {gatewayConfig?.enabled ? 'Disable' : 'Enable'}
+                <button onClick={() => void toggleRouting(!(routingConfig?.enabled ?? false))}>
+                  {routingConfig?.enabled ? 'Disable' : 'Enable'}
                 </button>
-                <button onClick={() => void syncGateway()}>Sync routing</button>
-                <button onClick={() => void resetGateway()}>Reset timers</button>
+                <button onClick={() => void syncRouting()}>Sync routing</button>
+                <button onClick={() => void resetRouting()}>Reset timers</button>
               </div>
             </section>
 
@@ -781,34 +781,34 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                     type="number"
                     min={0}
                     max={100}
-                    value={gatewayCanaryPct}
-                    onChange={(e) => setGatewayCanaryPct(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                    value={routingCanaryPct}
+                    onChange={(e) => setRoutingCanaryPct(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
                   />
                 </div>
                 <div className="settings-field">
                   <label>Reason</label>
                   <input
-                    value={gatewayRolloutReason}
-                    onChange={(e) => setGatewayRolloutReason(e.target.value)}
+                    value={routingRolloutReason}
+                    onChange={(e) => setRoutingRolloutReason(e.target.value)}
                     placeholder="Reason for routing update"
                   />
                 </div>
               </div>
               <div className="gateway-actions-row">
-                <button onClick={() => void applyGatewayRollout('live')}>Set live</button>
-                <button onClick={() => void applyGatewayRollout('canary')}>Set canary</button>
-                <button className="btn-danger" onClick={() => void applyGatewayRollout('paused')}>Pause</button>
+                <button onClick={() => void applyRoutingRollout('live')}>Set live</button>
+                <button onClick={() => void applyRoutingRollout('canary')}>Set canary</button>
+                <button className="btn-danger" onClick={() => void applyRoutingRollout('paused')}>Pause</button>
               </div>
-              {gatewayConfig?.rollout && (
+              {routingConfig?.rollout && (
                 <div className="settings-hint">
-                  Current rollout: {gatewayConfig.rollout.state} ({gatewayConfig.rollout.canary_traffic_pct}% canary) · updated {new Date(gatewayConfig.rollout.updated_at).toLocaleString()}
+                  Current rollout: {routingConfig.rollout.state} ({routingConfig.rollout.canary_traffic_pct}% canary) · updated {new Date(routingConfig.rollout.updated_at).toLocaleString()}
                 </div>
               )}
             </section>
 
             <section className="settings-section">
               <h2>Upstream service status</h2>
-              {gatewayHealth?.services?.length ? (
+              {routingHealth?.services?.length ? (
                 <table className="users-table approvals-table">
                   <thead>
                     <tr>
@@ -820,7 +820,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                     </tr>
                   </thead>
                   <tbody>
-                    {gatewayHealth.services.map((row, idx) => (
+                    {routingHealth.services.map((row, idx) => (
                       <tr key={`${row.key || row.service || row.name || 'svc'}-${idx}`}>
                         <td>{row.name || row.service || row.key || 'unknown'}</td>
                         <td><span className={`status-pill ${row.reachable ? 'completed' : 'failed'}`}>{row.reachable ? 'yes' : 'no'}</span></td>
@@ -839,7 +839,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             <section className="settings-section">
               <h2>Routing reliability</h2>
               <div className="approval-grid">
-                <ReliabilityCard title="Routing" data={gatewayReliability} />
+                <ReliabilityCard title="Routing" data={routingReliability} />
               </div>
             </section>
           </>
