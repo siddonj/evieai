@@ -19,3 +19,10 @@ def test_admin_mcp_config_includes_full_source_registry():
         "postgresql",
         "dashboard",
     }.issubset(keys)
+
+
+def test_admin_mcp_config_marks_only_previewable_sources():
+    body = admin_mcp_config()
+    previewable = {server["key"] for server in body["servers"] if server["has_admin_data"]}
+
+    assert previewable == {"knowledge_base", "memory", "document_generation", "postgresql"}

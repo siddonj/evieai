@@ -353,6 +353,7 @@ if MCP_DASHBOARD_URL:
 
 # ─── Runtime Admin Config ─────────────────────────────────────────────
 MCP_ENABLED: dict[str, bool] = dict.fromkeys(MCP_ENDPOINTS, True)
+MCP_ADMIN_DATA_SERVICES = {"knowledge_base", "memory", "document_generation", "postgresql"}
 _MCP_DISABLED_AT: dict[str, float] = {}  # Timestamp when auto-disabled (for auto-recovery)
 MCP_COOLDOWN_SECONDS = 30  # Auto-re-enable after this many seconds
 
@@ -2405,7 +2406,7 @@ def admin_mcp_config() -> dict[str, Any]:
                 "name": key.replace("_", " ").title(),
                 "enabled": MCP_ENABLED.get(key, True),
                 "url": url,
-                "has_admin_data": key in ("knowledge_base", "memory", "files", "document_generation", "analytics"),
+                "has_admin_data": key in MCP_ADMIN_DATA_SERVICES,
             }
             for key, url in MCP_ENDPOINTS.items()
         ]
