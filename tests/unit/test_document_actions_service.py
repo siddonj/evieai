@@ -37,10 +37,10 @@ def test_service_blocks_finalization_before_approval(tmp_path):
     assert result["reason"] == "approval_required"
 
 
-def test_service_allows_finalization_after_approval(tmp_path):
+def test_service_finalizes_after_approval_and_records_artifacts(tmp_path):
     store = DocumentActionsStore(db_path=tmp_path / "document_actions.db")
     service = DocumentActionsService(store=store)
-    record = service.create_draft(
+    draft = service.create_draft(
         user_id="alice",
         work_packet_id="wp-1",
         document_type="board_report",
@@ -48,14 +48,16 @@ def test_service_allows_finalization_after_approval(tmp_path):
         source_summary="Board summary",
     )
     store.mark_approved(
-        document_action_id=record["id"],
+        document_action_id=draft["id"],
         approved_by="alice",
         destination_type="onedrive",
         destination_ref="Reports/Board",
         output_formats=["pdf", "docx"],
     )
 
-    result = service.finalize(document_action_id=record["id"])
+    result = service.finalize(document_action_id=draft["id"])
 
-    assert result["status"] == "ready"
-    assert result["document_action_id"] == record["id"]
+    assert result["status"] == "executed"
+    assert result["artifacts"][0]["format"] == "pdf"
+    assert result["destination"]["type"] == "onedrive"
+    assert result["announcement"]["status"] == "created"

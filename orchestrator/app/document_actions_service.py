@@ -35,4 +35,30 @@ class DocumentActionsService:
                 "reason": "approval_required",
                 "document_action_id": document_action_id,
             }
-        return {"status": "ready", "document_action_id": document_action_id}
+        artifacts = [
+            {
+                "format": output_format,
+                "file_name": f"{record['title'].replace(' ', '_').lower()}.{output_format}",
+            }
+            for output_format in record["output_formats"]
+        ]
+        destination = {
+            "type": record["destination_type"],
+            "ref": record["destination_ref"],
+        }
+        announcement = {
+            "status": "created",
+            "type": "document_finalized",
+        }
+        executed = self.store.mark_executed(
+            document_action_id=document_action_id,
+            artifacts=artifacts,
+            announcement=announcement,
+        )
+        return {
+            "status": "executed",
+            "document_action": executed,
+            "artifacts": artifacts,
+            "destination": destination,
+            "announcement": announcement,
+        }

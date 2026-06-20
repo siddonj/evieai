@@ -158,6 +158,40 @@ class DocumentActionsStore:
             ).fetchone()
         return self._row_to_dict(row)
 
+    def mark_executed(
+        self,
+        *,
+        document_action_id: int,
+        artifacts: list[dict[str, Any]],
+        announcement: dict[str, Any],
+    ) -> dict[str, Any]:
+        now = _utc_now()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE document_actions
+                SET status = ?,
+                    artifacts_json = ?,
+                    announcement_json = ?,
+                    executed_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    "executed",
+                    _canonical_json(artifacts),
+                    _canonical_json(announcement),
+                    now,
+                    now,
+                    document_action_id,
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM document_actions WHERE id = ?",
+                (document_action_id,),
+            ).fetchone()
+        return self._row_to_dict(row)
+
     def _row_to_dict(self, row: sqlite3.Row | None) -> dict[str, Any]:
         if row is None:
             raise KeyError("document action not found")
