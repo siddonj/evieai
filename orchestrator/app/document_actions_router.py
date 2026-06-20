@@ -50,6 +50,13 @@ def _authorize_document_access(actor: dict[str, Any] | None, record: dict[str, A
         raise HTTPException(status_code=403, detail="Document workflow access denied")
 
 
+def _get_document_action_or_404(document_action_id: int) -> dict[str, Any]:
+    try:
+        return get_document_actions_store().get(document_action_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Document workflow not found") from exc
+
+
 @router.post("/draft")
 def create_draft(
     payload: CreateDraftRequest,
@@ -83,7 +90,7 @@ def get_document_action(
     document_action_id: int,
     actor: Annotated[dict[str, Any] | None, Depends(require_auth_optional)] = None,
 ) -> dict[str, Any]:
-    record = get_document_actions_store().get(document_action_id)
+    record = _get_document_action_or_404(document_action_id)
     _authorize_document_access(actor, record)
     return record
 
@@ -94,7 +101,7 @@ def approve_draft(
     payload: ApproveDraftRequest,
     actor: Annotated[dict[str, Any] | None, Depends(require_auth_optional)] = None,
 ) -> dict[str, Any]:
-    record = get_document_actions_store().get(document_action_id)
+    record = _get_document_action_or_404(document_action_id)
     _authorize_document_access(actor, record)
     return DOCUMENT_ACTIONS_SERVICE.approve(
         document_action_id=document_action_id,
@@ -110,6 +117,16 @@ def finalize_draft(
     document_action_id: int,
     actor: Annotated[dict[str, Any] | None, Depends(require_auth_optional)] = None,
 ) -> dict[str, Any]:
-    record = get_document_actions_store().get(document_action_id)
+    record = _get_document_action_or_404(document_action_id)
     _authorize_document_access(actor, record)
     return DOCUMENT_ACTIONS_SERVICE.finalize(document_action_id=document_action_id)
+
+
+@router.post("/{document_action_id}/export-package")
+def export_package(
+    document_action_id: int,
+    actor: Annotated[dict[str, Any] | None, Depends(require_auth_optional)] = None,
+) -> dict[str, Any]:
+    record = _get_document_action_or_404(document_action_id)
+    _authorize_document_access(actor, record)
+    return DOCUMENT_ACTIONS_SERVICE.export_package(document_action_id=document_action_id)

@@ -174,6 +174,42 @@ paths:
         "200":
           description: Draft document action created
 
+  /document-actions:
+    get:
+      operationId: list_document_actions
+      summary: List governed document workflows for a user
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Document workflow list
+
+  /document-actions/{document_action_id}:
+    get:
+      operationId: get_document_action
+      summary: Fetch a governed document workflow by id
+      parameters:
+        - name: document_action_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Document workflow record
+        "404":
+          description: Document workflow not found
+
   /document-actions/{document_action_id}/approve:
     post:
       operationId: approve_document_draft
@@ -190,10 +226,8 @@ paths:
           application/json:
             schema:
               type: object
-              required: [approved_by, destination_type, destination_ref, output_formats]
+              required: [destination_type, destination_ref, output_formats]
               properties:
-                approved_by:
-                  type: string
                 destination_type:
                   type: string
                 destination_ref:
@@ -205,6 +239,8 @@ paths:
       responses:
         "200":
           description: Draft approved for finalization
+        "404":
+          description: Document workflow not found
 
   /document-actions/{document_action_id}/finalize:
     post:
@@ -219,6 +255,24 @@ paths:
       responses:
         "200":
           description: Finalization result
+        "404":
+          description: Document workflow not found
+
+  /document-actions/{document_action_id}/export-package:
+    post:
+      operationId: export_document_package
+      summary: Generate a tracked export package for a finalized governed document
+      parameters:
+        - name: document_action_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Export package generation result
+        "404":
+          description: Document workflow not found
 
   /download/{service}/{file_name}:
     get:

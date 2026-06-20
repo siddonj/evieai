@@ -5159,3 +5159,166 @@ h1 {
     min-height: 8rem;
   }
 }
+
+.playbook-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin: 1.1rem 0 0.85rem;
+}
+
+.playbook-card {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1rem 1.05rem;
+  border-radius: 18px;
+  border: 1px solid rgba(110, 194, 255, 0.2);
+  background:
+    linear-gradient(145deg, rgba(8, 23, 52, 0.96), rgba(17, 47, 102, 0.84)),
+    radial-gradient(circle at top right, rgba(45, 212, 191, 0.18), transparent 34%);
+  color: #eef4ff;
+  text-align: left;
+  box-shadow: 0 18px 32px rgba(3, 8, 24, 0.24);
+}
+
+.playbook-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(217, 169, 106, 0.34);
+  background:
+    linear-gradient(145deg, rgba(10, 29, 62, 0.98), rgba(22, 56, 118, 0.9)),
+    radial-gradient(circle at top right, rgba(45, 212, 191, 0.22), transparent 38%);
+}
+
+.playbook-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #82dfff;
+}
+
+.playbook-card strong {
+  font-size: 1.12rem;
+  line-height: 1.1;
+}
+
+.playbook-card p {
+  margin: 0;
+  color: #cfe0fb;
+  line-height: 1.55;
+}
+
+.playbook-output-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.playbook-pill {
+  padding: 0.34rem 0.58rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+  color: #eff5ff;
+  font-size: 0.76rem;
+}
+
+.report-viewer-page {
+  max-width: 1500px;
+}
+
+.report-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 1.5rem;
+  background:
+    linear-gradient(135deg, rgba(12, 25, 52, 0.94), rgba(24, 61, 129, 0.88)),
+    radial-gradient(circle at top right, rgba(217, 169, 106, 0.18), transparent 36%);
+}
+
+.report-shell {
+  gap: 1rem;
+}
+
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.report-stat {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(110, 194, 255, 0.18);
+  background: rgba(7, 18, 39, 0.72);
+}
+
+.report-stat span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #8ddfff;
+}
+
+.report-stat strong {
+  font-size: 1.18rem;
+  color: #f3f7ff;
+}
+
+.report-stat p {
+  margin: 0;
+  color: #c7d8f7;
+  line-height: 1.5;
+}
+
+.report-panel {
+  background: rgba(7, 18, 39, 0.76);
+}
+
+.report-body {
+  min-height: 20rem;
+}
+
+.report-timeline {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.report-timeline-item {
+  padding-left: 1rem;
+  border-left: 2px solid rgba(130, 223, 255, 0.28);
+}
+
+.report-timeline-item strong {
+  display: block;
+  margin-bottom: 0.22rem;
+  color: #f3f7ff;
+}
+
+.report-timeline-item p {
+  margin: 0;
+  color: #c7d8f7;
+}
+
+@media (max-width: 900px) {
+  .playbook-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .playbook-card {
+    padding: 0.95rem;
+  }
+
+  .report-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -16,6 +16,7 @@ type DocumentWorkflowPanelProps = {
   workPacketId: string
   sourceSummary: string
   onActionChange: (action: DocumentAction) => void
+  onViewReport?: (documentActionId: number) => void
 }
 
 export function DocumentWorkflowPanel({
@@ -26,11 +27,12 @@ export function DocumentWorkflowPanel({
   workPacketId,
   sourceSummary,
   onActionChange,
+  onViewReport,
 }: DocumentWorkflowPanelProps) {
   const [destinationType, setDestinationType] = useState(action.destination_type || 'onedrive')
   const [destinationRef, setDestinationRef] = useState(action.destination_ref || '')
   const [selectedFormats, setSelectedFormats] = useState<string[]>(action.output_formats?.length ? action.output_formats : ['pdf', 'docx'])
-  const [busy, setBusy] = useState<'create' | 'approve' | 'finalize' | null>(null)
+  const [busy, setBusy] = useState<'create' | 'approve' | 'finalize' | 'export' | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -42,6 +44,8 @@ export function DocumentWorkflowPanel({
   const isSuggested = action.id < 0
   const canApprove = action.id > 0 && (action.status === 'draft' || action.status === 'blocked')
   const canFinalize = action.id > 0 && action.status === 'approved'
+  const canExportPackage = action.id > 0 && action.status === 'executed'
+  const canViewReport = action.id > 0 && action.status === 'executed'
 
   function toggleFormat(format: string) {
     setSelectedFormats((prev) => (
@@ -132,6 +136,32 @@ export function DocumentWorkflowPanel({
       onActionChange(finalized.document_action)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not finalize draft')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function handleExportPackage() {
+    if (busy) return
+    setBusy('export')
+    setError('')
+    try {
+      const res = await fetch(`${orchestratorUrl}/document-actions/${action.id}/export-package`, {
+        method: 'POST',
+        headers: authHeader ? { Authorization: authHeader } : undefined,
+      })
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`)
+      }
+      const exported = await res.json() as {
+        document_action?: DocumentAction
+      }
+      if (!exported.document_action) {
+        throw new Error('Missing export package document action')
+      }
+      onActionChange(exported.document_action)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not export package')
     } finally {
       setBusy(null)
     }
@@ -238,6 +268,28 @@ export function DocumentWorkflowPanel({
           >
             {busy === 'finalize' ? 'Finalizing…' : 'Finalize'}
           </button>
+          <button
+            className="status-btn"
+            onClick={(event) => {
+              event.stopPropagation()
+              void handleExportPackage()
+            }}
+            disabled={!canExportPackage || busy !== null}
+          >
+            {busy === 'export' ? 'Exporting…' : 'Export package'}
+          </button>
+          <button
+            className="status-btn"
+            onClick={(event) => {
+              event.stopPropagation()
+              if (canViewReport) {
+                onViewReport?.(action.id)
+              }
+            }}
+            disabled={!canViewReport}
+          >
+            View report
+          </button>
         </div>
       )}
       {action.artifacts?.length ? (
@@ -258,6 +310,22 @@ export function DocumentWorkflowPanel({
             <strong>{action.announcement.status || 'queued'}</strong>
             <p>{action.announcement.result?.message || action.announcement.action_id}</p>
           </article>
+        </div>
+      ) : null}
+      {action.export_package?.status ? (
+        <div className="result-grid">
+          <article className="mini-card">
+            <span>Export package</span>
+            <strong>{action.export_package.status}</strong>
+            <p>{action.export_package.result?.message || `${action.export_package.artifacts?.length || 0} export artifact(s)`}</p>
+          </article>
+          {action.export_package.artifacts?.length ? (
+            <article className="mini-card">
+              <span>Formats</span>
+              <strong>{action.export_package.artifacts.map((artifact) => artifact.format).filter(Boolean).join(', ')}</strong>
+              <p>{action.export_package.action_id || 'Tracked export workflow'}</p>
+            </article>
+          ) : null}
         </div>
       ) : null}
       {error ? <p>{error}</p> : null}

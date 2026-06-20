@@ -21,6 +21,7 @@ type ActionRow = {
   created_at: string
   updated_at: string
   payload?: {
+    document_action_id?: number
     title?: string
     document_type?: string
     message?: string
@@ -38,7 +39,15 @@ type ActionsResponse = {
   actions: ActionRow[]
 }
 
-type View = 'chat' | 'settings' | 'service_health' | 'performance' | 'network' | 'admin' | 'documents' | 'outbox'
+type View = 'chat' | 'settings' | 'service_health' | 'performance' | 'network' | 'admin' | 'documents' | 'outbox' | 'report'
+
+type Playbook = {
+  id: string
+  eyebrow: string
+  title: string
+  question: string
+  outputs: string[]
+}
 
 type PerformanceData = {
   generated_at: string
@@ -148,6 +157,23 @@ const SUGGESTED_PROMPTS = [
   { icon: 'AA', label: 'Upcoming activities', query: 'What are my upcoming property tours, inspections, and deal deadlines this month?' },
 ]
 
+const PLAYBOOKS: Playbook[] = [
+  {
+    id: 'portfolio-performance-review',
+    eyebrow: 'Hero playbook',
+    title: 'Portfolio performance review',
+    question: 'Generate a portfolio performance review with NOI, occupancy, rent trends, risk flags, and an export-ready executive summary.',
+    outputs: ['Governed draft', 'Presentation report', 'PDF / DOCX / XLSX package'],
+  },
+  {
+    id: 'board-packet',
+    eyebrow: 'Secondary scenario',
+    title: 'Board packet',
+    question: 'Prepare a board packet summarizing portfolio health, key risks, capital priorities, and next-quarter actions.',
+    outputs: ['Board-ready narrative', 'Approval workflow', 'Formal export package'],
+  },
+]
+
 function loadHistory(): ChatMessage[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -195,6 +221,10 @@ function formatCurrency(value: number): string {
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('en-US').format(value)
+}
+
+function formatDocumentType(value?: string): string {
+  return (value || 'document_workflow').split('_').join(' ')
 }
 
 function PerformanceDashboardView({ userId, onBack }: { userId?: string; onBack: () => void }) {
@@ -441,7 +471,17 @@ function NetworkDashboardView({ userId, onBack }: { userId?: string; onBack: () 
   )
 }
 
-function DocumentsView({ userId, authHeader, onBack }: { userId?: string; authHeader?: string; onBack: () => void }) {
+function DocumentsView({
+  userId,
+  authHeader,
+  onBack,
+  onOpenReport,
+}: {
+  userId?: string
+  authHeader?: string
+  onBack: () => void
+  onOpenReport: (documentActionId: number) => void
+}) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [documents, setDocuments] = useState<DocumentAction[]>([])
@@ -514,6 +554,7 @@ function DocumentsView({ userId, authHeader, onBack }: { userId?: string; authHe
                   workPacketId={action.work_packet_id || `document-${action.id}`}
                   sourceSummary={action.title}
                   onActionChange={updateDocument}
+                  onViewReport={onOpenReport}
                 />
               </div>
             ))}
@@ -524,7 +565,15 @@ function DocumentsView({ userId, authHeader, onBack }: { userId?: string; authHe
   )
 }
 
-function OutboxView({ authHeader, onBack }: { authHeader?: string; onBack: () => void }) {
+function OutboxView({
+  authHeader,
+  onBack,
+  onOpenReport,
+}: {
+  authHeader?: string
+  onBack: () => void
+  onOpenReport: (documentActionId: number) => void
+}) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [actions, setActions] = useState<ActionRow[]>([])
@@ -596,9 +645,156 @@ function OutboxView({ authHeader, onBack }: { authHeader?: string; onBack: () =>
                     <p>{action.result?.message || action.payload?.message || 'Announcement queued'}</p>
                   </article>
                 </div>
+                {action.payload?.document_action_id ? (
+                  <div className="tool-bar">
+                    <button className="status-btn" onClick={() => onOpenReport(action.payload?.document_action_id || 0)}>
+                      Open report
+                    </button>
+                  </div>
+                ) : null}
               </section>
             ))}
           </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ReportViewer({
+  documentActionId,
+  authHeader,
+  onBack,
+}: {
+  documentActionId: number
+  authHeader?: string
+  onBack: () => void
+}) {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [document, setDocument] = useState<DocumentAction | null>(null)
+
+  async function loadDocument() {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`${ORCHESTRATOR_URL}/document-actions/${documentActionId}`, {
+        headers: authHeader ? { Authorization: authHeader } : undefined,
+      })
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`)
+      }
+      const payload = await res.json() as DocumentAction
+      setDocument(payload)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      setError(`Could not load report view: ${message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadDocument()
+  }, [documentActionId, authHeader])
+
+  return (
+    <div className="page report-viewer-page">
+      <div className="bg-grid" aria-hidden="true" />
+      <header className="hero report-hero">
+        <p className="eyebrow">Presentation View</p>
+        <h1>{document?.title || 'Report viewer'}</h1>
+        <p className="subtitle">
+          {document ? `Polished review surface for ${formatDocumentType(document.document_type)} with governed status, formal exports, and downstream handoff visibility.` : 'Loading governed report view.'}
+        </p>
+      </header>
+
+      <div className="dashboard-shell report-shell">
+        <div className="dashboard-toolbar">
+          <button className="status-btn" onClick={onBack}>← Back</button>
+          <button className="status-btn" onClick={() => void loadDocument()} disabled={loading}>⟳ Refresh</button>
+        </div>
+
+        {error && <div className="dashboard-error">{error}</div>}
+        {loading && !document && <div className="dashboard-loading">Loading report...</div>}
+
+        {document && (
+          <>
+            <div className="report-summary-grid">
+              <article className="report-stat">
+                <span>Workflow</span>
+                <strong>{document.status}</strong>
+                <p>{formatDocumentType(document.document_type)}</p>
+              </article>
+              <article className="report-stat">
+                <span>Final artifacts</span>
+                <strong>{document.artifacts?.length || 0}</strong>
+                <p>{document.artifacts?.map((artifact) => artifact.format).filter(Boolean).join(', ') || 'Awaiting finalization'}</p>
+              </article>
+              <article className="report-stat">
+                <span>Export package</span>
+                <strong>{document.export_package?.status || 'not started'}</strong>
+                <p>{document.export_package?.artifacts?.map((artifact) => artifact.format).filter(Boolean).join(', ') || 'PDF, DOCX, XLSX when ready'}</p>
+              </article>
+              <article className="report-stat">
+                <span>Handoff</span>
+                <strong>{document.announcement?.status || 'pending'}</strong>
+                <p>{document.announcement?.result?.message || 'Announcement visible in outbox after finalization'}</p>
+              </article>
+            </div>
+
+            <div className="dashboard-row">
+              <section className="dashboard-panel report-panel">
+                <h3>Executive narrative</h3>
+                <div
+                  className="text prose report-body"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(document.draft_markdown || `# ${document.title}\n\n${formatDocumentType(document.document_type)}`) }}
+                />
+              </section>
+
+              <section className="dashboard-panel report-panel">
+                <h3>Workflow timeline</h3>
+                <div className="report-timeline">
+                  <div className="report-timeline-item">
+                    <strong>Drafted</strong>
+                    <p>{document.created_at || 'Created in current session'}</p>
+                  </div>
+                  <div className="report-timeline-item">
+                    <strong>Finalized</strong>
+                    <p>{document.executed_at || 'Awaiting finalization'}</p>
+                  </div>
+                  <div className="report-timeline-item">
+                    <strong>Export package</strong>
+                    <p>{document.export_package?.status || 'Not started'}</p>
+                  </div>
+                  <div className="report-timeline-item">
+                    <strong>Announcement</strong>
+                    <p>{document.announcement?.status || 'Pending'}</p>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <section className="dashboard-panel report-panel">
+              <h3>Artifacts and deliverables</h3>
+              <div className="result-grid">
+                {(document.artifacts || []).map((artifact, index) => (
+                  <article key={`${artifact.file_name || artifact.format || 'artifact'}-${index}`} className="mini-card">
+                    <span>{artifact.format || 'artifact'}</span>
+                    <strong>{artifact.file_name || 'Generated file'}</strong>
+                    <p>{artifact.blob_url || artifact.storage_ref || 'Stored'}</p>
+                  </article>
+                ))}
+                {(document.export_package?.artifacts || []).map((artifact, index) => (
+                  <article key={`export-${artifact.file_name || artifact.format || 'artifact'}-${index}`} className="mini-card">
+                    <span>{artifact.format || 'export'}</span>
+                    <strong>{artifact.file_name || 'Export package file'}</strong>
+                    <p>{artifact.blob_url || artifact.storage_ref || 'Stored'}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </>
         )}
       </div>
     </div>
@@ -635,6 +831,7 @@ function ChatView() {
     ]
   })
   const [view, setView] = useState<View>('chat')
+  const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null)
   const [showPrompts, setShowPrompts] = useState(true)
 
   // Streaming state
@@ -707,6 +904,11 @@ function ChatView() {
     setMessages([welcome])
     setShowPrompts(true)
     saveHistory([welcome])
+  }
+
+  function openReport(documentActionId: number) {
+    setSelectedDocumentId(documentActionId)
+    setView('report')
   }
 
   async function sendMessage(textOverride?: string) {
@@ -858,11 +1060,15 @@ function ChatView() {
   }
 
   if (view === 'documents') {
-    return <DocumentsView userId={user?.email} authHeader={authHeader} onBack={() => setView('chat')} />
+    return <DocumentsView userId={user?.email} authHeader={authHeader} onBack={() => setView('chat')} onOpenReport={openReport} />
   }
 
   if (view === 'outbox') {
-    return <OutboxView authHeader={authHeader} onBack={() => setView('chat')} />
+    return <OutboxView authHeader={authHeader} onBack={() => setView('chat')} onOpenReport={openReport} />
+  }
+
+  if (view === 'report' && selectedDocumentId) {
+    return <ReportViewer documentActionId={selectedDocumentId} authHeader={authHeader} onBack={() => setView('documents')} />
   }
 
   const hasConversation = messages.length > 1
@@ -893,19 +1099,41 @@ function ChatView() {
 
       {/* Suggested Prompts */}
       {showPrompts && !loading && (
-        <div className="suggested-prompts">
-          {SUGGESTED_PROMPTS.map((p) => (
-            <button
-              key={p.query}
-              className="prompt-chip"
-              onClick={() => sendMessage(p.query)}
-              disabled={loading}
-            >
-              <span className="prompt-icon">{p.icon}</span>
-              <span className="prompt-label">{p.label}</span>
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="playbook-grid">
+            {PLAYBOOKS.map((playbook) => (
+              <button
+                key={playbook.id}
+                className="playbook-card"
+                onClick={() => sendMessage(playbook.question)}
+                disabled={loading}
+              >
+                <span className="playbook-eyebrow">{playbook.eyebrow}</span>
+                <strong>{playbook.title}</strong>
+                <p>{playbook.question}</p>
+                <div className="playbook-output-row">
+                  {playbook.outputs.map((output) => (
+                    <span key={output} className="playbook-pill">{output}</span>
+                  ))}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="suggested-prompts">
+            {SUGGESTED_PROMPTS.map((p) => (
+              <button
+                key={p.query}
+                className="prompt-chip"
+                onClick={() => sendMessage(p.query)}
+                disabled={loading}
+              >
+                <span className="prompt-icon">{p.icon}</span>
+                <span className="prompt-label">{p.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       <div className="chat-shell">
@@ -969,13 +1197,14 @@ function ChatView() {
                     action={action}
                     orchestratorUrl={ORCHESTRATOR_URL}
                     userId={user?.email}
-                    authHeader={authHeader}
-                    workPacketId={msg.data?.work_packet?.answer?.summary ? `${msg.id}-${action.document_type}` : msg.id}
-                    sourceSummary={msg.data?.work_packet?.answer?.summary || msg.text}
-                    onActionChange={(nextAction) => updateDocumentAction(msg.id, nextAction)}
-                  />
-                </div>
-              ))}
+                  authHeader={authHeader}
+                  workPacketId={msg.data?.work_packet?.answer?.summary ? `${msg.id}-${action.document_type}` : msg.id}
+                  sourceSummary={msg.data?.work_packet?.answer?.summary || msg.text}
+                  onActionChange={(nextAction) => updateDocumentAction(msg.id, nextAction)}
+                  onViewReport={openReport}
+                />
+              </div>
+            ))}
               {msg.data?.work_packet && (
                 <div className="message-section">
                   <WorkPacketPanel packet={msg.data.work_packet} />

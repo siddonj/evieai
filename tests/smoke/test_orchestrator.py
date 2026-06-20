@@ -194,6 +194,45 @@ async def test_document_workflow_approve_and_finalize():
 
 
 @pytest.mark.asyncio
+async def test_document_workflow_export_package_endpoint():
+    async with httpx.AsyncClient(timeout=20) as client:
+        draft = await client.post(
+            f"{_base_url()}/document-actions/draft",
+            json={
+                "user_id": "smoke-export",
+                "work_packet_id": "wp-export-1",
+                "document_type": "executive_briefing",
+                "title": "Executive Briefing",
+                "source_summary": "Summary",
+            },
+        )
+        assert draft.status_code == 200
+        draft_body = draft.json()
+
+        approved = await client.post(
+            f"{_base_url()}/document-actions/{draft_body['id']}/approve",
+            json={
+                "destination_type": "onedrive",
+                "destination_ref": "Reports/Exec",
+                "output_formats": ["pdf", "docx"],
+            },
+        )
+        assert approved.status_code == 200
+
+        finalized = await client.post(f"{_base_url()}/document-actions/{draft_body['id']}/finalize")
+        assert finalized.status_code == 200
+
+        exported = await client.post(f"{_base_url()}/document-actions/{draft_body['id']}/export-package")
+        assert exported.status_code == 200
+        body = exported.json()
+        assert body["status"] == "completed"
+        assert len(body["artifacts"]) == 3
+        assert body["artifacts"][0]["storage_ref"]
+        assert body["export_action"]["action_id"]
+        assert body["export_action"]["status"] == "completed"
+
+
+@pytest.mark.asyncio
 async def test_chat_document_workflow_end_to_end():
     async with httpx.AsyncClient(timeout=45) as client:
         chat = await client.post(
@@ -277,6 +316,29 @@ async def test_document_workflow_list_and_get_endpoints():
 
 
 @pytest.mark.asyncio
+async def test_document_workflow_missing_record_returns_404():
+    async with httpx.AsyncClient(timeout=10) as client:
+        fetched = await client.get(f"{_base_url()}/document-actions/999999")
+        assert fetched.status_code == 404
+
+        approved = await client.post(
+            f"{_base_url()}/document-actions/999999/approve",
+            json={
+                "destination_type": "onedrive",
+                "destination_ref": "Reports/Missing",
+                "output_formats": ["pdf"],
+            },
+        )
+        assert approved.status_code == 404
+
+        finalized = await client.post(f"{_base_url()}/document-actions/999999/finalize")
+        assert finalized.status_code == 404
+
+        exported = await client.post(f"{_base_url()}/document-actions/999999/export-package")
+        assert exported.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_openapi_schema_mentions_document_actions():
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(f"{_base_url()}/openapi.json")
@@ -287,6 +349,7 @@ async def test_openapi_schema_mentions_document_actions():
         assert "/document-actions/{document_action_id}" in schema["paths"]
         assert "/document-actions/{document_action_id}/approve" in schema["paths"]
         assert "/document-actions/{document_action_id}/finalize" in schema["paths"]
+        assert "/document-actions/{document_action_id}/export-package" in schema["paths"]
 
 
 @pytest.mark.asyncio

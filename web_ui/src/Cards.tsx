@@ -182,6 +182,7 @@ export type DocumentAction = {
   work_packet_id?: string
   document_type: string
   title: string
+  draft_markdown?: string
   draft_version?: number
   destination_type?: string
   destination_ref?: string
@@ -189,6 +190,7 @@ export type DocumentAction = {
   created_at?: string
   updated_at?: string
   executed_at?: string
+  exported_at?: string
   announcement?: {
     id?: number
     status?: string
@@ -209,6 +211,28 @@ export type DocumentAction = {
     size_bytes?: number
     blob_url?: string
   }>
+  export_package?: {
+    status?: 'queued' | 'running' | 'completed' | 'failed' | string
+    type?: string
+    channel?: string
+    action_id?: string
+    created_at?: string
+    updated_at?: string
+    error?: string
+    result?: {
+      delivered?: boolean
+      channel?: string
+      message?: string
+      artifact_count?: number
+    }
+    artifacts?: Array<{
+      format?: string
+      file_name?: string
+      storage_ref?: string
+      size_bytes?: number
+      blob_url?: string
+    }>
+  }
 }
 
 export type ChatResponse = {

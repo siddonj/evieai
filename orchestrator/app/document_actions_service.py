@@ -105,6 +105,41 @@ class DocumentActionsService:
             "announcement": executed["announcement"],
         }
 
+    def export_package(self, *, document_action_id: int) -> dict[str, Any]:
+        record = self.store.get(document_action_id)
+        export_package = record.get("export_package")
+
+        if record["status"] != "executed":
+            return {
+                "status": "blocked",
+                "reason": "finalization_required",
+                "document_action_id": document_action_id,
+            }
+
+        if isinstance(export_package, dict) and export_package.get("status") == "completed":
+            return {
+                "status": "completed",
+                "document_action": record,
+                "artifacts": list(export_package.get("artifacts") or []),
+                "export_action": export_package,
+            }
+
+        artifacts = [
+            self._write_export_artifact(record=record, output_format=output_format)
+            for output_format in ("pdf", "docx", "xlsx")
+        ]
+        export_action = self._create_export_action(record=record, artifacts=artifacts)
+        persisted = self.store.mark_export_package(
+            document_action_id=document_action_id,
+            export_package=export_action | {"artifacts": artifacts},
+        )
+        return {
+            "status": "completed",
+            "document_action": persisted,
+            "artifacts": persisted["export_package"]["artifacts"],
+            "export_action": persisted["export_package"],
+        }
+
     def _write_artifact(
         self,
         *,
@@ -112,6 +147,36 @@ class DocumentActionsService:
         output_format: str,
     ) -> dict[str, Any]:
         file_name = f"{record['title'].replace(' ', '_').lower()}.{output_format}"
+        content = self._render_artifact_content(record=record, output_format=output_format)
+        artifact_path = write_local_document_artifact(
+            artifact_root=self.artifact_root,
+            document_action_id=int(record["id"]),
+            file_name=file_name,
+            content=content,
+        )
+        artifact = {
+            "format": output_format,
+            "file_name": file_name,
+            "storage_ref": str(artifact_path),
+            "size_bytes": artifact_path.stat().st_size,
+        }
+        blob_url = upload_report(
+            name=f"document_artifacts/{record['id']}/{file_name}",
+            content=content,
+            content_type="text/plain",
+        )
+        if blob_url:
+            artifact["blob_url"] = blob_url
+        return artifact
+
+    def _write_export_artifact(
+        self,
+        *,
+        record: dict[str, Any],
+        output_format: str,
+    ) -> dict[str, Any]:
+        file_stem = record["title"].replace(" ", "_").lower()
+        file_name = f"{file_stem}_export.{output_format}"
         content = self._render_artifact_content(record=record, output_format=output_format)
         artifact_path = write_local_document_artifact(
             artifact_root=self.artifact_root,
@@ -207,6 +272,70 @@ class DocumentActionsService:
         return {
             "status": (completed or {}).get("status", created["status"]),
             "type": "document_finalized",
+            "channel": "internal_queue",
+            "action_id": action_id,
+            "result": (completed or {}).get("result"),
+        }
+
+    def _create_export_action(
+        self,
+        *,
+        record: dict[str, Any],
+        artifacts: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        if self.actions_store is None:
+            return {
+                "status": "completed",
+                "type": "export_package",
+                "channel": "internal_queue",
+                "action_id": None,
+                "result": {
+                    "delivered": True,
+                    "channel": "internal_queue",
+                    "artifact_count": len(artifacts),
+                },
+            }
+
+        payload = {
+            "document_action_id": record["id"],
+            "title": record["title"],
+            "document_type": record["document_type"],
+            "artifacts": artifacts,
+            "message": f"{record['title']} export package generated with {len(artifacts)} artifact(s).",
+        }
+        created = self.actions_store.create_action_request(
+            action_id=str(uuid.uuid4()),
+            source_id="document_workflow",
+            entity_type="export_package",
+            payload=payload,
+            idempotency_key=f"document-export-package:{record['id']}",
+            risk_level="low",
+            policy_version="document-workflow-v1",
+            policy_decision={
+                "allow": True,
+                "risk_level": "low",
+                "requires_approval": False,
+                "reason": "Internal document workflow export package",
+                "policy_version": "document-workflow-v1",
+            },
+            requires_approval=False,
+            requested_by=record.get("approved_by"),
+        )
+        action_id = created["action_id"]
+        completed = self.actions_store.update_action_result(
+            action_id=action_id,
+            status="completed",
+            result={
+                "delivered": True,
+                "channel": "internal_queue",
+                "message": payload["message"],
+                "artifact_count": len(artifacts),
+            },
+            approved_by=record.get("approved_by"),
+        )
+        return {
+            "status": (completed or {}).get("status", created["status"]),
+            "type": "export_package",
             "channel": "internal_queue",
             "action_id": action_id,
             "result": (completed or {}).get("result"),

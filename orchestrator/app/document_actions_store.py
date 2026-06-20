@@ -47,7 +47,9 @@ class DocumentActionsStore:
                     approved_at TEXT,
                     artifacts_json TEXT NOT NULL DEFAULT '[]',
                     announcement_json TEXT,
+                    export_package_json TEXT,
                     executed_at TEXT,
+                    exported_at TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
@@ -65,9 +67,17 @@ class DocumentActionsStore:
                 conn.execute(
                     "ALTER TABLE document_actions ADD COLUMN announcement_json TEXT"
                 )
+            if "export_package_json" not in columns:
+                conn.execute(
+                    "ALTER TABLE document_actions ADD COLUMN export_package_json TEXT"
+                )
             if "executed_at" not in columns:
                 conn.execute(
                     "ALTER TABLE document_actions ADD COLUMN executed_at TEXT"
+                )
+            if "exported_at" not in columns:
+                conn.execute(
+                    "ALTER TABLE document_actions ADD COLUMN exported_at TEXT"
                 )
             conn.execute(
                 """
@@ -262,6 +272,35 @@ class DocumentActionsStore:
             ).fetchone()
         return self._row_to_dict(row)
 
+    def mark_export_package(
+        self,
+        *,
+        document_action_id: int,
+        export_package: dict[str, Any],
+    ) -> dict[str, Any]:
+        now = _utc_now()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE document_actions
+                SET export_package_json = ?,
+                    exported_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    _canonical_json(export_package),
+                    now,
+                    now,
+                    document_action_id,
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM document_actions WHERE id = ?",
+                (document_action_id,),
+            ).fetchone()
+        return self._row_to_dict(row)
+
     def _row_to_dict(self, row: sqlite3.Row | None) -> dict[str, Any]:
         if row is None:
             raise KeyError("document action not found")
@@ -270,6 +309,7 @@ class DocumentActionsStore:
         data["output_formats"] = json.loads(data.pop("output_formats_json") or "[]")
         data["artifacts"] = json.loads(data.pop("artifacts_json") or "[]")
         data["announcement"] = json.loads(data.pop("announcement_json") or "null")
+        data["export_package"] = json.loads(data.pop("export_package_json") or "null")
         return data
 
     def _announcement_row_to_dict(self, row: sqlite3.Row | None) -> dict[str, Any]:
