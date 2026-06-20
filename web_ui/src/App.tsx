@@ -259,22 +259,20 @@ function PerformanceDashboardView({ userId, onBack }: { userId?: string; onBack:
     <div className="page">
       <div className="bg-grid" aria-hidden="true" />
       <header className="hero">
-        <p className="eyebrow">Live Operations</p>
-        <h1>Performance Dashboard</h1>
-        <p className="subtitle">
-          Portfolio, pipeline, and execution performance in one view.
-        </p>
+        <p className="eyebrow">Portfolio signal</p>
+        <h1>Portfolio performance</h1>
+        <p className="subtitle">Portfolio, pipeline, and execution performance in one view.</p>
       </header>
 
       <div className="dashboard-shell">
         <div className="dashboard-toolbar">
-          <button className="status-btn" onClick={onBack}>← Back to Chat</button>
-          <button className="status-btn" onClick={() => void loadDashboard()} disabled={loading}>⟳ Refresh</button>
+          <button className="status-btn" onClick={onBack}>Back to chat</button>
+          <button className="status-btn" onClick={() => void loadDashboard()} disabled={loading}>Refresh</button>
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
 
-        {loading && !data && <div className="dashboard-loading">Loading dashboard...</div>}
+        {loading && !data && <div className="dashboard-loading">Loading portfolio data...</div>}
 
         {data && (
           <>
@@ -378,19 +376,19 @@ function NetworkDashboardView({ userId, onBack }: { userId?: string; onBack: () 
     <div className="page">
       <div className="bg-grid" aria-hidden="true" />
       <header className="hero">
-        <p className="eyebrow">Network Operations</p>
-        <h1>Network Dashboard</h1>
+        <p className="eyebrow">Site reliability</p>
+        <h1>Network performance</h1>
         <p className="subtitle">Wireless reliability, event pressure, and site-level performance across provider sources.</p>
       </header>
 
       <div className="dashboard-shell">
         <div className="dashboard-toolbar">
-          <button className="status-btn" onClick={onBack}>← Back to Chat</button>
-          <button className="status-btn" onClick={() => void loadDashboard()} disabled={loading}>⟳ Refresh</button>
+          <button className="status-btn" onClick={onBack}>Back to chat</button>
+          <button className="status-btn" onClick={() => void loadDashboard()} disabled={loading}>Refresh</button>
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
-        {loading && !data && <div className="dashboard-loading">Loading network dashboard...</div>}
+        {loading && !data && <div className="dashboard-loading">Loading network data...</div>}
 
         {data && (
           <>
