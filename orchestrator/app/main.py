@@ -791,6 +791,38 @@ def _work_order_query() -> str:
     return "open work orders"
 
 
+def _forced_source_plan(message: str) -> tuple[str, str, str] | None:
+    lower = message.lower()
+
+    def has(*phrases: str) -> bool:
+        return any(phrase in lower for phrase in phrases)
+
+    if has("network", "wifi", "wireless", "latency", "packet loss", "throughput", "access point", "incident", "uptime"):
+        return ("query_sql", "Network performance summary including sites, devices, events, daily metrics, uptime, latency, packet loss, throughput, incidents, and open event pressure", "network telemetry")
+    if _is_work_order_intent(message):
+        return ("query_sql", _work_order_query(), "work orders")
+    if has("dashboard", "overview", "snapshot", "dashboard view", "portfolio view", "pipeline view", "my activities"):
+        return ("query_dashboard", message, "dashboard")
+    if has("kpi", "kpis", "metric", "metrics", "trend", "trends", "occupancy", "cap rate", "noi", "commission", "performance", "analytics", "market"):
+        return ("query_analytics", message, "analytics")
+    if has("policy", "policies", "handbook", "procedure", "procedures", "sop", "sops", "remote work", "vacation", "onboarding", "expense reimbursement", "workplace conduct", "it security"):
+        return ("query_knowledge_base", message, "knowledge base")
+    if has("email", "emails", "mail", "message", "messages", "inbox", "thread", "threads"):
+        return ("query_mail", message, "mail")
+    if has("onedrive", "sharepoint", "shared folder", "shared drive", "folder path"):
+        return ("query_onedrive", message, "onedrive")
+    if has("generate", "draft", "create", "write", "produce") and has("report", "summary", "briefing", "document", "packet", "assessment", "executive summary", "board packet"):
+        return ("query_document_generation", message, "document generation")
+    if has("file", "files", "document", "documents", "meeting notes", "roadmap", "roster", "presentation", "spreadsheet", "pdf", "csv"):
+        return ("query_files", message, "files")
+    if has("postgres", "postgresql", "table", "tables", "schema", "column", "columns", "as of", "diff between", "lineage", "freshness", "confidence breakdown"):
+        normalized = _normalize_postgresql_query(message, message)
+        return ("query_postgresql", normalized, "postgresql")
+    if has("property", "properties", "deal", "deals", "pipeline", "contact", "contacts", "lease", "leases", "resident", "residents", "unit", "units", "broker", "brokerage", "commission"):
+        return ("query_sql", message, "sql")
+    return None
+
+
 # ─── MCP Calling ──────────────────────────────────────────────────────
 
 async def _call_mcp_direct(tool_name: str, query: str, user_id: str | None = None) -> dict[str, Any]:
@@ -1068,25 +1100,15 @@ async def _stream_chat_response(
     messages.append({"role": "user", "content": payload.message})
 
     # Force a real SQL telemetry fetch for network prompts so responses are data-grounded.
-    network_keywords = (
-        "network", "wifi", "wireless", "latency",
-        "packet loss", "throughput", "access point", "incident", "uptime",
-    )
-    network_intent = any(k in payload.message.lower() for k in network_keywords)
-    work_order_intent = _is_work_order_intent(payload.message)
-    blocked_tools: set[str] = {"query_analytics", "query_dashboard"} if network_intent else set()
+    forced_source_plan = _forced_source_plan(payload.message)
+    blocked_tools: set[str] = {"query_analytics", "query_dashboard"} if forced_source_plan and forced_source_plan[2] == "network telemetry" else set()
 
-    if network_intent:
+    if forced_source_plan:
+        forced_name, _, forced_label_text = forced_source_plan
         messages[0]["content"] += (
-            "\n\nNetwork telemetry mode is active for this request. "
-            "Use query_sql for network telemetry facts. "
-            "Do NOT call query_analytics or query_dashboard for this response."
-        )
-    elif work_order_intent:
-        messages[0]["content"] += (
-            "\n\nWork order mode is active for this request. "
-            "Use query_sql for open work orders, maintenance requests, service tickets, and repairs. "
-            "Do NOT answer from memory or generalize from unrelated data sources."
+            f"\n\n{forced_label_text.title()} mode is active for this request. "
+            f"Use {forced_name} for this response. "
+            "Do not answer from memory or unrelated data sources."
         )
 
     try:
@@ -1104,12 +1126,8 @@ async def _stream_chat_response(
     full_reply = ""
     max_turns = 5
 
-    if network_intent:
-        forced_name = "query_sql"
-        forced_query = (
-            "Network performance summary including sites, devices, events, daily metrics, "
-            "uptime, latency, packet loss, throughput, incidents, and open event pressure"
-        )
+    if forced_source_plan:
+        forced_name, forced_query, forced_label_text = forced_source_plan
         forced_label = _TOOL_LABELS.get(forced_name, forced_name)
         yield _sse({"type": "tool", "name": forced_name, "label": forced_label, "status": "calling"})
         forced_result = await _call_mcp(forced_name, forced_query, payload.user_id)
@@ -1121,42 +1139,16 @@ async def _stream_chat_response(
         mcp_results_log.append(forced_result)
         messages.append({
             "role": "assistant",
-            "content": "I retrieved live network telemetry from SQL and will summarize it.",
+            "content": f"I retrieved live {forced_label_text} data and will summarize it.",
             "tool_calls": [{
-                "id": "forced_query_sql_network",
+                "id": f"forced_{forced_name}_{forced_label_text.replace(' ', '_')}",
                 "type": "function",
                 "function": {"name": forced_name, "arguments": json.dumps({"query": forced_query})},
             }],
         })
         messages.append({
             "role": "tool",
-            "tool_call_id": "forced_query_sql_network",
-            "content": json.dumps(forced_result),
-        })
-    elif work_order_intent:
-        forced_name = "query_sql"
-        forced_query = _work_order_query()
-        forced_label = _TOOL_LABELS.get(forced_name, forced_name)
-        yield _sse({"type": "tool", "name": forced_name, "label": forced_label, "status": "calling"})
-        forced_result = await _call_mcp(forced_name, forced_query, payload.user_id)
-        forced_result = _augment_files_with_urls(forced_result, _TOOL_TO_ROUTE.get(forced_name, ""))
-        forced_summary = _summarize_mcp_result(forced_result)
-        yield _sse({"type": "tool", "name": forced_name, "label": forced_label, "status": "done", "summary": forced_summary})
-
-        tool_calls_log.append({"name": forced_name, "args": {"query": forced_query, "forced": True}})
-        mcp_results_log.append(forced_result)
-        messages.append({
-            "role": "assistant",
-            "content": "I retrieved live work-order data from SQL and will summarize it.",
-            "tool_calls": [{
-                "id": "forced_query_sql_work_orders",
-                "type": "function",
-                "function": {"name": forced_name, "arguments": json.dumps({"query": forced_query})},
-            }],
-        })
-        messages.append({
-            "role": "tool",
-            "tool_call_id": "forced_query_sql_work_orders",
+            "tool_call_id": f"forced_{forced_name}_{forced_label_text.replace(' ', '_')}",
             "content": json.dumps(forced_result),
         })
 
