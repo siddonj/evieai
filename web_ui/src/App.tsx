@@ -1152,8 +1152,8 @@ function ChatView() {
           <span className="status-actions">
             {isAdmin && (
               <>
-            <button className="status-btn" onClick={() => setView('admin')} title="Open operations dashboard">
-                  Admin
+                <button className="status-btn" onClick={() => setView('admin')} title="Open operations dashboard">
+                  Operations
                 </button>
                 <button className="status-btn" onClick={() => setView('settings')} title="Open settings">
                   Settings
@@ -1166,27 +1166,27 @@ function ChatView() {
               </button>
             )}
             <button className="status-btn" onClick={() => setView('service_health')} title="Open service health">
-              Services
+              Service health
             </button>
             <button className="status-btn" onClick={() => setView('performance')} title="Open performance dashboard">
-              Dashboard
+              Portfolio
             </button>
             <button className="status-btn" onClick={() => setView('network')} title="Open network dashboard">
-              Network
+              Sites
             </button>
             <button className="status-btn" onClick={() => setView('documents')} title="Open document workflows">
-              Documents
+              Workflows
             </button>
             <button className="status-btn" onClick={() => setView('outbox')} title="Open workflow outbox">
-              Outbox
+              Deliveries
             </button>
             {hasConversation && (
               <button className="status-btn" onClick={clearChat} title="Clear conversation history">
-                Clear chat
+                Clear thread
               </button>
             )}
             <button className="status-btn" onClick={logout} title="Sign out">
-              Logout
+              Sign out
             </button>
           </span>
         </div>
