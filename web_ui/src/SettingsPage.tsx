@@ -175,7 +175,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
     [connectors],
   )
 
-  // Load MCP config on mount
+  // Load service config on mount
   useEffect(() => {
     setTab(initialTab)
   }, [initialTab])
@@ -229,7 +229,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
           : []
       setServers(normalized)
     } catch {
-      setUserMessage('Failed to load MCP configuration.')
+      setUserMessage('Failed to load service inventory.')
       setServers([])
     } finally {
       setServerLoading(false)
@@ -302,7 +302,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
         }
       }
     } catch {
-      setAddDataMessage('Failed to send data to MCP server.')
+      setAddDataMessage('Failed to send data to the service.')
     }
   }
 
@@ -468,7 +468,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled }),
       })
-      setGatewayMessage(`Gateway ${enabled ? 'enabled' : 'disabled'}`)
+      setGatewayMessage(`Routing ${enabled ? 'enabled' : 'disabled'}`)
       await loadGatewayAdminData()
     } catch (err) {
       setGatewayMessage(err instanceof Error ? err.message : 'Failed to toggle gateway')
@@ -487,7 +487,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
           reason: gatewayRolloutReason || 'Updated from settings',
         }),
       })
-      setGatewayMessage(`Gateway rollout set to ${state}`)
+      setGatewayMessage(`Routing rollout set to ${state}`)
       await loadGatewayAdminData()
     } catch (err) {
       setGatewayMessage(err instanceof Error ? err.message : 'Failed to update rollout')
@@ -498,7 +498,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
     setGatewayMessage('')
     try {
       await fetchJson(`${ORCHESTRATOR_URL}/admin/gateway-sync`, { method: 'POST' })
-      setGatewayMessage('Gateway sync triggered')
+      setGatewayMessage('Routing sync triggered')
       await loadGatewayAdminData()
     } catch (err) {
       setGatewayMessage(err instanceof Error ? err.message : 'Failed to sync gateway')
@@ -509,7 +509,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
     setGatewayMessage('')
     try {
       await fetchJson(`${ORCHESTRATOR_URL}/admin/gateway-reset`, { method: 'POST' })
-      setGatewayMessage('Gateway routing cooldown reset')
+      setGatewayMessage('Routing cooldown reset')
       await loadGatewayAdminData()
     } catch (err) {
       setGatewayMessage(err instanceof Error ? err.message : 'Failed to reset gateway')
@@ -532,7 +532,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             Service health
           </button>
           <button className={`settings-tab ${tab === 'gateway' ? 'active' : ''}`} onClick={() => setTab('gateway')}>
-            Gateway
+            Routing
           </button>
           <button className={`settings-tab ${tab === 'approvals' ? 'active' : ''}`} onClick={() => setTab('approvals')}>
             Approvals
@@ -677,13 +677,13 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
           <>
             <section className="settings-section">
               <div className="approval-toolbar">
-                <h2>MCP service health</h2>
+                <h2>Service health</h2>
                 <button onClick={() => void loadServiceHealth()} disabled={serviceHealthLoading}>
                   {serviceHealthLoading ? 'Refreshing...' : 'Refresh'}
                 </button>
               </div>
-              <p className="settings-hint">
-                Live status, response time, and reset controls for each MCP service.
+                <p className="settings-hint">
+                Live status, response time, and reset controls for each service.
               </p>
               {serviceHealthMessage && <div className="settings-message">{serviceHealthMessage}</div>}
 
@@ -723,7 +723,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
           <>
             <section className="settings-section">
               <div className="approval-toolbar">
-                <h2>Gateway</h2>
+                <h2>Routing</h2>
                 <button onClick={() => void loadGatewayAdminData()} disabled={gatewayLoading}>
                   {gatewayLoading ? 'Refreshing...' : 'Refresh'}
                 </button>
@@ -731,7 +731,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
               {gatewayMessage && <div className="settings-message">{gatewayMessage}</div>}
 
               {!gatewayConfig ? (
-                <div className="settings-hint">Gateway configuration unavailable.</div>
+                <div className="settings-hint">Routing configuration unavailable.</div>
               ) : (
                 <div className="gateway-summary-grid">
                   <div className="gateway-summary-card">
@@ -765,14 +765,14 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                 <button onClick={() => void toggleGateway(!(gatewayConfig?.enabled ?? false))}>
                   {gatewayConfig?.enabled ? 'Disable' : 'Enable'}
                 </button>
-                <button onClick={() => void syncGateway()}>Sync registry</button>
-                <button onClick={() => void resetGateway()}>Reset cooldown</button>
+                <button onClick={() => void syncGateway()}>Sync routing</button>
+                <button onClick={() => void resetGateway()}>Reset timers</button>
               </div>
             </section>
 
             <section className="settings-section">
               <div className="approval-toolbar">
-                <h2>Gateway rollout</h2>
+                <h2>Routing rollout</h2>
               </div>
               <div className="settings-row">
                 <div className="settings-field">
@@ -832,14 +832,14 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                   </tbody>
                 </table>
               ) : (
-                <div className="settings-hint">No upstream health records available.</div>
+                <div className="settings-hint">No upstream status records available.</div>
               )}
             </section>
 
             <section className="settings-section">
-                <h2>Gateway reliability</h2>
+                <h2>Routing reliability</h2>
               <div className="approval-grid">
-                <ReliabilityCard title="Gateway" data={gatewayReliability} />
+                <ReliabilityCard title="Routing" data={gatewayReliability} />
               </div>
             </section>
           </>
