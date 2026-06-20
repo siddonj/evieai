@@ -310,7 +310,7 @@ app.add_middleware(
 )
 
 MCP_SQL_URL = os.getenv("MCP_SQL_URL", "http://localhost:5000/mcp")
-MCP_POSTGRESQL_URL = os.getenv("MCP_POSTGRESQL_URL", "")
+MCP_POSTGRESQL_URL = os.getenv("MCP_POSTGRESQL_URL", "http://localhost:8010/mcp")
 MCP_FILES_URL = os.getenv("MCP_FILES_URL", "http://localhost:8001/mcp")
 MCP_MAIL_URL = os.getenv("MCP_MAIL_URL", "http://localhost:8002/mcp")
 MCP_ONEDRIVE_URL = os.getenv("MCP_ONEDRIVE_URL", "http://localhost:8003/mcp")
@@ -318,7 +318,7 @@ MCP_MEMORY_URL = os.getenv("MCP_MEMORY_URL", "http://localhost:8004/mcp")
 MCP_KB_URL = os.getenv("MCP_KB_URL", "http://localhost:8005/mcp")
 MCP_DOC_URL = os.getenv("MCP_DOC_URL", "http://localhost:8006/mcp")
 MCP_ANALYTICS_URL = os.getenv("MCP_ANALYTICS_URL", "http://localhost:8007/mcp")
-MCP_DASHBOARD_URL = os.getenv("MCP_DASHBOARD_URL", "")
+MCP_DASHBOARD_URL = os.getenv("MCP_DASHBOARD_URL", "http://localhost:8009/mcp")
 
 CONTEXT_FORGE_ENABLED = os.getenv("CONTEXT_FORGE_ENABLED", "false").lower() in ("1", "true", "yes")
 CONTEXT_FORGE_BASE_URL = os.getenv("CONTEXT_FORGE_BASE_URL", "").strip()
