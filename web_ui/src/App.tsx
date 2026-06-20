@@ -3,7 +3,7 @@ import { marked } from 'marked'
 import { AuthProvider, useAuth } from './auth'
 import { DocumentWorkflowPanel } from './DocumentWorkflowPanel'
 import { LoginPage } from './LoginPage'
-import { ResultDeck, ToolBadge, LiveToolBadge, type ChatResponse } from './Cards'
+import { ResultDeck, ToolBadge, LiveToolBadge, type ChatResponse, type DocumentAction } from './Cards'
 import { WorkPacketPanel } from './WorkPacketPanel'
 
 const SettingsPage = lazy(() => import('./SettingsPage').then(m => ({ default: m.SettingsPage })))
@@ -481,6 +481,29 @@ function ChatView() {
     return `Connected to ${ORCHESTRATOR_URL}  |  User: ${user?.email}  |  MF Brokerage`
   }, [loading, activeTools, user])
 
+  function updateDocumentAction(messageId: string, nextAction: DocumentAction) {
+    setMessages((prev) => prev.map((msg) => {
+      if (msg.id !== messageId || !msg.data?.document_actions) {
+        return msg
+      }
+      const currentActions = msg.data.document_actions
+      const existingIndex = currentActions.findIndex((action) => action.id === nextAction.id)
+      const replacementIndex = existingIndex >= 0
+        ? existingIndex
+        : currentActions.findIndex((action) => action.document_type === nextAction.document_type && action.title === nextAction.title)
+      const updatedActions = replacementIndex >= 0
+        ? currentActions.map((action, index) => (index === replacementIndex ? nextAction : action))
+        : [...currentActions, nextAction]
+      return {
+        ...msg,
+        data: {
+          ...msg.data,
+          document_actions: updatedActions,
+        },
+      }
+    }))
+  }
+
   function clearChat() {
     const welcome: ChatMessage = {
       id: nextId(),
@@ -578,6 +601,8 @@ function ChatView() {
                 reply: fullReply,
                 tool_calls: event.tool_calls || [],
                 mcp_results: event.mcp_results || [],
+                work_packet: event.work_packet || undefined,
+                document_actions: event.document_actions || [],
               }
               break
 
@@ -732,7 +757,14 @@ function ChatView() {
               />
               {msg.data?.document_actions?.map((action) => (
                 <div key={action.id} className="message-section">
-                  <DocumentWorkflowPanel action={action} />
+                  <DocumentWorkflowPanel
+                    action={action}
+                    orchestratorUrl={ORCHESTRATOR_URL}
+                    userId={user?.email}
+                    workPacketId={msg.data?.work_packet?.answer?.summary ? `${msg.id}-${action.document_type}` : msg.id}
+                    sourceSummary={msg.data?.work_packet?.answer?.summary || msg.text}
+                    onActionChange={(nextAction) => updateDocumentAction(msg.id, nextAction)}
+                  />
                 </div>
               ))}
               {msg.data?.work_packet && (
