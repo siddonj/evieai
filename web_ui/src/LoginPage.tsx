@@ -39,8 +39,8 @@ export function LoginPage() {
               <div className="evie-wordmark-tag">MULTIFAMILY AI SOLUTIONS</div>
             </div>
           </div>
-          <p className="eyebrow">Private Workspace</p>
           <h1>Intelligence Workspace</h1>
+          <p className="login-subtitle">Sign in to access the agent, dashboards, and governed workflows.</p>
           {isDevDemo && <div className="mode-badge">Demo mode</div>}
         </div>
         <form className="login-form" onSubmit={handleSubmit}>
