@@ -43,6 +43,18 @@ def create_draft(payload: CreateDraftRequest) -> dict[str, Any]:
     )
 
 
+@router.get("")
+def list_document_actions(user_id: str | None = None, limit: int = 50) -> dict[str, Any]:
+    return {
+        "items": get_document_actions_store().list_actions(user_id=user_id, limit=limit),
+    }
+
+
+@router.get("/{document_action_id}")
+def get_document_action(document_action_id: int) -> dict[str, Any]:
+    return get_document_actions_store().get(document_action_id)
+
+
 @router.post("/{document_action_id}/approve")
 def approve_draft(document_action_id: int, payload: ApproveDraftRequest) -> dict[str, Any]:
     return DOCUMENT_ACTIONS_SERVICE.approve(

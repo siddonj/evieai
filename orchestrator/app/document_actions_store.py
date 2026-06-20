@@ -171,6 +171,28 @@ class DocumentActionsStore:
             ).fetchone()
         return self._row_to_dict(row)
 
+    def list_actions(
+        self,
+        *,
+        user_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if user_id:
+            clauses.append("user_id = ?")
+            params.append(user_id)
+
+        query = "SELECT * FROM document_actions"
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [self._row_to_dict(row) for row in rows]
+
     def mark_executed(
         self,
         *,

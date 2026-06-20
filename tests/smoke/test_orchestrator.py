@@ -249,12 +249,44 @@ async def test_chat_document_workflow_end_to_end():
 
 
 @pytest.mark.asyncio
+async def test_document_workflow_list_and_get_endpoints():
+    async with httpx.AsyncClient(timeout=20) as client:
+        draft = await client.post(
+            f"{_base_url()}/document-actions/draft",
+            json={
+                "user_id": "smoke-docs",
+                "work_packet_id": "wp-docs-1",
+                "document_type": "executive_briefing",
+                "title": "Executive Briefing",
+                "source_summary": "Summary",
+            },
+        )
+        assert draft.status_code == 200
+        draft_body = draft.json()
+
+        listed = await client.get(f"{_base_url()}/document-actions", params={"user_id": "smoke-docs", "limit": 10})
+        assert listed.status_code == 200
+        listed_body = listed.json()
+        assert listed_body["items"]
+        assert any(item["id"] == draft_body["id"] for item in listed_body["items"])
+
+        fetched = await client.get(f"{_base_url()}/document-actions/{draft_body['id']}")
+        assert fetched.status_code == 200
+        fetched_body = fetched.json()
+        assert fetched_body["id"] == draft_body["id"]
+        assert fetched_body["title"] == "Executive Briefing"
+        assert fetched_body["status"] == "draft"
+
+
+@pytest.mark.asyncio
 async def test_openapi_schema_mentions_document_actions():
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(f"{_base_url()}/openapi.json")
         assert resp.status_code == 200
         schema = resp.json()
         assert "/document-actions/draft" in schema["paths"]
+        assert "/document-actions" in schema["paths"]
+        assert "/document-actions/{document_action_id}" in schema["paths"]
         assert "/document-actions/{document_action_id}/approve" in schema["paths"]
         assert "/document-actions/{document_action_id}/finalize" in schema["paths"]
 

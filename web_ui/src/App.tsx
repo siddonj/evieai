@@ -9,7 +9,11 @@ import { WorkPacketPanel } from './WorkPacketPanel'
 const SettingsPage = lazy(() => import('./SettingsPage').then(m => ({ default: m.SettingsPage })))
 const AdminPage = lazy(() => import('./AdminPage').then(m => ({ default: m.AdminPage })))
 
-type View = 'chat' | 'settings' | 'service_health' | 'performance' | 'network' | 'admin'
+type DocumentsResponse = {
+  items: DocumentAction[]
+}
+
+type View = 'chat' | 'settings' | 'service_health' | 'performance' | 'network' | 'admin' | 'documents'
 
 type PerformanceData = {
   generated_at: string
@@ -412,6 +416,86 @@ function NetworkDashboardView({ userId, onBack }: { userId?: string; onBack: () 
   )
 }
 
+function DocumentsView({ userId, onBack }: { userId?: string; onBack: () => void }) {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [documents, setDocuments] = useState<DocumentAction[]>([])
+
+  async function loadDocuments() {
+    setLoading(true)
+    setError('')
+    try {
+      const params = new URLSearchParams()
+      params.set('limit', '50')
+      if (userId) {
+        params.set('user_id', userId)
+      }
+      const res = await fetch(`${ORCHESTRATOR_URL}/document-actions?${params.toString()}`)
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`)
+      }
+      const payload = await res.json() as DocumentsResponse
+      setDocuments(payload.items || [])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      setError(`Could not load document workflows: ${message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadDocuments()
+  }, [userId])
+
+  function updateDocument(nextAction: DocumentAction) {
+    setDocuments((prev) => prev.map((action) => (
+      action.id === nextAction.id ? nextAction : action
+    )))
+  }
+
+  return (
+    <div className="page">
+      <div className="bg-grid" aria-hidden="true" />
+      <header className="hero">
+        <p className="eyebrow">Governed Workflows</p>
+        <h1>Documents</h1>
+        <p className="subtitle">
+          Reopen governed document workflows, inspect artifacts, and continue approvals outside chat.
+        </p>
+      </header>
+
+      <div className="dashboard-shell">
+        <div className="dashboard-toolbar">
+          <button className="status-btn" onClick={onBack}>← Back to Chat</button>
+          <button className="status-btn" onClick={() => void loadDocuments()} disabled={loading}>⟳ Refresh</button>
+        </div>
+
+        {error && <div className="dashboard-error">{error}</div>}
+        {loading && !documents.length && <div className="dashboard-loading">Loading document workflows...</div>}
+        {!loading && !documents.length && <div className="dashboard-loading">No document workflows yet.</div>}
+
+        {documents.length > 0 && (
+          <div className="messages">
+            {documents.map((action) => (
+              <div key={action.id} className="message-section">
+                <DocumentWorkflowPanel
+                  action={action}
+                  orchestratorUrl={ORCHESTRATOR_URL}
+                  userId={userId}
+                  workPacketId={action.work_packet_id || `document-${action.id}`}
+                  sourceSummary={action.title}
+                  onActionChange={updateDocument}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function saveHistory(msgs: ChatMessage[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs.slice(-50))) // keep last 50
@@ -663,6 +747,10 @@ function ChatView() {
     return <NetworkDashboardView userId={user?.email} onBack={() => setView('chat')} />
   }
 
+  if (view === 'documents') {
+    return <DocumentsView userId={user?.email} onBack={() => setView('chat')} />
+  }
+
   const hasConversation = messages.length > 1
 
   return (
@@ -734,6 +822,9 @@ function ChatView() {
             </button>
             <button className="status-btn" onClick={() => setView('network')} title="Network Dashboard">
               Network
+            </button>
+            <button className="status-btn" onClick={() => setView('documents')} title="Document Workflows">
+              Documents
             </button>
             {hasConversation && (
               <button className="status-btn" onClick={clearChat} title="Clear conversation">

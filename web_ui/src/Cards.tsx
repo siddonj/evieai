@@ -178,16 +178,29 @@ export type WorkPacket = {
 export type DocumentAction = {
   id: number
   status: 'draft' | 'approved' | 'executed' | 'blocked'
+  user_id?: string
+  work_packet_id?: string
   document_type: string
   title: string
   draft_version?: number
   destination_type?: string
   destination_ref?: string
   output_formats?: string[]
+  created_at?: string
+  updated_at?: string
+  executed_at?: string
+  announcement?: {
+    id?: number
+    status?: string
+    type?: string
+    action_id?: string
+    created_at?: string
+  }
   artifacts?: Array<{
     format?: string
     file_name?: string
     storage_ref?: string
+    size_bytes?: number
   }>
 }
 

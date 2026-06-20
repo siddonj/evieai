@@ -111,3 +111,34 @@ def test_store_migrates_older_schema_on_reopen(tmp_path):
 
     assert record["artifacts"] == []
     assert record["announcement"] is None
+
+
+def test_store_lists_actions_for_user_newest_first(tmp_path):
+    db_path = tmp_path / "document_actions.db"
+    store = DocumentActionsStore(db_path=db_path)
+    first = store.create_draft(
+        user_id="alice",
+        work_packet_id="wp-1",
+        document_type="executive_briefing",
+        title="Executive Briefing",
+        draft_markdown="# Briefing",
+    )
+    second = store.create_draft(
+        user_id="alice",
+        work_packet_id="wp-2",
+        document_type="board_report",
+        title="Board Report",
+        draft_markdown="# Board",
+    )
+    store.create_draft(
+        user_id="bob",
+        work_packet_id="wp-3",
+        document_type="operational_report",
+        title="Ops Report",
+        draft_markdown="# Ops",
+    )
+
+    actions = store.list_actions(user_id="alice", limit=10)
+
+    assert [action["id"] for action in actions] == [second["id"], first["id"]]
+    assert all(action["user_id"] == "alice" for action in actions)
