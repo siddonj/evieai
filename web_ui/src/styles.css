@@ -6208,6 +6208,61 @@ h1 {
   background: rgba(255, 255, 255, 0.075);
 }
 
+.message-section {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+}
+
+.message-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.message-section-title {
+  color: #8eb6ff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.message-section-meta {
+  color: #9fb2c9;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.tool-bar {
+  align-items: center;
+}
+
+.tool-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 30px;
+}
+
+.tool-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(132, 183, 255, 0.8);
+  box-shadow: 0 0 0 4px rgba(132, 183, 255, 0.12);
+}
+
+.live-tools {
+  gap: 0.55rem;
+}
+
+.live-tool {
+  border-radius: 999px;
+}
+
 @media (max-width: 640px) {
   .result-card-header {
     flex-direction: column;
@@ -6215,5 +6270,10 @@ h1 {
 
   .result-grid {
     grid-template-columns: 1fr;
+  }
+
+  .message-section-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

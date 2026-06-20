@@ -1211,15 +1211,27 @@ function ChatView() {
                 </div>
               )}
               {msg.data?.tool_calls && msg.data.tool_calls.length > 0 && (
-                <div className="tool-bar">
-                  {msg.data.tool_calls.map((tc, i) => (
-                    <ToolBadge key={`${tc.name}-${i}`} name={tc.name} />
-                  ))}
+                <div className="message-section">
+                  <div className="message-section-header">
+                    <span className="message-section-title">Tools used</span>
+                    <span className="message-section-meta">{msg.data.tool_calls.length}</span>
+                  </div>
+                  <div className="tool-bar">
+                    {msg.data.tool_calls.map((tc, i) => (
+                      <ToolBadge key={`${tc.name}-${i}`} name={tc.name} />
+                    ))}
+                  </div>
                 </div>
               )}
               {msg.data?.mcp_results && msg.data.mcp_results.length > 0 && (
-                <div className="card-panel">
-                  {msg.data.mcp_results.map((r, i) => <ResultDeck key={i} result={r} />)}
+                <div className="message-section">
+                  <div className="message-section-header">
+                    <span className="message-section-title">Results</span>
+                    <span className="message-section-meta">{msg.data.mcp_results.length}</span>
+                  </div>
+                  <div className="card-panel">
+                    {msg.data.mcp_results.map((r, i) => <ResultDeck key={i} result={r} />)}
+                  </div>
                 </div>
               )}
             </div>
