@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from orchestrator.app.actions_store import ActionsStore
 from orchestrator.app.document_actions_service import DocumentActionsService
 from orchestrator.app.document_actions_store import DocumentActionsStore
 
@@ -39,8 +40,13 @@ def test_service_blocks_finalization_before_approval(tmp_path):
 
 def test_service_finalizes_after_approval_and_records_artifacts(tmp_path):
     store = DocumentActionsStore(db_path=tmp_path / "document_actions.db")
+    actions_store = ActionsStore(str(tmp_path / "actions.db"))
     artifact_root = tmp_path / "document_artifacts"
-    service = DocumentActionsService(store=store, artifact_root=artifact_root)
+    service = DocumentActionsService(
+        store=store,
+        artifact_root=artifact_root,
+        actions_store=actions_store,
+    )
     draft = service.create_draft(
         user_id="alice",
         work_packet_id="wp-1",
@@ -67,8 +73,15 @@ def test_service_finalizes_after_approval_and_records_artifacts(tmp_path):
     assert first_artifact_path.exists()
     assert "# Board Report" in first_artifact_path.read_text(encoding="utf-8")
     assert result["destination"]["type"] == "onedrive"
-    assert result["announcement"]["status"] == "created"
+    assert result["announcement"]["status"] == "approved"
     assert result["announcement"]["id"] > 0
+    assert result["announcement"]["action_id"]
+    announcement_action = actions_store.get_action_request(result["announcement"]["action_id"])
+    assert announcement_action is not None
+    assert announcement_action["source_id"] == "document_workflow"
+    assert announcement_action["entity_type"] == "announcement"
+    assert announcement_action["status"] == "approved"
+    assert announcement_action["payload"]["document_action_id"] == draft["id"]
     assert persisted["status"] == "executed"
     assert persisted["executed_at"]
     assert persisted["artifacts"] == result["artifacts"]
@@ -78,4 +91,5 @@ def test_service_finalizes_after_approval_and_records_artifacts(tmp_path):
 
     assert rerun["status"] == "executed"
     assert rerun["announcement"]["id"] == result["announcement"]["id"]
+    assert rerun["announcement"]["action_id"] == result["announcement"]["action_id"]
     assert rerun["artifacts"][0]["storage_ref"] == result["artifacts"][0]["storage_ref"]

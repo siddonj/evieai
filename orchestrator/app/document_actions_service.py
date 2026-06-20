@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import os
+import uuid
 from pathlib import Path
 from typing import Any
 
 try:
     from app.blob import DOCUMENT_ARTIFACT_ROOT, write_local_document_artifact
+    from app.actions_store import ActionsStore
     from app.document_actions_store import DocumentActionsStore
 except ImportError:
     from orchestrator.app.blob import DOCUMENT_ARTIFACT_ROOT, write_local_document_artifact
+    from orchestrator.app.actions_store import ActionsStore
     from orchestrator.app.document_actions_store import DocumentActionsStore
 
 
@@ -17,9 +20,11 @@ class DocumentActionsService:
         self,
         store: DocumentActionsStore,
         artifact_root: Path | str | None = None,
+        actions_store: ActionsStore | None = None,
     ) -> None:
         self.store = store
         self.artifact_root = Path(artifact_root or os.getenv("DOCUMENT_ARTIFACT_ROOT", DOCUMENT_ARTIFACT_ROOT))
+        self.actions_store = actions_store
 
     def create_draft(
         self,
@@ -82,11 +87,11 @@ class DocumentActionsService:
             self._write_artifact(record=record, output_format=output_format)
             for output_format in record["output_formats"]
         ]
-        announcement = {
-            "status": "created",
-            "type": "document_finalized",
-            "channel": "internal_queue",
-        }
+        announcement = self._create_announcement_action(
+            record=record,
+            artifacts=artifacts,
+            destination=destination,
+        )
         executed = self.store.mark_executed(
             document_action_id=document_action_id,
             artifacts=artifacts,
@@ -138,3 +143,51 @@ class DocumentActionsService:
             ]
         )
         return content.encode("utf-8")
+
+    def _create_announcement_action(
+        self,
+        *,
+        record: dict[str, Any],
+        artifacts: list[dict[str, Any]],
+        destination: dict[str, Any],
+    ) -> dict[str, Any]:
+        if self.actions_store is None:
+            return {
+                "status": "created",
+                "type": "document_finalized",
+                "channel": "internal_queue",
+            }
+
+        payload = {
+            "document_action_id": record["id"],
+            "title": record["title"],
+            "document_type": record["document_type"],
+            "destination": destination,
+            "artifacts": artifacts,
+            "message": f"{record['title']} finalized with {len(artifacts)} artifact(s).",
+        }
+        created = self.actions_store.create_action_request(
+            action_id=str(uuid.uuid4()),
+            source_id="document_workflow",
+            entity_type="announcement",
+            payload=payload,
+            idempotency_key=f"document-announcement:{record['id']}",
+            risk_level="low",
+            policy_version="document-workflow-v1",
+            policy_decision={
+                "allow": True,
+                "risk_level": "low",
+                "requires_approval": False,
+                "reason": "Internal document workflow announcement",
+                "policy_version": "document-workflow-v1",
+            },
+            requires_approval=False,
+            requested_by=record.get("approved_by"),
+        )
+        action = self.actions_store.get_action_request(created["action_id"])
+        return {
+            "status": (action or {}).get("status", created["status"]),
+            "type": "document_finalized",
+            "channel": "internal_queue",
+            "action_id": created["action_id"],
+        }
