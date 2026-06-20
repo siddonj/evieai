@@ -520,24 +520,22 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
     <div className="page">
       <div className="bg-grid" aria-hidden="true" />
       <header className="hero settings-hero">
-        <p className="eyebrow">Settings</p>
-        <h1>Admin Console</h1>
-        <p className="subtitle">
-          Manage data sources and write-back safety controls.
-        </p>
+        <p className="eyebrow">Operations</p>
+        <h1>Settings</h1>
+        <p className="subtitle">Manage data sources, service health, and write-back controls.</p>
       </header>
 
       <main className="settings-shell">
         {/* Tab Navigation */}
         <div className="settings-tabs">
           <button className={`settings-tab ${tab === 'service_health' ? 'active' : ''}`} onClick={() => setTab('service_health')}>
-            ⏱️ Service Health
+            Service health
           </button>
           <button className={`settings-tab ${tab === 'gateway' ? 'active' : ''}`} onClick={() => setTab('gateway')}>
-            🌉 Gateway
+            Gateway
           </button>
           <button className={`settings-tab ${tab === 'approvals' ? 'active' : ''}`} onClick={() => setTab('approvals')}>
-            ✅ Approvals
+            Approvals
           </button>
         </div>
 
@@ -546,7 +544,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             {userMessage && <section className="settings-section"><div className="settings-message">{userMessage}</div></section>}
             <section className="settings-section">
               <div className="approval-toolbar">
-                <h2>LLM Provider</h2>
+              <h2>Model provider</h2>
                 <button onClick={() => void loadLlmProviderStatus()} disabled={llmStatusLoading}>
                   {llmStatusLoading ? 'Refreshing...' : 'Refresh'}
                 </button>
@@ -590,8 +588,8 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             </section>
 
             <section className="settings-section">
-              <h2>MCP Server Status</h2>
-              <p className="settings-hint">Toggle MCP servers on or off. Disabled servers will not be available to the AI agent.</p>
+              <h2>MCP server status</h2>
+              <p className="settings-hint">Toggle MCP services on or off. Disabled services are hidden from the agent.</p>
               {serverLoading ? (
                 <div className="settings-loading">Loading MCP configuration...</div>
               ) : (
@@ -616,7 +614,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                           onClick={() => previewData(s.key)}
                           disabled={previewLoading === s.key}
                         >
-                          {previewLoading === s.key ? 'Loading...' : 'Preview Data'}
+                  {previewLoading === s.key ? 'Loading...' : 'Preview data'}
                         </button>
                       )}
                     </div>
@@ -628,7 +626,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             {/* Data Preview Panel */}
             {Object.keys(dataPreview).length > 0 && (
               <section className="settings-section">
-                <h2>Data Preview</h2>
+                <h2>Data preview</h2>
                 {Object.entries(dataPreview).map(([service, data]) => (
                   <div key={service} className="data-preview-panel">
                     <div className="data-preview-header">
@@ -642,19 +640,19 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             )}
 
             <section className="settings-section">
-              <h2>Add Data to MCP Server</h2>
+              <h2>Add data to an MCP service</h2>
               <p className="settings-hint">
-                Upload new documents, user contexts, templates, or analytics categories. Select a server and paste JSON data.
+                Upload new documents, user context, templates, or analytics records. Select a service and paste JSON.
               </p>
               <div className="add-data-form">
                 <div className="settings-row">
                   <div className="settings-field">
-                    <label>Target MCP Server</label>
+                    <label>Target service</label>
                     <select value={addDataService} onChange={(e) => setAddDataService(e.target.value)}>
-                      <option value="knowledge_base">📚 Knowledge Base (document object)</option>
-                      <option value="memory">🧠 Memory (user_id + context object)</option>
-                      <option value="document_generation">📄 Document Generation (document template)</option>
-                      <option value="analytics">📊 Analytics (category + data object)</option>
+                      <option value="knowledge_base">Knowledge base</option>
+                      <option value="memory">Memory</option>
+                      <option value="document_generation">Document generation</option>
+                      <option value="analytics">Analytics</option>
                     </select>
                   </div>
                 </div>
@@ -668,7 +666,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                     rows={10}
                   />
                 </div>
-                <button onClick={submitData}>Submit Data</button>
+                <button onClick={submitData}>Submit data</button>
                 {addDataMessage && <div className={`settings-message ${addDataMessage.startsWith('Success') ? 'success' : ''}`}>{addDataMessage}</div>}
               </div>
             </section>
@@ -679,7 +677,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
           <>
             <section className="settings-section">
               <div className="approval-toolbar">
-                <h2>MCP Service Health</h2>
+                <h2>MCP service health</h2>
                 <button onClick={() => void loadServiceHealth()} disabled={serviceHealthLoading}>
                   {serviceHealthLoading ? 'Refreshing...' : 'Refresh'}
                 </button>
@@ -696,7 +694,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                     <th>Enabled</th>
                     <th>Reachable</th>
                     <th>Status</th>
-                    <th>Response (ms)</th>
+                    <th>Response ms</th>
                     <th>Cooldown</th>
                     <th>Action</th>
                   </tr>
@@ -708,11 +706,11 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                       <td><span className={`status-pill ${row.enabled ? 'completed' : 'failed'}`}>{row.enabled ? 'on' : 'off'}</span></td>
                       <td><span className={`status-pill ${row.reachable ? 'completed' : 'failed'}`}>{row.reachable ? 'yes' : 'no'}</span></td>
                       <td>{row.status_code ?? 'n/a'}</td>
-                      <td>{row.response_ms}</td>
+                        <td>{row.response_ms}</td>
                       <td>{row.cooldown_remaining_seconds > 0 ? `${row.cooldown_remaining_seconds}s` : '-'}</td>
-                      <td>
-                        <button onClick={() => void resetService(row.key)}>Reset</button>
-                      </td>
+                        <td>
+                          <button onClick={() => void resetService(row.key)}>Reset</button>
+                        </td>
                     </tr>
                   ))}
                 </tbody>
@@ -725,7 +723,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
           <>
             <section className="settings-section">
               <div className="approval-toolbar">
-                <h2>Context Forge Gateway</h2>
+                <h2>Gateway</h2>
                 <button onClick={() => void loadGatewayAdminData()} disabled={gatewayLoading}>
                   {gatewayLoading ? 'Refreshing...' : 'Refresh'}
                 </button>
@@ -745,11 +743,11 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                     <span className={`status-pill ${gatewayConfig.configured ? 'completed' : 'failed'}`}>{gatewayConfig.configured ? 'yes' : 'no'}</span>
                   </div>
                   <div className="gateway-summary-card">
-                    <span>Auth</span>
+                    <span>Auth mode</span>
                     <strong>{gatewayConfig.auth_mode}</strong>
                   </div>
                   <div className="gateway-summary-card">
-                    <span>Fallback</span>
+                    <span>Fallback mode</span>
                     <strong>{gatewayConfig.fallback_mode}</strong>
                   </div>
                   <div className="gateway-summary-card wide">
@@ -757,7 +755,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                     <strong className="llm-endpoint">{gatewayConfig.base_url_masked || gatewayConfig.base_url || 'not set'}</strong>
                   </div>
                   <div className="gateway-summary-card">
-                    <span>Last Sync</span>
+                    <span>Last sync</span>
                     <strong>{gatewayConfig.last_sync_at ? new Date(gatewayConfig.last_sync_at).toLocaleString() : 'never'}</strong>
                   </div>
                 </div>
@@ -765,20 +763,20 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
 
               <div className="gateway-actions-row">
                 <button onClick={() => void toggleGateway(!(gatewayConfig?.enabled ?? false))}>
-                  {gatewayConfig?.enabled ? 'Disable Gateway' : 'Enable Gateway'}
+                  {gatewayConfig?.enabled ? 'Disable' : 'Enable'}
                 </button>
-                <button onClick={() => void syncGateway()}>Sync Registry</button>
-                <button onClick={() => void resetGateway()}>Reset Cooldown</button>
+                <button onClick={() => void syncGateway()}>Sync registry</button>
+                <button onClick={() => void resetGateway()}>Reset cooldown</button>
               </div>
             </section>
 
             <section className="settings-section">
               <div className="approval-toolbar">
-                <h2>Gateway Rollout</h2>
+                <h2>Gateway rollout</h2>
               </div>
               <div className="settings-row">
                 <div className="settings-field">
-                  <label>Canary Traffic %</label>
+                  <label>Canary traffic %</label>
                   <input
                     type="number"
                     min={0}
@@ -797,8 +795,8 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                 </div>
               </div>
               <div className="gateway-actions-row">
-                <button onClick={() => void applyGatewayRollout('live')}>Set Live</button>
-                <button onClick={() => void applyGatewayRollout('canary')}>Set Canary</button>
+                <button onClick={() => void applyGatewayRollout('live')}>Set live</button>
+                <button onClick={() => void applyGatewayRollout('canary')}>Set canary</button>
                 <button className="btn-danger" onClick={() => void applyGatewayRollout('paused')}>Pause</button>
               </div>
               {gatewayConfig?.rollout && (
@@ -809,7 +807,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             </section>
 
             <section className="settings-section">
-              <h2>Upstream Service Health</h2>
+              <h2>Upstream service health</h2>
               {gatewayHealth?.services?.length ? (
                 <table className="users-table approvals-table">
                   <thead>
@@ -839,7 +837,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             </section>
 
             <section className="settings-section">
-              <h2>Gateway Reliability</h2>
+                <h2>Gateway reliability</h2>
               <div className="approval-grid">
                 <ReliabilityCard title="Gateway" data={gatewayReliability} />
               </div>
@@ -851,7 +849,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
           <>
             <section className="settings-section">
               <div className="approval-toolbar">
-                <h2>Write-Back Reliability</h2>
+                <h2>Write-back reliability</h2>
                 <button onClick={() => void loadApprovalAdminData()} disabled={actionsLoading}>
                   {actionsLoading ? 'Refreshing...' : 'Refresh'}
                 </button>
@@ -866,7 +864,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             </section>
 
             <section className="settings-section">
-              <h2>Circuit Breaker Controls</h2>
+              <h2>Circuit breaker controls</h2>
               <div className="settings-row">
                 <div className="settings-field">
                   <label>Connector</label>
@@ -892,7 +890,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
             </section>
 
             <section className="settings-section">
-              <h2>Pending Approval Queue</h2>
+              <h2>Pending approval queue</h2>
               {approvals.length === 0 ? (
                 <div className="settings-hint">No pending approvals.</div>
               ) : (
@@ -903,7 +901,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                       <th>Source</th>
                       <th>Entity</th>
                       <th>Risk</th>
-                      <th>Requested By</th>
+                    <th>Requested by</th>
                       <th>Created</th>
                       <th>Actions</th>
                     </tr>
@@ -930,9 +928,9 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
 
             <section className="settings-section">
               <div className="approval-toolbar">
-                <h2>Action History</h2>
+                <h2>Action history</h2>
                 <div className="settings-field action-filter-field">
-                  <label>Status Filter</label>
+                  <label>Status filter</label>
                   <select value={actionStatusFilter} onChange={(e) => setActionStatusFilter(e.target.value)}>
                     <option value="">All</option>
                     <option value="pending_approval">pending_approval</option>

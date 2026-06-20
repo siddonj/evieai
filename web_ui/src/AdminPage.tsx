@@ -45,17 +45,21 @@ interface AdminPageProps {
   onBack: () => void
 }
 
-const SERVICE_CATEGORIES: Record<string, { label: string; emoji: string; color: string }> = {
-  sql: { label: 'SQL Database', emoji: '🗄️', color: '#3b82f6' },
-  files: { label: 'File Share', emoji: '📁', color: '#f59e0b' },
-  mail: { label: 'Email (O365)', emoji: '📧', color: '#ef4444' },
-  onedrive: { label: 'OneDrive', emoji: '☁️', color: '#0ea5e9' },
-  memory: { label: 'Memory Store', emoji: '🧠', color: '#8b5cf6' },
-  knowledge_base: { label: 'Knowledge Base', emoji: '📚', color: '#10b981' },
-  document_generation: { label: 'Document Gen', emoji: '📄', color: '#ec4899' },
-  analytics: { label: 'Analytics', emoji: '📊', color: '#f97316' },
-  postgresql: { label: 'PostgreSQL', emoji: '🐘', color: '#06b6d4' },
-  dashboard: { label: 'Dashboard', emoji: '📈', color: '#14b8a6' },
+const SERVICE_CATEGORIES: Record<string, { label: string; color: string }> = {
+  sql: { label: 'SQL database', color: '#3b82f6' },
+  files: { label: 'File share', color: '#f59e0b' },
+  mail: { label: 'Mail', color: '#ef4444' },
+  onedrive: { label: 'OneDrive', color: '#0ea5e9' },
+  memory: { label: 'Memory', color: '#8b5cf6' },
+  knowledge_base: { label: 'Knowledge base', color: '#10b981' },
+  document_generation: { label: 'Documents', color: '#ec4899' },
+  analytics: { label: 'Analytics', color: '#f97316' },
+  postgresql: { label: 'PostgreSQL', color: '#06b6d4' },
+  dashboard: { label: 'Dashboard', color: '#14b8a6' },
+}
+
+function getServiceCategory(name: string) {
+  return SERVICE_CATEGORIES[name] ?? { label: 'Service', color: '#64748b' }
 }
 
 export function AdminPage({ onBack }: AdminPageProps) {
@@ -146,7 +150,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         id: `incident-${now.getTime()}`,
         timestamp: now,
         severity: 'critical',
-        message: `🚨 INCIDENT: ${downCount} services down - ${downServices}`,
+        message: `${downCount} services are unavailable: ${downServices}`,
         dismissed: false,
       }
       newAlerts.unshift(alert)
@@ -231,10 +235,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
     return (
       <div className="admin-container">
         <div className="dashboard-header">
-          <h1>System Health Dashboard</h1>
-          <p>Real-time system monitoring</p>
+          <h1>Operations Health</h1>
+          <p>Real-time service status and recovery controls</p>
         </div>
-        <div className="dashboard-loading">Loading system status...</div>
+        <div className="dashboard-loading">Loading current health data...</div>
       </div>
     )
   }
@@ -247,8 +251,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
     <div className="admin-container">
       {/* Header */}
       <div className="dashboard-header">
-        <h1>System Health Dashboard</h1>
-        <p>Real-time system monitoring</p>
+        <h1>Operations Health</h1>
+        <p>Real-time service status and recovery controls</p>
       </div>
 
       {/* Toolbar */}
@@ -262,12 +266,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
             />
             Auto-refresh (5s)
           </label>
-          <button
-            className="toolbar-button"
-            onClick={() => void fetchHealth()}
-            disabled={loading}
-          >
-            🔄 {loading ? 'Loading...' : 'Refresh'}
+          <button className="toolbar-button" onClick={() => void fetchHealth()} disabled={loading}>
+            {loading ? 'Refreshing...' : 'Refresh'}
           </button>
           <button className="toolbar-button" onClick={onBack}>
             ← Back
@@ -319,19 +319,19 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
             <div className="kpi-cards">
               <div className="kpi-card">
-                <div className="kpi-icon">📊</div>
+                <div className="kpi-icon">Operations</div>
                 <div className="kpi-label">Orchestrator</div>
                 <div className="kpi-value">{health.orchestrator_status}</div>
               </div>
               <div className="kpi-card">
-                <div className="kpi-icon">✅</div>
+                <div className="kpi-icon">Coverage</div>
                 <div className="kpi-label">Active Services</div>
                 <div className="kpi-value">
                   {reachableCount}/{totalCount}
                 </div>
               </div>
               <div className="kpi-card">
-                <div className="kpi-icon">⏱️</div>
+                <div className="kpi-icon">Latency</div>
                 <div className="kpi-label">Avg Response</div>
                 <div className="kpi-value">
                   {health.services.length > 0
@@ -349,7 +349,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
           {/* Health Trend Chart */}
           {history.length > 1 && (
             <div className="chart-section">
-              <h2>📈 Health Trend (Last 20 checks)</h2>
+              <h2>Health trend over the last 20 checks</h2>
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={history}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
@@ -370,12 +370,15 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
           {/* Services Grid */}
           <div className="services-grid">
-            <h2>🔧 Service Status</h2>
+            <h2>Service status</h2>
             <div className="service-cards">
               {health.services.map((service) => (
                 <div
                   key={service.name}
                   className={`service-card ${service.reachable ? 'healthy' : 'unhealthy'}`}
+                  style={{
+                    borderLeftColor: getServiceCategory(service.name).color,
+                  }}
                 >
                   <div className="service-header">
                     <div
@@ -390,14 +393,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
                       }
                       style={{ cursor: 'pointer', flex: 1 }}
                     >
-                      <div className="service-icon">
-                        {SERVICE_CATEGORIES[service.name]?.emoji || '🔧'}
-                      </div>
+                      <div className="service-icon">{getServiceCategory(service.name).label.slice(0, 1)}</div>
                       <div className="service-name">
-                        {SERVICE_CATEGORIES[service.name]?.label || service.name}
+                        {getServiceCategory(service.name).label}
                       </div>
                       <div className={`service-status ${service.reachable ? 'up' : 'down'}`}>
-                        {service.reachable ? '🟢 Online' : '🔴 Offline'}
+                        {service.reachable ? 'Online' : 'Offline'}
                       </div>
                     </div>
                     <button
@@ -430,27 +431,27 @@ export function AdminPage({ onBack }: AdminPageProps) {
           {/* Incident Banner */}
           {downServices >= INCIDENT_THRESHOLD && (
             <div className="incident-banner">
-              <span className="incident-icon">🚨</span>
+              <span className="incident-icon">Alert</span>
               <span className="incident-text">
-                INCIDENT: {downServices} services are currently down
+                {downServices} services are currently unavailable
               </span>
             </div>
           )}
 
           {/* Data Sources */}
           <div className="datasource-section">
-            <h2>📦 Data Sources</h2>
+            <h2>Data sources</h2>
             <div className="datasource-grid">
               {[
-                { name: 'Real Estate DB', status: '🟢 OK' },
-                { name: 'Market Analytics', status: '🟢 OK' },
-                { name: 'Tenant Database', status: '🟢 OK' },
-                { name: 'Financial Records', status: '🟢 OK' },
-                { name: 'Document Library', status: '🟢 OK' },
-                { name: 'Communications', status: '🟢 OK' },
+                { name: 'Real Estate DB', status: 'Available' },
+                { name: 'Market Analytics', status: 'Available' },
+                { name: 'Tenant Database', status: 'Available' },
+                { name: 'Financial Records', status: 'Available' },
+                { name: 'Document Library', status: 'Available' },
+                { name: 'Communications', status: 'Available' },
               ].map((ds) => (
                 <div key={ds.name} className="datasource-item">
-                  <div className="ds-icon">📄</div>
+                  <div className="ds-icon" aria-hidden="true" />
                   <div className="ds-name">{ds.name}</div>
                   <div className="ds-status">{ds.status}</div>
                 </div>
@@ -465,7 +466,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         <div className="modal-overlay" onClick={() => setSelectedService(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{selectedService.name}</h2>
+              <h2>{getServiceCategory(selectedService.name).label}</h2>
               <button className="modal-close" onClick={() => setSelectedService(null)}>
                 ✕
               </button>
@@ -476,7 +477,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <div
                   className={`detail-value ${selectedService.reachable ? 'status-ok' : 'status-error'}`}
                 >
-                  {selectedService.reachable ? '🟢 Online' : '🔴 Offline'}
+                  {selectedService.reachable ? 'Online' : 'Offline'}
                 </div>
               </div>
 

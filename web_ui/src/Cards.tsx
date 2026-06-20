@@ -370,14 +370,14 @@ export function ExportMenu({ type, title, data }: { type: 'report' | 'table'; ti
 
 export function ToolBadge({ name }: { name: string }) {
   const labels: Record<string, string> = {
-    query_mail: '📧 Mail',
-    query_onedrive: '☁️ OneDrive',
-    query_files: '📁 Files',
-    query_sql: '🗃️ SQL',
-    query_knowledge_base: '📚 Knowledge Base',
-    query_memory: '🧠 Memory',
-    query_document_generation: '📄 Document',
-    query_analytics: '📊 Analytics',
+    query_mail: 'Mail',
+    query_onedrive: 'OneDrive',
+    query_files: 'Files',
+    query_sql: 'SQL',
+    query_knowledge_base: 'Knowledge base',
+    query_memory: 'Memory',
+    query_document_generation: 'Document',
+    query_analytics: 'Analytics',
   }
   return <span className="tool-badge">{labels[name] || name}</span>
 }
@@ -385,23 +385,13 @@ export function ToolBadge({ name }: { name: string }) {
 /* ─── Live Tool Badge (streaming) ─────────────────────────────────── */
 
 export function LiveToolBadge({ name, label, status, summary }: { name: string; label: string; status: 'calling' | 'done' | 'error'; summary?: string }) {
-  const icons: Record<string, string> = {
-    query_mail: '📧',
-    query_onedrive: '☁️',
-    query_files: '📁',
-    query_sql: '🗃️',
-    query_knowledge_base: '📚',
-    query_memory: '🧠',
-    query_document_generation: '📄',
-    query_analytics: '📊',
-  }
-  const icon = icons[name] || '🔧'
+  const labelText = (label || name).replace(/^query_/i, '').replace(/_/g, ' ').trim()
 
   if (status === 'calling') {
     return (
       <span className="live-tool live-tool-calling">
-        <span className="live-tool-icon spinning">{icon}</span>
-        <span className="live-tool-label">{label}</span>
+        <span className="live-tool-dot spinning" aria-hidden="true" />
+        <span className="live-tool-label">{labelText}</span>
         <span className="live-tool-pulse" />
       </span>
     )
@@ -410,8 +400,8 @@ export function LiveToolBadge({ name, label, status, summary }: { name: string; 
   if (status === 'error') {
     return (
       <span className="live-tool live-tool-error">
-        <span className="live-tool-icon">❌</span>
-        <span className="live-tool-label">{label}</span>
+        <span className="live-tool-dot error" aria-hidden="true" />
+        <span className="live-tool-label">{labelText}</span>
         {summary && <span className="live-tool-summary">{summary}</span>}
       </span>
     )
@@ -419,8 +409,8 @@ export function LiveToolBadge({ name, label, status, summary }: { name: string; 
 
   return (
     <span className="live-tool live-tool-done">
-      <span className="live-tool-icon">✅</span>
-      <span className="live-tool-label">{label}</span>
+      <span className="live-tool-dot done" aria-hidden="true" />
+      <span className="live-tool-label">{labelText}</span>
       {summary && <span className="live-tool-summary">{summary}</span>}
     </span>
   )
@@ -922,10 +912,12 @@ export function ResultDeck({ result }: { result: McpResult }) {
   const documents = result.documents || []
 
   if (documents.length > 0 && result.service !== 'document_generation') {
+    const countLabel = documents.length === 1 ? '1 item' : `${documents.length} items`
     return (
       <div className="deck">
         <div className="deck-header">
-          📚 {result.summary || 'Policies & SOPs'}
+          <span className="deck-title">Knowledge base</span>
+          <span className="deck-meta">{result.summary || countLabel}</span>
         </div>
         <div className="deck-grid kb-grid">
           {documents.map((d, i) => (
@@ -937,10 +929,12 @@ export function ResultDeck({ result }: { result: McpResult }) {
   }
 
   if (messages.length > 0) {
+    const countLabel = messages.length === 1 ? '1 message' : `${messages.length} messages`
     return (
       <div className="deck">
         <div className="deck-header">
-          📧 {result.summary || 'Messages'}
+          <span className="deck-title">Messages</span>
+          <span className="deck-meta">{result.summary || countLabel}</span>
         </div>
         <div className="deck-grid email-grid">
           {messages.map((m, i) => (
@@ -952,10 +946,12 @@ export function ResultDeck({ result }: { result: McpResult }) {
   }
 
   if (files.length > 0) {
+    const countLabel = files.length === 1 ? '1 file' : `${files.length} files`
     return (
       <div className="deck">
         <div className="deck-header">
-          📁 {result.summary || 'Files'}
+          <span className="deck-title">Files</span>
+          <span className="deck-meta">{result.summary || countLabel}</span>
         </div>
         <div className="deck-grid file-grid">
           {files.map((f, i) => (
@@ -970,7 +966,8 @@ export function ResultDeck({ result }: { result: McpResult }) {
     return (
       <div className="deck">
         <div className="deck-header">
-          🧠 {result.summary || 'Personal Context'}
+          <span className="deck-title">Personal context</span>
+          <span className="deck-meta">{result.summary || 'Profile and bookmarks'}</span>
         </div>
         <div className="deck-grid memory-grid">
           <MemoryCard result={result} />
@@ -984,7 +981,8 @@ export function ResultDeck({ result }: { result: McpResult }) {
     return (
       <div className="deck">
         <div className="deck-header">
-          📄 {result.summary || 'Generated Documents'}
+          <span className="deck-title">Generated documents</span>
+          <span className="deck-meta">{result.summary || `${docs.length} doc${docs.length === 1 ? '' : 's'}`}</span>
         </div>
         <div className="deck-grid doc-grid">
           {docs.map((d, i) => (
@@ -999,7 +997,8 @@ export function ResultDeck({ result }: { result: McpResult }) {
     return (
       <div className="deck">
         <div className="deck-header">
-          📊 {result.summary || 'Analytics'}
+          <span className="deck-title">Analytics</span>
+          <span className="deck-meta">{result.summary || 'Key metrics and trends'}</span>
         </div>
         <div className="deck-grid analytics-grid">
           <AnalyticsCard result={result} />
@@ -1012,7 +1011,8 @@ export function ResultDeck({ result }: { result: McpResult }) {
     return (
       <div className="deck">
         <div className="deck-header">
-          🗃️ {result.summary || 'SQL Database'}
+          <span className="deck-title">SQL data</span>
+          <span className="deck-meta">{result.summary || 'Structured records and metrics'}</span>
         </div>
         <div className="deck-grid sql-grid">
           <SqlDataCard result={result} />
