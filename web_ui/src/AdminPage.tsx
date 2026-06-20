@@ -270,7 +270,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
           <button className="toolbar-button" onClick={onBack}>
-            ← Back
+            Back to chat
           </button>
         </div>
         <div className="toolbar-right">

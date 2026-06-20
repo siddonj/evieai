@@ -1038,15 +1038,15 @@ function ChatView() {
   }
 
   if (view === 'settings') {
-    return <Suspense fallback={<div className="dashboard-loading">Loading settings...</div>}><SettingsPage initialTab="service_health" /></Suspense>
+    return <Suspense fallback={<div className="dashboard-loading">Loading settings panel...</div>}><SettingsPage initialTab="service_health" /></Suspense>
   }
 
   if (view === 'service_health') {
-    return <Suspense fallback={<div className="dashboard-loading">Loading health...</div>}><SettingsPage initialTab="service_health" /></Suspense>
+    return <Suspense fallback={<div className="dashboard-loading">Loading service health...</div>}><SettingsPage initialTab="service_health" /></Suspense>
   }
 
   if (view === 'admin') {
-    return <Suspense fallback={<div className="dashboard-loading">Loading admin...</div>}><AdminPage onBack={() => setView('chat')} /></Suspense>
+    return <Suspense fallback={<div className="dashboard-loading">Loading operations console...</div>}><AdminPage onBack={() => setView('chat')} /></Suspense>
   }
 
   if (view === 'performance') {

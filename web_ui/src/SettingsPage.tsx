@@ -591,7 +591,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
               <h2>MCP server status</h2>
               <p className="settings-hint">Toggle MCP services on or off. Disabled services are hidden from the agent.</p>
               {serverLoading ? (
-                <div className="settings-loading">Loading MCP configuration...</div>
+                <div className="settings-loading">Loading service inventory...</div>
               ) : (
                 <div className="mcp-server-list">
                   {servers.map((s) => (
@@ -614,7 +614,7 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
                           onClick={() => previewData(s.key)}
                           disabled={previewLoading === s.key}
                         >
-                  {previewLoading === s.key ? 'Loading...' : 'Preview data'}
+                  {previewLoading === s.key ? 'Loading...' : 'View data'}
                         </button>
                       )}
                     </div>
