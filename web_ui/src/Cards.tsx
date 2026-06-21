@@ -1,7 +1,8 @@
 /* ─── Types ─────────────────────────────────────────────────────── */
 import { useState } from 'react'
+import { getOrchestratorUrl } from './apiBase'
 
-const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:8000'
+const ORCHESTRATOR_URL = getOrchestratorUrl()
 
 export type McpFile = {
   name: string

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from './auth'
+import { getOrchestratorUrl } from './apiBase'
 
-const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:8000'
+const ORCHESTRATOR_URL = getOrchestratorUrl()
 
 type McpServer = {
   key: string

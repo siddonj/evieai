@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { marked } from 'marked'
 import { AuthProvider, useAuth } from './auth'
+import { getOrchestratorUrl } from './apiBase'
 import { DocumentWorkflowPanel } from './DocumentWorkflowPanel'
 import { LoginPage } from './LoginPage'
 import { ResultDeck, ToolBadge, LiveToolBadge, downloadResource, type ChatResponse, type DocumentAction } from './Cards'
@@ -9,6 +10,7 @@ import { useDemoLauncher } from './useDemoLauncher.js'
 
 const SettingsPage = lazy(() => import('./SettingsPage').then(m => ({ default: m.SettingsPage })))
 const AdminPage = lazy(() => import('./AdminPage').then(m => ({ default: m.AdminPage })))
+const ORCHESTRATOR_URL = getOrchestratorUrl()
 
 type DocumentsResponse = {
   items: DocumentAction[]

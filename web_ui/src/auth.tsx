@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { getOrchestratorUrl } from './apiBase'
 
 export type User = {
   id: string
@@ -6,7 +7,7 @@ export type User = {
   role: 'admin' | 'user'
 }
 
-const API_BASE = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:8000'
+const API_BASE = getOrchestratorUrl()
 
 const SESSION_KEY = 'evieai_session'
 

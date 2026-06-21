@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { getOrchestratorUrl } from './apiBase'
 
-const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:8000'
+const ORCHESTRATOR_URL = getOrchestratorUrl()
 const ALERT_THRESHOLD = 80
 const INCIDENT_THRESHOLD = 3
 
