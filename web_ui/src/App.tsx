@@ -144,7 +144,6 @@ type LiveTool = {
   summary?: string
 }
 
-const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:8000'
 const STORAGE_KEY = 'aiagent_chat_history'
 const IS_DEV_DEMO = import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEV_LOGIN_BYPASS !== 'true'
 const DEMO_PATH = '/demo'
