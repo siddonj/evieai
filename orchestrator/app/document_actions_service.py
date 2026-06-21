@@ -5,6 +5,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 try:
     from app.actions_store import ActionsStore
     from app.blob import DOCUMENT_ARTIFACT_ROOT, upload_report, write_local_document_artifact
@@ -25,6 +27,7 @@ class DocumentActionsService:
         self.store = store
         self.artifact_root = Path(artifact_root or os.getenv("DOCUMENT_ARTIFACT_ROOT", DOCUMENT_ARTIFACT_ROOT))
         self.actions_store = actions_store
+        self.document_export_base_url = self._resolve_document_export_base_url()
 
     def create_draft(
         self,
@@ -147,7 +150,7 @@ class DocumentActionsService:
         output_format: str,
     ) -> dict[str, Any]:
         file_name = f"{record['title'].replace(' ', '_').lower()}.{output_format}"
-        content = self._render_artifact_content(record=record, output_format=output_format)
+        content, content_type = self._render_artifact_content(record=record, output_format=output_format)
         artifact_path = write_local_document_artifact(
             artifact_root=self.artifact_root,
             document_action_id=int(record["id"]),
@@ -163,7 +166,7 @@ class DocumentActionsService:
         blob_url = upload_report(
             name=f"document_artifacts/{record['id']}/{file_name}",
             content=content,
-            content_type="text/plain",
+            content_type=content_type,
         )
         if blob_url:
             artifact["blob_url"] = blob_url
@@ -177,7 +180,7 @@ class DocumentActionsService:
     ) -> dict[str, Any]:
         file_stem = record["title"].replace(" ", "_").lower()
         file_name = f"{file_stem}_export.{output_format}"
-        content = self._render_artifact_content(record=record, output_format=output_format)
+        content, content_type = self._render_artifact_content(record=record, output_format=output_format)
         artifact_path = write_local_document_artifact(
             artifact_root=self.artifact_root,
             document_action_id=int(record["id"]),
@@ -193,18 +196,60 @@ class DocumentActionsService:
         blob_url = upload_report(
             name=f"document_artifacts/{record['id']}/{file_name}",
             content=content,
-            content_type="text/plain",
+            content_type=content_type,
         )
         if blob_url:
             artifact["blob_url"] = blob_url
         return artifact
+
+    def _resolve_document_export_base_url(self) -> str:
+        export_url = os.getenv("DOCUMENT_EXPORT_URL", os.getenv("MCP_DOC_URL", "http://localhost:8006/mcp")).strip()
+        if export_url.endswith("/mcp"):
+            return export_url[:-4]
+        return export_url.rstrip("/")
+
+    def _artifact_export_payload(self, *, record: dict[str, Any], output_format: str) -> dict[str, Any]:
+        markdown = str(record.get("draft_markdown") or f"# {record['title']}\n")
+        return {
+            "type": "report",
+            "format": output_format,
+            "title": record["title"],
+            "data": {
+                "sections": [
+                    {
+                        "heading": record["title"],
+                        "content": markdown,
+                        "key_metrics": [],
+                    }
+                ],
+                "action_items": [],
+                "tags": [str(record.get("document_type") or "document_workflow")],
+            },
+        }
+
+    def _artifact_content_type(self, output_format: str) -> str:
+        return {
+            "pdf": "application/pdf",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }.get(output_format, "application/octet-stream")
 
     def _render_artifact_content(
         self,
         *,
         record: dict[str, Any],
         output_format: str,
-    ) -> bytes:
+    ) -> tuple[bytes, str]:
+        export_url = f"{self.document_export_base_url}/export"
+        export_payload = self._artifact_export_payload(record=record, output_format=output_format)
+        try:
+            with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+                resp = client.post(export_url, json=export_payload)
+            if resp.status_code < 400 and resp.content:
+                return resp.content, resp.headers.get("content-type", self._artifact_content_type(output_format))
+        except Exception:
+            pass
+
         destination_line = f"Destination: {record.get('destination_type') or 'local'} / {record.get('destination_ref') or 'n/a'}"
         format_line = f"Format: {output_format}"
         content = "\n".join(
@@ -215,7 +260,7 @@ class DocumentActionsService:
                 format_line,
             ]
         )
-        return content.encode("utf-8")
+        return content.encode("utf-8"), "text/plain; charset=utf-8"
 
     def _create_announcement_action(
         self,
