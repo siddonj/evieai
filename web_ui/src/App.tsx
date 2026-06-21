@@ -5,7 +5,7 @@ import { getOrchestratorUrl } from './apiBase'
 import { DocumentWorkflowPanel } from './DocumentWorkflowPanel'
 import { LoginPage } from './LoginPage'
 import { ResultDeck, ToolBadge, LiveToolBadge, type ChatResponse, type DocumentAction } from './Cards'
-import { downloadResource } from './downloadResource'
+import { downloadResource } from './exportDownload'
 import { WorkPacketPanel } from './WorkPacketPanel'
 import { useDemoLauncher } from './useDemoLauncher.js'
 

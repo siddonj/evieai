@@ -1,7 +1,7 @@
 /* ─── Types ─────────────────────────────────────────────────────── */
 import { useState } from 'react'
 import { getOrchestratorUrl } from './apiBase'
-import { downloadResource } from './downloadResource'
+import { downloadExportResponse, downloadResource } from './exportDownload'
 
 const ORCHESTRATOR_URL = getOrchestratorUrl()
 
@@ -311,32 +311,8 @@ export function ExportMenu({ type, title, data }: { type: 'report' | 'table'; ti
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, format, title, data }),
       })
-      if (!res.ok) {
-        const text = await res.text().catch(() => res.statusText)
-        alert(`Export failed (${res.status}): ${text.slice(0, 300)}`)
-        return
-      }
-      const contentType = res.headers.get('content-type') || ''
-      if (!contentType.includes('application/') && !contentType.includes('octet-stream')) {
-        const text = await res.text().catch(() => '')
-        alert(`Export returned unexpected content type "${contentType}".${text ? ' Response: ' + text.slice(0, 200) : ''}`)
-        return
-      }
-      const blob = await res.blob()
-      const contentDisposition = res.headers.get('content-disposition') || ''
-      const match = contentDisposition.match(/filename="?([^";]+)"?/)
-      const filename = match ? match[1] : `${title.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'export'}.${format}`
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      a.style.display = 'none'
-      document.body.appendChild(a)
-      a.click()
-      setTimeout(() => {
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-      }, 1000)
+      const fallbackFilename = `${title.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'export'}.${format}`
+      await downloadExportResponse(res, fallbackFilename)
     } catch (e) {
       alert('Export failed. See console for details.')
       console.error('Export error:', e)
