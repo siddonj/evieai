@@ -191,6 +191,11 @@ async def test_document_workflow_approve_and_finalize():
         assert finalized.status_code == 200
         body = finalized.json()
         assert body["status"] == "executed"
+        artifact_name = body["artifacts"][0]["file_name"]
+        download = await client.get(f"{_base_url()}/document-actions/{draft_body['id']}/artifacts/{artifact_name}")
+        assert download.status_code == 200
+        assert "attachment" in (download.headers.get("content-disposition") or "").lower()
+        assert download.content
 
 
 @pytest.mark.asyncio
@@ -230,6 +235,29 @@ async def test_document_workflow_export_package_endpoint():
         assert body["artifacts"][0]["storage_ref"]
         assert body["export_action"]["action_id"]
         assert body["export_action"]["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_export_endpoint_returns_attachment():
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            f"{_base_url()}/export",
+            json={
+                "type": "report",
+                "format": "pdf",
+                "title": "Smoke Export",
+                "data": {
+                    "sections": [
+                        {"heading": "Overview", "content": "Smoke test export."},
+                    ],
+                    "action_items": ["Confirm attachment"],
+                    "tags": ["smoke"],
+                },
+            },
+        )
+        assert resp.status_code == 200
+        assert "attachment" in (resp.headers.get("content-disposition") or "").lower()
+        assert resp.content
 
 
 @pytest.mark.asyncio
@@ -281,6 +309,10 @@ async def test_chat_document_workflow_end_to_end():
         assert len(finalized_body["artifacts"]) == 2
         assert finalized_body["artifacts"][0]["storage_ref"]
         assert finalized_body["artifacts"][0]["size_bytes"] > 0
+        artifact_name = finalized_body["artifacts"][0]["file_name"]
+        download = await client.get(f"{_base_url()}/document-actions/{draft_body['id']}/artifacts/{artifact_name}")
+        assert download.status_code == 200
+        assert "attachment" in (download.headers.get("content-disposition") or "").lower()
         assert finalized_body["announcement"]["action_id"]
         assert finalized_body["announcement"]["status"] == "completed"
 

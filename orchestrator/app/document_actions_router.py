@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+import mimetypes
+import urllib.parse
+from typing import Annotated
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
+import httpx
 
 from app.actions_store import get_actions_store
 from app.auth_router import require_auth_optional
@@ -53,6 +58,26 @@ def _get_document_action_or_404(document_action_id: int) -> dict[str, Any]:
         return get_document_actions_store().get(document_action_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Document workflow not found") from exc
+
+
+def _iter_document_artifacts(record: dict[str, Any]) -> list[dict[str, Any]]:
+    artifacts: list[dict[str, Any]] = []
+    for key in ("artifacts", "export_package"):
+        value = record.get(key)
+        if key == "artifacts" and isinstance(value, list):
+            artifacts.extend(item for item in value if isinstance(item, dict))
+        elif key == "export_package" and isinstance(value, dict):
+            nested = value.get("artifacts")
+            if isinstance(nested, list):
+                artifacts.extend(item for item in nested if isinstance(item, dict))
+    return artifacts
+
+
+def _find_document_artifact(record: dict[str, Any], file_name: str) -> dict[str, Any] | None:
+    for artifact in _iter_document_artifacts(record):
+        if str(artifact.get("file_name") or "") == file_name:
+            return artifact
+    return None
 
 
 @router.post("/draft")
@@ -128,3 +153,44 @@ def export_package(
     record = _get_document_action_or_404(document_action_id)
     _authorize_document_access(actor, record)
     return DOCUMENT_ACTIONS_SERVICE.export_package(document_action_id=document_action_id)
+
+
+@router.get("/{document_action_id}/artifacts/{file_name:path}")
+async def download_document_artifact(
+    document_action_id: int,
+    file_name: str,
+    actor: Annotated[dict[str, Any] | None, Depends(require_auth_optional)] = None,
+) -> Response:
+    record = _get_document_action_or_404(document_action_id)
+    _authorize_document_access(actor, record)
+    artifact = _find_document_artifact(record, file_name)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Document artifact not found")
+
+    local_path = DOCUMENT_ACTIONS_SERVICE.artifact_root / str(document_action_id) / file_name
+    if local_path.is_file():
+        media_type = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+        return FileResponse(path=local_path, filename=file_name, media_type=media_type)
+
+    blob_url = artifact.get("blob_url")
+    if isinstance(blob_url, str) and blob_url:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            resp = await client.get(blob_url)
+        if resp.status_code >= 400:
+            raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
+
+        headers: dict[str, str] = {}
+        disposition = resp.headers.get("content-disposition")
+        if disposition:
+            headers["Content-Disposition"] = disposition
+        else:
+            safe_name = file_name.replace('"', '\\"')
+            headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+
+        return Response(
+            content=resp.content,
+            media_type=resp.headers.get("content-type", "application/octet-stream"),
+            headers=headers,
+        )
+
+    raise HTTPException(status_code=404, detail="Document artifact unavailable")

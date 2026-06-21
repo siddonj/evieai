@@ -3,7 +3,7 @@ import { marked } from 'marked'
 import { AuthProvider, useAuth } from './auth'
 import { DocumentWorkflowPanel } from './DocumentWorkflowPanel'
 import { LoginPage } from './LoginPage'
-import { ResultDeck, ToolBadge, LiveToolBadge, type ChatResponse, type DocumentAction } from './Cards'
+import { ResultDeck, ToolBadge, LiveToolBadge, downloadResource, type ChatResponse, type DocumentAction } from './Cards'
 import { WorkPacketPanel } from './WorkPacketPanel'
 import { useDemoLauncher } from './useDemoLauncher.js'
 
@@ -682,6 +682,14 @@ function ReportViewer({
   const [error, setError] = useState('')
   const [document, setDocument] = useState<DocumentAction | null>(null)
 
+  function artifactDownloadUrl(fileName: string) {
+    return `${ORCHESTRATOR_URL}/document-actions/${documentActionId}/artifacts/${encodeURIComponent(fileName)}`
+  }
+
+  async function handleDownloadArtifact(fileName: string) {
+    await downloadResource(artifactDownloadUrl(fileName), fileName)
+  }
+
   async function loadDocument() {
     setLoading(true)
     setError('')
@@ -793,6 +801,14 @@ function ReportViewer({
                     <span>{artifact.format || 'artifact'}</span>
                     <strong>{artifact.file_name || 'Generated file'}</strong>
                     <p>{artifact.blob_url || artifact.storage_ref || 'Stored'}</p>
+                    {artifact.file_name && (
+                      <button
+                        className="status-btn"
+                        onClick={() => void handleDownloadArtifact(artifact.file_name!)}
+                      >
+                        Download
+                      </button>
+                    )}
                   </article>
                 ))}
                 {(document.export_package?.artifacts || []).map((artifact, index) => (
@@ -800,6 +816,14 @@ function ReportViewer({
                     <span>{artifact.format || 'export'}</span>
                     <strong>{artifact.file_name || 'Export package file'}</strong>
                     <p>{artifact.blob_url || artifact.storage_ref || 'Stored'}</p>
+                    {artifact.file_name && (
+                      <button
+                        className="status-btn"
+                        onClick={() => void handleDownloadArtifact(artifact.file_name!)}
+                      >
+                        Download
+                      </button>
+                    )}
                   </article>
                 ))}
               </div>

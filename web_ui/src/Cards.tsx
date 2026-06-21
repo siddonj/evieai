@@ -74,6 +74,7 @@ export type GeneratedDocument = {
   status?: string
   pages?: number
   word_count?: number
+  download_url?: string
   sections?: Array<{
     heading: string
     content: string
@@ -210,6 +211,7 @@ export type DocumentAction = {
     storage_ref?: string
     size_bytes?: number
     blob_url?: string
+    download_url?: string
   }>
   export_package?: {
     status?: 'queued' | 'running' | 'completed' | 'failed' | string
@@ -442,6 +444,10 @@ export function EmailCard({ msg }: { msg: McpMessage }) {
 async function downloadFile(file: McpFile) {
   if (!file.url) return
   const url = file.url.startsWith('http') ? file.url : `${ORCHESTRATOR_URL}${file.url}`
+  await downloadResource(url, file.name)
+}
+
+export async function downloadResource(url: string, filename: string) {
   try {
     const res = await fetch(url)
     if (!res.ok) throw new Error(`Download failed: ${res.status}`)
@@ -449,7 +455,7 @@ async function downloadFile(file: McpFile) {
     const blobUrl = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = blobUrl
-    a.download = file.name
+    a.download = filename
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -471,10 +477,10 @@ export function FileCard({ file }: { file: McpFile }) {
       onKeyDown={clickable ? (e) => { if (e.key === 'Enter') downloadFile(file) } : undefined}
     >
       <div className="file-icon">{fileIcon(file.name)}</div>
-      <div className="file-body">
-        <div className="file-name">{file.name}</div>
-        <div className="file-desc">{file.description || file.folder || ''}</div>
-        <div className="file-footer">
+        <div className="file-body">
+          <div className="file-name">{file.name}</div>
+          <div className="file-desc">{file.description || file.folder || ''}</div>
+          <div className="file-footer">
           <span className="file-folder">📂 {file.folder || 'General'}</span>
           {file.size ? <span className="file-size">{formatBytes(file.size)}</span> : null}
           {file.lastModifiedDateTime ? (
