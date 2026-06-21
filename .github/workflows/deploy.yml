@@ -22,6 +22,7 @@ env:
   ACR_SERVER: evie62a1acrdev.azurecr.io
   RESOURCE_GROUP: rg-evie62a1-dev
   ORCHESTRATOR_APP: evie62a1-orchestrator-dev
+  IMAGE_TAG: sha-${{ github.sha }}
 
 jobs:
   lint:
@@ -61,15 +62,15 @@ jobs:
 
       - name: Build MCP base image
         run: |
-          docker build -t $ACR_SERVER/evieai-mcp-base:latest \
+          docker build -t $ACR_SERVER/evieai-mcp-base:$IMAGE_TAG \
             -f Dockerfile.base .
-          docker push $ACR_SERVER/evieai-mcp-base:latest
+          docker push $ACR_SERVER/evieai-mcp-base:$IMAGE_TAG
 
       - name: Build orchestrator
         run: |
-          docker build -t $ACR_SERVER/orchestrator:latest \
+          docker build -t $ACR_SERVER/orchestrator:$IMAGE_TAG \
             -f orchestrator/Dockerfile .
-          docker push $ACR_SERVER/orchestrator:latest
+          docker push $ACR_SERVER/orchestrator:$IMAGE_TAG
 
       - name: Build MCP images
         run: |
@@ -96,11 +97,11 @@ jobs:
             ["dashboard"]="mcp_servers/dashboard"
           )
           for name in "${!MCP_DOCKERFILES[@]}"; do
-            docker build -t $ACR_SERVER/${name}:latest \
-              --build-arg BASE_IMAGE=$ACR_SERVER/evieai-mcp-base:latest \
+            docker build -t $ACR_SERVER/${name}:$IMAGE_TAG \
+              --build-arg BASE_IMAGE=$ACR_SERVER/evieai-mcp-base:$IMAGE_TAG \
               -f "${MCP_DOCKERFILES[$name]}" \
               "${MCP_CONTEXTS[$name]}"
-            docker push $ACR_SERVER/${name}:latest
+            docker push $ACR_SERVER/${name}:$IMAGE_TAG
           done
 
       - name: Build Web UI
@@ -150,7 +151,7 @@ jobs:
           az containerapp update \
             --name $ORCHESTRATOR_APP \
             --resource-group $RESOURCE_GROUP \
-            --image $ACR_SERVER/orchestrator:latest \
+            --image $ACR_SERVER/orchestrator:$IMAGE_TAG \
             --set-env-vars \
               "JWT_SECRET=$JWT_SECRET" \
               "AUTH_DB_PATH=/tmp/evieai_auth.db" \
@@ -174,7 +175,7 @@ jobs:
             az containerapp update \
               --name "${CA_NAMES[$svc]}" \
               --resource-group $RESOURCE_GROUP \
-              --image "$ACR_SERVER/${svc}:latest" &
+              --image "$ACR_SERVER/${svc}:$IMAGE_TAG" &
           done
           wait
 
