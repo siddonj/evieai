@@ -6,12 +6,12 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from app.blob import DOCUMENT_ARTIFACT_ROOT, upload_report, write_local_document_artifact
     from app.actions_store import ActionsStore
+    from app.blob import DOCUMENT_ARTIFACT_ROOT, upload_report, write_local_document_artifact
     from app.document_actions_store import DocumentActionsStore
 except ImportError:
-    from orchestrator.app.blob import DOCUMENT_ARTIFACT_ROOT, upload_report, write_local_document_artifact
     from orchestrator.app.actions_store import ActionsStore
+    from orchestrator.app.blob import DOCUMENT_ARTIFACT_ROOT, upload_report, write_local_document_artifact
     from orchestrator.app.document_actions_store import DocumentActionsStore
 
 

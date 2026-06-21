@@ -426,7 +426,7 @@ def _sanitize_name(title: str) -> str:
 
 def _generate_excel(payload: ExportRequest) -> bytes:
     from openpyxl import Workbook
-    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
     wb = Workbook()
     ws = wb.active
@@ -520,7 +520,7 @@ def _generate_excel(payload: ExportRequest) -> bytes:
             for c_idx, val in enumerate(row_data, 1):
                 ws.cell(row=r_idx, column=c_idx, value=str(val)).border = thin_border
 
-        for i, h in enumerate(headers, 1):
+        for i, _h in enumerate(headers, 1):
             ws.column_dimensions[chr(64 + i) if i <= 26 else f"A{i}"].width = 25
 
     buf = io.BytesIO()
@@ -531,9 +531,9 @@ def _generate_excel(payload: ExportRequest) -> bytes:
 
 def _generate_docx(payload: ExportRequest) -> bytes:
     from docx import Document
-    from docx.shared import Inches, Pt, RGBColor
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt
 
     doc = Document()
 
@@ -561,8 +561,8 @@ def _generate_docx(payload: ExportRequest) -> bytes:
                 table.style = "Light Grid Accent 1"
                 table.alignment = WD_TABLE_ALIGNMENT.CENTER
                 hdr = table.rows[0].cells
-                for i, h in enumerate(["Metric", "Value", "Trend"]):
-                    hdr[i].text = h
+                for i, heading in enumerate(["Metric", "Value", "Trend"]):
+                    hdr[i].text = heading
                     for p in hdr[i].paragraphs:
                         for r in p.runs:
                             r.bold = True
@@ -616,7 +616,6 @@ def _generate_docx(payload: ExportRequest) -> bytes:
 
 
 def _generate_pdf(payload: ExportRequest) -> bytes:
-    from jinja2 import Template
     from weasyprint import HTML
 
     if payload.type == "report":
@@ -735,9 +734,9 @@ def export_document(payload: ExportRequest) -> Response:
         raise HTTPException(
             status_code=500,
             detail=f"Export library not available: {e.name}. Run: pip install {e.name}",
-        )
+        ) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Export generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Export generation failed: {e}") from e
 
     filename = f"{_sanitize_name(payload.title)}{ext}"
     return Response(

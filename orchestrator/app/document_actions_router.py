@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -10,7 +9,6 @@ from app.actions_store import get_actions_store
 from app.auth_router import require_auth_optional
 from app.document_actions_service import DocumentActionsService
 from app.document_actions_store import get_document_actions_store
-
 
 router = APIRouter(prefix="/document-actions", tags=["document-actions"])
 DOCUMENT_ACTIONS_SERVICE = DocumentActionsService(

@@ -8,8 +8,8 @@ Uses SQLite for local-dev consistency with the rest of the orchestrator stores.
 from __future__ import annotations
 
 import os
-import sqlite3
 import secrets
+import sqlite3
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path

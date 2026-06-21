@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-import pytest
-
 import orchestrator.app.document_actions_service as document_actions_service_module
-
 from orchestrator.app.actions_store import ActionsStore
 from orchestrator.app.document_actions_service import DocumentActionsService
 from orchestrator.app.document_actions_store import DocumentActionsStore
