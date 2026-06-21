@@ -415,6 +415,21 @@ class ExportRequest(BaseModel):
     data: dict[str, Any]
 
 
+def _report_sections(payload: ExportRequest) -> list[dict[str, Any]]:
+    sections = payload.data.get("sections", [])
+    if isinstance(sections, list) and sections:
+        return [section for section in sections if isinstance(section, dict)]
+
+    title = payload.title.strip() or "Generated document"
+    return [
+        {
+            "heading": title,
+            "content": "No structured sections were returned with this document.",
+            "key_metrics": [],
+        }
+    ]
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  EXPORT — Generators
 # ═══════════════════════════════════════════════════════════════════════
@@ -445,7 +460,7 @@ def _generate_excel(payload: ExportRequest) -> bytes:
 
     if payload.type == "report":
         data = payload.data
-        sections = data.get("sections", [])
+        sections = _report_sections(payload)
         action_items = data.get("action_items", [])
         tags = data.get("tags", [])
 
@@ -547,7 +562,7 @@ def _generate_docx(payload: ExportRequest) -> bytes:
 
     if payload.type == "report":
         data = payload.data
-        sections = data.get("sections", [])
+        sections = _report_sections(payload)
         action_items = data.get("action_items", [])
         tags = data.get("tags", [])
 
@@ -620,7 +635,7 @@ def _generate_pdf(payload: ExportRequest) -> bytes:
 
     if payload.type == "report":
         data = payload.data
-        sections = data.get("sections", [])
+        sections = _report_sections(payload)
         action_items = data.get("action_items", [])
         tags = data.get("tags", [])
         table_headers = []

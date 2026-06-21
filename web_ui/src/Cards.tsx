@@ -608,8 +608,24 @@ export function MemoryCard({ result }: { result: McpResult }) {
 export function DocumentCard({ doc }: { doc: GeneratedDocument }) {
   const typeIcon = doc.type === 'executive_summary' ? '📊' : doc.type === 'board_briefing' ? '📋' : doc.type === 'sales_report' ? '💼' : doc.type === 'security_assessment' ? '🔒' : '📄'
 
+  const exportSections = doc.sections && doc.sections.length > 0
+    ? doc.sections
+    : [
+        {
+          heading: doc.title || 'Generated document',
+          content: [
+            doc.type ? `Type: ${doc.type.split('_').join(' ')}` : null,
+            doc.status ? `Status: ${doc.status}` : null,
+            typeof doc.pages === 'number' ? `Pages: ${doc.pages}` : null,
+            typeof doc.word_count === 'number' ? `Words: ${doc.word_count.toLocaleString()}` : null,
+            doc.download_url ? `Download: ${doc.download_url}` : null,
+          ].filter(Boolean).join(' | ') || 'No structured sections were returned with this document.',
+          key_metrics: [],
+        },
+      ]
+
   const exportData = {
-    sections: doc.sections || [],
+    sections: exportSections,
     action_items: doc.action_items || [],
     tags: doc.tags || [],
   }
