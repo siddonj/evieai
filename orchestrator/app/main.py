@@ -1847,14 +1847,26 @@ async def export_file(payload: ExportRequest) -> Response:
     if service not in MCP_ENDPOINTS:
         raise HTTPException(status_code=503, detail="Export service not available")
     mcp_base = _base(MCP_ENDPOINTS[service])
-    export_url = f"{mcp_base}/export"
+    export_urls = [f"{mcp_base}/export", f"{mcp_base}/mcp/export"]
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            export_url,
-            json=payload.model_dump(),
-            headers={"Content-Type": "application/json"},
-        )
+        resp = None
+        last_error: httpx.Response | None = None
+        for export_url in dict.fromkeys(export_urls):
+            candidate = await client.post(
+                export_url,
+                json=payload.model_dump(),
+                headers={"Content-Type": "application/json"},
+            )
+            if candidate.status_code != 404:
+                resp = candidate
+                break
+            last_error = candidate
+
+        if resp is None:
+            assert last_error is not None
+            detail = last_error.text[:500]
+            raise HTTPException(status_code=last_error.status_code, detail=detail)
         if resp.status_code >= 400:
             detail = resp.text[:500]
             raise HTTPException(status_code=resp.status_code, detail=detail)
