@@ -19,6 +19,7 @@ build/
 # Node
 node_modules/
 dist/
+.worktrees/
 
 # OS
 .DS_Store
