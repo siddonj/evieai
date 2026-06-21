@@ -18,5 +18,6 @@
     "incremental": true,
     "assumeChangesOnlyAffectDirectDependencies": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.test.mts", "src/**/*.test.cts"]
 }

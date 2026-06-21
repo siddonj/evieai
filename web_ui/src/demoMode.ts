@@ -18,6 +18,6 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
   },
 ]
 
-export function getNextDemoStep(stepIndex: number): number {
-  return Math.min(stepIndex + 1, DEMO_SCENARIOS[0].prompts.length - 1)
+export function getNextDemoStep(stepIndex: number, prompts: string[]): number {
+  return Math.min(stepIndex + 1, Math.max(0, prompts.length - 1))
 }
