@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import mimetypes
-import urllib.parse
-from typing import Annotated
-from typing import Any
+from typing import Annotated, Any
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
-import httpx
 
 from app.actions_store import get_actions_store
 from app.auth_router import require_auth_optional
