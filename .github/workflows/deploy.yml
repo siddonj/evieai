@@ -156,7 +156,8 @@ jobs:
               "JWT_SECRET=$JWT_SECRET" \
               "AUTH_DB_PATH=/tmp/evieai_auth.db" \
               "DEFAULT_ADMIN_EMAIL=admin@evieai.local" \
-              "DEFAULT_ADMIN_PASSWORD=admin"
+              "DEFAULT_ADMIN_PASSWORD=admin" \
+              "CORS_ORIGINS=https://demo.resiq.co,https://witty-pond-00ebb7d0f.7.azurestaticapps.net"
 
       - name: Deploy MCP servers
         run: |

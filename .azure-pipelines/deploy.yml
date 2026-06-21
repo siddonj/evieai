@@ -252,6 +252,7 @@ stages:
                     "AUTH_DB_PATH=/tmp/evieai_auth.db" \
                     "DEFAULT_ADMIN_EMAIL=admin@evieai.local" \
                     "DEFAULT_ADMIN_PASSWORD=admin" \
+                    "CORS_ORIGINS=https://demo.resiq.co,https://witty-pond-00ebb7d0f.7.azurestaticapps.net" \
                     "CONTEXT_FORGE_ENABLED=true" \
                     "CONTEXT_FORGE_BASE_URL=http://aiagent2-context-forge-dev.internal.azurecontainerapps.io" \
                     "CONTEXT_FORGE_FALLBACK_MODE=mcp" \
