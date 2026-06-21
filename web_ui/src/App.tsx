@@ -145,6 +145,7 @@ type LiveTool = {
 const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:8000'
 const STORAGE_KEY = 'aiagent_chat_history'
 const IS_DEV_DEMO = import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEV_LOGIN_BYPASS !== 'true'
+const DEMO_PATH = '/demo'
 
 // Multifamily & brokerage suggested prompts
 const SUGGESTED_PROMPTS = [
@@ -825,6 +826,7 @@ function nextId(): string {
 function ChatView() {
   const { user, token, isAdmin, logout } = useAuth()
   const authHeader = token && token !== 'dev-session' ? `Bearer ${token}` : undefined
+  const isDemoPath = window.location.pathname === DEMO_PATH || window.location.pathname.startsWith(`${DEMO_PATH}/`)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -854,6 +856,7 @@ function ChatView() {
     selectDemoPrompt,
     advanceDemoStep,
   } = useDemoLauncher()
+  const [demoRoutePrimed, setDemoRoutePrimed] = useState(false)
 
   // Streaming state
   const [streamingText, setStreamingText] = useState('')
@@ -883,6 +886,15 @@ function ChatView() {
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    if (!isDemoPath || demoRoutePrimed || activeDemoScenario) {
+      return
+    }
+    setShowPrompts(true)
+    setInput(startDemoMode())
+    setDemoRoutePrimed(true)
+  }, [activeDemoScenario, demoRoutePrimed, isDemoPath, startDemoMode])
 
   const statusText = useMemo(() => {
     if (loading) {
