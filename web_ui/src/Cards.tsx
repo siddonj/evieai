@@ -1,6 +1,7 @@
 /* ─── Types ─────────────────────────────────────────────────────── */
 import { useState } from 'react'
 import { getOrchestratorUrl } from './apiBase'
+import { downloadResource } from './downloadResource'
 
 const ORCHESTRATOR_URL = getOrchestratorUrl()
 
@@ -446,24 +447,6 @@ async function downloadFile(file: McpFile) {
   if (!file.url) return
   const url = file.url.startsWith('http') ? file.url : `${ORCHESTRATOR_URL}${file.url}`
   await downloadResource(url, file.name)
-}
-
-export async function downloadResource(url: string, filename: string) {
-  try {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`Download failed: ${res.status}`)
-    const blob = await res.blob()
-    const blobUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = blobUrl
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(blobUrl)
-  } catch {
-    window.open(url, '_blank')
-  }
 }
 
 export function FileCard({ file }: { file: McpFile }) {
