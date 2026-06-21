@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mimetypes
+import urllib.parse
 from typing import Annotated, Any
 
 import httpx
