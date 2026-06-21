@@ -6341,6 +6341,178 @@ h1 {
   border-radius: 999px;
 }
 
+.demo-launcher {
+  margin-top: 0.9rem;
+  padding: 1rem 1.05rem 1.05rem;
+  border: 1px solid rgba(145, 170, 205, 0.2);
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, rgba(18, 28, 42, 0.94), rgba(12, 18, 28, 0.88)),
+    radial-gradient(circle at top right, rgba(114, 172, 255, 0.15), transparent 42%),
+    radial-gradient(circle at left bottom, rgba(245, 161, 105, 0.1), transparent 36%);
+  box-shadow:
+    0 22px 60px rgba(2, 8, 18, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+}
+
+.demo-launcher-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.demo-launcher-eyebrow {
+  display: inline-flex;
+  margin-bottom: 0.28rem;
+  color: #93baff;
+  font-size: 0.69rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.demo-launcher h2 {
+  margin: 0;
+  color: #f4f8ff;
+  font-size: 1.03rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.demo-launcher p {
+  margin: 0.34rem 0 0;
+  max-width: 62ch;
+  color: #bfd0e3;
+  font-size: 0.88rem;
+  line-height: 1.52;
+}
+
+.demo-launcher-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.demo-launcher-step {
+  padding: 0.44rem 0.68rem;
+  border: 1px solid rgba(150, 172, 204, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #d9e3f0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.demo-launcher-button {
+  appearance: none;
+  border: 1px solid rgba(159, 178, 205, 0.2);
+  border-radius: 999px;
+  padding: 0.58rem 0.86rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: #eef4ff;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    background 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.demo-launcher-button:hover:not(:disabled),
+.demo-launcher-prompt:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(133, 182, 255, 0.38);
+  background: rgba(92, 145, 227, 0.12);
+  box-shadow: 0 10px 22px rgba(2, 7, 17, 0.22);
+}
+
+.demo-launcher-button-primary {
+  border-color: rgba(140, 183, 255, 0.42);
+  background: linear-gradient(180deg, rgba(98, 151, 236, 0.95), rgba(53, 99, 175, 0.92));
+  box-shadow: 0 12px 26px rgba(42, 84, 148, 0.28);
+}
+
+.demo-launcher-prompts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.95rem;
+}
+
+.demo-launcher-prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  width: 100%;
+  min-height: 68px;
+  padding: 0.78rem 0.82rem;
+  border: 1px solid rgba(148, 169, 200, 0.18);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #e8eff9;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    background 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.demo-launcher-prompt.is-active {
+  border-color: rgba(129, 180, 255, 0.55);
+  background: rgba(87, 137, 208, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(130, 179, 255, 0.16);
+}
+
+.demo-launcher-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #a8c5f2;
+  font-size: 0.73rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.demo-launcher-prompt-text {
+  color: #dfe9f7;
+  font-size: 0.87rem;
+  line-height: 1.45;
+}
+
+.demo-launcher-button:focus-visible,
+.demo-launcher-prompt:focus-visible {
+  outline: 2px solid rgba(145, 194, 255, 0.92);
+  outline-offset: 2px;
+}
+
+@media (max-width: 960px) {
+  .demo-launcher-header {
+    flex-direction: column;
+  }
+
+  .demo-launcher-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .demo-launcher-prompts {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .result-card-header {
     flex-direction: column;

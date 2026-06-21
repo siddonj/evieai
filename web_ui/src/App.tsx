@@ -3,6 +3,7 @@ import { marked } from 'marked'
 import { AuthProvider, useAuth } from './auth'
 import { DocumentWorkflowPanel } from './DocumentWorkflowPanel'
 import { LoginPage } from './LoginPage'
+import { DEMO_SCENARIOS, getNextDemoStep } from './demoMode'
 import { ResultDeck, ToolBadge, LiveToolBadge, type ChatResponse, type DocumentAction } from './Cards'
 import { WorkPacketPanel } from './WorkPacketPanel'
 
@@ -841,6 +842,8 @@ function ChatView() {
   const [view, setView] = useState<View>('chat')
   const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null)
   const [showPrompts, setShowPrompts] = useState(true)
+  const [demoScenarioId, setDemoScenarioId] = useState<string | null>(null)
+  const [demoStepIndex, setDemoStepIndex] = useState(0)
 
   // Streaming state
   const [streamingText, setStreamingText] = useState('')
@@ -851,6 +854,10 @@ function ChatView() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const finalDataRef = useRef<ChatResponse | null>(null)
+  const activeDemoScenario = useMemo(() => (
+    DEMO_SCENARIOS.find((scenario) => scenario.id === demoScenarioId) ?? null
+  ), [demoScenarioId])
+  const currentDemoPrompt = activeDemoScenario?.prompts[demoStepIndex] ?? ''
 
   // Auto-scroll to bottom during streaming
   useEffect(() => {
@@ -911,7 +918,30 @@ function ChatView() {
     }
     setMessages([welcome])
     setShowPrompts(true)
+    if (activeDemoScenario) {
+      setDemoStepIndex(0)
+      setInput(activeDemoScenario.prompts[0] || '')
+    }
     saveHistory([welcome])
+  }
+
+  function startDemoMode() {
+    const scenario = DEMO_SCENARIOS[0]
+    if (!scenario) return
+    setDemoScenarioId(scenario.id)
+    setDemoStepIndex(0)
+    setInput(scenario.prompts[0] || '')
+    setShowPrompts(true)
+  }
+
+  function resetDemoMode() {
+    if (!activeDemoScenario) {
+      startDemoMode()
+      return
+    }
+    setDemoStepIndex(0)
+    setInput(activeDemoScenario.prompts[0] || '')
+    setShowPrompts(true)
   }
 
   function openReport(documentActionId: number) {
@@ -1019,6 +1049,12 @@ function ChatView() {
 
       // Finalize the streaming message
       const finalText = streamError ? `I encountered an error: ${streamError}` : (fullReply || 'No response from orchestrator.')
+
+      if (activeDemoScenario && text === currentDemoPrompt) {
+        const nextStep = getNextDemoStep(demoStepIndex)
+        setDemoStepIndex(nextStep)
+        setInput(activeDemoScenario.prompts[nextStep] || '')
+      }
 
       const assistantMsg: ChatMessage = {
         id: nextId(),
@@ -1305,6 +1341,53 @@ function ChatView() {
           )}
           <div ref={messagesEndRef} />
         </div>
+
+        <section className="demo-launcher" aria-label="Guided demo mode">
+          <div className="demo-launcher-header">
+            <div>
+              <span className="demo-launcher-eyebrow">
+                {activeDemoScenario ? 'Guided demo active' : 'Presenter flow'}
+              </span>
+              <h2>{activeDemoScenario?.title || DEMO_SCENARIOS[0].title}</h2>
+              <p>{activeDemoScenario?.description || DEMO_SCENARIOS[0].description}</p>
+            </div>
+            <div className="demo-launcher-actions">
+              {!activeDemoScenario ? (
+                <button className="demo-launcher-button demo-launcher-button-primary" onClick={startDemoMode}>
+                  Start guided demo
+                </button>
+              ) : (
+                <>
+                  <div className="demo-launcher-step">
+                    Step {demoStepIndex + 1} of {activeDemoScenario.prompts.length}
+                  </div>
+                  <button className="demo-launcher-button" onClick={resetDemoMode}>
+                    Reset demo
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="demo-launcher-prompts" role="list" aria-label="Guided demo prompts">
+            {(activeDemoScenario?.prompts || DEMO_SCENARIOS[0].prompts).map((prompt, index) => (
+              <button
+                key={prompt}
+                className={`demo-launcher-prompt${activeDemoScenario && demoStepIndex === index ? ' is-active' : ''}`}
+                onClick={() => {
+                  setDemoScenarioId(DEMO_SCENARIOS[0].id)
+                  setDemoStepIndex(index)
+                  setInput(prompt)
+                  setShowPrompts(true)
+                }}
+                disabled={loading}
+              >
+                <span className="demo-launcher-index">{index + 1}</span>
+                <span className="demo-launcher-prompt-text">{prompt}</span>
+              </button>
+            ))}
+          </div>
+        </section>
 
         {/* Composer */}
         <div className="composer">
