@@ -715,6 +715,11 @@ def _generate_pdf(payload: ExportRequest) -> bytes:
 </html>"""
 
     pdf_bytes = HTML(string=html_str).write_pdf()
+    if not pdf_bytes:
+        raise RuntimeError(
+            "weasyprint produced an empty PDF. "
+            "Check that fontconfig and system fonts are installed in the container."
+        )
     return pdf_bytes
 
 

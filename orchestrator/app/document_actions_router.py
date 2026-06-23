@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import mimetypes
-import urllib.parse
 from typing import Annotated, Any
 
 import httpx
@@ -190,6 +189,22 @@ async def download_document_artifact(
             content=resp.content,
             media_type=resp.headers.get("content-type", "application/octet-stream"),
             headers=headers,
+        )
+
+    # No local file and no blob URL — regenerate from stored draft on the fly.
+    output_format = artifact.get("format", "")
+    if output_format:
+        try:
+            content, content_type = DOCUMENT_ACTIONS_SERVICE._render_artifact_content(
+                record=record, output_format=output_format
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        safe_name = file_name.replace('"', '\\"')
+        return Response(
+            content=content,
+            media_type=content_type,
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
         )
 
     raise HTTPException(status_code=404, detail="Document artifact unavailable")

@@ -2,10 +2,43 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
+
 import orchestrator.app.document_actions_service as document_actions_service_module
 from orchestrator.app.actions_store import ActionsStore
 from orchestrator.app.document_actions_service import DocumentActionsService
 from orchestrator.app.document_actions_store import DocumentActionsStore
+
+
+class _FakeExportResponse:
+    status_code = 200
+    content = b"FAKE_BINARY_CONTENT"
+
+    def get(self, key: str, default: str = "") -> str:
+        return {"content-type": "application/octet-stream"}.get(key, default)
+
+    @property
+    def headers(self) -> "_FakeExportResponse":
+        return self
+
+
+class _FakeExportClient:
+    def __init__(self, **kwargs: object) -> None:
+        pass
+
+    def __enter__(self) -> "_FakeExportClient":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        pass
+
+    def post(self, url: str, **kwargs: object) -> _FakeExportResponse:
+        return _FakeExportResponse()
+
+
+@pytest.fixture()
+def mock_export_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(document_actions_service_module.httpx, "Client", _FakeExportClient)
 
 
 def test_service_creates_document_draft(tmp_path):
@@ -41,7 +74,7 @@ def test_service_blocks_finalization_before_approval(tmp_path):
     assert result["reason"] == "approval_required"
 
 
-def test_service_finalizes_after_approval_and_records_artifacts(tmp_path):
+def test_service_finalizes_after_approval_and_records_artifacts(tmp_path, mock_export_service):
     store = DocumentActionsStore(db_path=tmp_path / "document_actions.db")
     actions_store = ActionsStore(str(tmp_path / "actions.db"))
     artifact_root = tmp_path / "document_artifacts"
@@ -74,7 +107,7 @@ def test_service_finalizes_after_approval_and_records_artifacts(tmp_path):
     assert result["artifacts"][0]["storage_ref"] == str(first_artifact_path)
     assert result["artifacts"][0]["size_bytes"] == first_artifact_path.stat().st_size
     assert first_artifact_path.exists()
-    assert "# Board Report" in first_artifact_path.read_text(encoding="utf-8")
+    assert first_artifact_path.read_bytes() == b"FAKE_BINARY_CONTENT"
     assert result["destination"]["type"] == "onedrive"
     assert result["announcement"]["status"] == "completed"
     assert result["announcement"]["id"] > 0
@@ -99,7 +132,7 @@ def test_service_finalizes_after_approval_and_records_artifacts(tmp_path):
     assert rerun["artifacts"][0]["storage_ref"] == result["artifacts"][0]["storage_ref"]
 
 
-def test_service_records_export_package_metadata(tmp_path):
+def test_service_records_export_package_metadata(tmp_path, mock_export_service):
     store = DocumentActionsStore(db_path=tmp_path / "document_actions.db")
     actions_store = ActionsStore(str(tmp_path / "actions.db"))
     artifact_root = tmp_path / "document_artifacts"
@@ -237,7 +270,7 @@ def test_store_round_trips_export_package_metadata(tmp_path):
     assert persisted["exported_at"] == updated["exported_at"]
 
 
-def test_service_promotes_artifact_to_blob_when_available(tmp_path, monkeypatch):
+def test_service_promotes_artifact_to_blob_when_available(tmp_path, monkeypatch, mock_export_service):
     store = DocumentActionsStore(db_path=tmp_path / "document_actions.db")
     actions_store = ActionsStore(str(tmp_path / "actions.db"))
     artifact_root = tmp_path / "document_artifacts"
@@ -269,3 +302,25 @@ def test_service_promotes_artifact_to_blob_when_available(tmp_path, monkeypatch)
     result = service.finalize(document_action_id=draft["id"])
 
     assert result["artifacts"][0]["blob_url"] == f"https://blob.example/document_artifacts/{draft['id']}/executive_briefing.pdf"
+
+
+def test_service_raises_when_export_service_unavailable(tmp_path):
+    store = DocumentActionsStore(db_path=tmp_path / "document_actions.db")
+    service = DocumentActionsService(store=store, artifact_root=tmp_path / "document_artifacts")
+    draft = service.create_draft(
+        user_id="alice",
+        work_packet_id="wp-err-1",
+        document_type="board_report",
+        title="Board Report",
+        source_summary="Summary",
+    )
+    store.mark_approved(
+        document_action_id=draft["id"],
+        approved_by="alice",
+        destination_type="onedrive",
+        destination_ref="Reports",
+        output_formats=["pdf"],
+    )
+
+    with pytest.raises(RuntimeError, match="document generation service is not available"):
+        service.finalize(document_action_id=draft["id"])

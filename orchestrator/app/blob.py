@@ -9,7 +9,7 @@ from typing import Any
 
 STORAGE_ACCOUNT = os.getenv("AZURE_STORAGE_ACCOUNT", "")
 STORAGE_KEY = os.getenv("AZURE_STORAGE_KEY", "")
-CONTAINER = "reports"
+CONTAINER = os.getenv("AZURE_STORAGE_CONTAINER", "reports")
 DOCUMENT_ARTIFACT_ROOT = os.getenv("DOCUMENT_ARTIFACT_ROOT", "data/document_artifacts")
 
 

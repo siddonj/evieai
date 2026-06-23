@@ -1849,7 +1849,7 @@ async def export_file(payload: ExportRequest) -> Response:
     mcp_base = _base(MCP_ENDPOINTS[service])
     export_urls = [f"{mcp_base}/export", f"{mcp_base}/mcp/export"]
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=90.0) as client:
         resp = None
         last_error: httpx.Response | None = None
         for export_url in dict.fromkeys(export_urls):
@@ -1870,6 +1870,8 @@ async def export_file(payload: ExportRequest) -> Response:
         if resp.status_code >= 400:
             detail = resp.text[:500]
             raise HTTPException(status_code=resp.status_code, detail=detail)
+        if not resp.content:
+            raise HTTPException(status_code=502, detail="Export service returned empty content")
         content_type = resp.headers.get("content-type", "application/octet-stream")
         disposition = resp.headers.get("content-disposition", "")
         headers: dict[str, str] = {}

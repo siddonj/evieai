@@ -688,7 +688,13 @@ function ReportViewer({
   }
 
   async function handleDownloadArtifact(fileName: string) {
-    await downloadResource(artifactDownloadUrl(fileName), fileName)
+    setError('')
+    try {
+      await downloadResource(artifactDownloadUrl(fileName), fileName)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Download failed'
+      setError(`Could not download ${fileName}: ${message}`)
+    }
   }
 
   async function loadDocument() {

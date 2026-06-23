@@ -449,21 +449,24 @@ async function downloadFile(file: McpFile) {
 }
 
 export async function downloadResource(url: string, filename: string) {
-  try {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`Download failed: ${res.status}`)
-    const blob = await res.blob()
-    const blobUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = blobUrl
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(blobUrl)
-  } catch {
-    window.open(url, '_blank')
+  const res = await fetch(url)
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`
+    try {
+      const body = await res.json() as { detail?: string }
+      if (body.detail) detail = body.detail
+    } catch { /* ignore parse errors */ }
+    throw new Error(detail)
   }
+  const blob = await res.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(blobUrl)
 }
 
 export function FileCard({ file }: { file: McpFile }) {
