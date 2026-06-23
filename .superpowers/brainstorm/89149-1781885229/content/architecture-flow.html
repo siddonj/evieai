@@ -1,0 +1,79 @@
+<h2>EvieAI Product Flow</h2>
+<p class="subtitle">Recommended default: cross-source answer first, governed orchestration when needed</p>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">Primary Experience Model</div>
+    <div class="mockup-body">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:stretch">
+        <div style="border:1px solid #2d3b52;border-radius:16px;padding:16px;background:#0f1724">
+          <div class="label">Step 1</div>
+          <h3>User Question</h3>
+          <p>Ask one question across mail, files, SQL, knowledge base, analytics, and memory.</p>
+        </div>
+        <div style="border:1px solid #2d3b52;border-radius:16px;padding:16px;background:#111827">
+          <div class="label">Step 2</div>
+          <h3>Cross-Source Retrieval</h3>
+          <p>Orchestrator fans out, compares evidence, reconciles partial matches, and scores confidence.</p>
+        </div>
+        <div style="border:1px solid #2d3b52;border-radius:16px;padding:16px;background:#132033">
+          <div class="label">Step 3</div>
+          <h3>Work Packet</h3>
+          <p>Return answer, evidence cards, source conflicts, confidence, suggested exports, and proposed actions.</p>
+        </div>
+        <div style="border:1px solid #2d3b52;border-radius:16px;padding:16px;background:#16263b">
+          <div class="label">Step 4</div>
+          <h3>Workspace Escalation</h3>
+          <p>If conflicts or write-backs matter, open a governed session with approvals, action queue, and audit trail.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card" data-choice="recommended" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="padding:18px;height:100%;display:flex;flex-direction:column;gap:12px;background:linear-gradient(160deg,#0f1724,#1c2d45)">
+        <div class="mock-button" style="width:100%">Question -> Work Packet</div>
+        <div class="placeholder" style="height:44px">Grounded answer + source evidence</div>
+        <div class="placeholder" style="height:44px">Dynamic cards + report/export actions</div>
+        <div class="placeholder" style="height:44px">Escalate to workspace when needed</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Recommended Shape</h3>
+      <p>Fast chat entry point, structured work packet by default, persistent orchestration only when needed.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="chat-heavy" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="padding:18px;height:100%;display:flex;flex-direction:column;gap:12px;background:linear-gradient(160deg,#171717,#2a2a2a)">
+        <div class="mock-button" style="width:100%">Question -> Answer</div>
+        <div class="placeholder" style="height:44px">Tool badges and citations</div>
+        <div class="placeholder" style="height:44px">Exports/actions as secondary controls</div>
+        <div class="placeholder" style="height:44px">Limited orchestration identity</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Too Chat-Centric</h3>
+      <p>Easy to ship, but it makes orchestration feel like an add-on instead of the product.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="workspace-heavy" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="padding:18px;height:100%;display:flex;flex-direction:column;gap:12px;background:linear-gradient(160deg,#1b1730,#2e2551)">
+        <div class="mock-button" style="width:100%">Open Persistent Case</div>
+        <div class="placeholder" style="height:44px">Sources stream into long-lived session</div>
+        <div class="placeholder" style="height:44px">Action queue and approvals always visible</div>
+        <div class="placeholder" style="height:44px">Heavier upfront UX for simple questions</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Too Heavy by Default</h3>
+      <p>Strong orchestration story, but slower first value and weaker for one-shot intelligence queries.</p>
+    </div>
+  </div>
+</div>
