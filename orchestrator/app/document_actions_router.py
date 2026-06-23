@@ -140,7 +140,10 @@ def finalize_draft(
 ) -> dict[str, Any]:
     record = _get_document_action_or_404(document_action_id)
     _authorize_document_access(actor, record)
-    return DOCUMENT_ACTIONS_SERVICE.finalize(document_action_id=document_action_id)
+    try:
+        return DOCUMENT_ACTIONS_SERVICE.finalize(document_action_id=document_action_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/{document_action_id}/export-package")
@@ -150,7 +153,10 @@ def export_package(
 ) -> dict[str, Any]:
     record = _get_document_action_or_404(document_action_id)
     _authorize_document_access(actor, record)
-    return DOCUMENT_ACTIONS_SERVICE.export_package(document_action_id=document_action_id)
+    try:
+        return DOCUMENT_ACTIONS_SERVICE.export_package(document_action_id=document_action_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/{document_action_id}/artifacts/{file_name:path}")

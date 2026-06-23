@@ -9,6 +9,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+# Eager imports so Azure Container Apps doesn't time out on first request while
+# packages are being loaded. weasyprint in particular scans fonts on first import
+# which can take 10-30s on a cold container.
+try:
+    import openpyxl as _openpyxl  # noqa: F401
+    import docx as _docx  # noqa: F401
+    import weasyprint as _weasyprint  # noqa: F401
+except ImportError:
+    pass  # missing libs surface as HTTPException 500 when the endpoint is called
+
 app = FastAPI(title="mcp-document-generation", version="0.3.0")
 
 # ═══════════════════════════════════════════════════════════════════════
