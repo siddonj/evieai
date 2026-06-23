@@ -1841,6 +1841,35 @@ class ExportRequest(BaseModel):
     data: dict[str, Any]
 
 
+@app.get("/debug/export-probe")
+async def debug_export_probe() -> dict:
+    """Temporary diagnostic endpoint — remove after debugging doc-mcp empty response."""
+    service = "document_generation"
+    if service not in MCP_ENDPOINTS:
+        return {"error": "document_generation not in MCP_ENDPOINTS"}
+    mcp_base = _base(MCP_ENDPOINTS[service])
+    probe_payload = {
+        "type": "report",
+        "format": "xlsx",
+        "title": "DebugProbe",
+        "data": {"sections": [{"heading": "Test", "content": "hello", "key_metrics": []}], "action_items": [], "tags": []},
+    }
+    results = {}
+    async with httpx.AsyncClient(timeout=90.0) as client:
+        for url in [f"{mcp_base}/export", f"{mcp_base}/mcp/export", f"{mcp_base}/health"]:
+            try:
+                r = await client.post(url, json=probe_payload) if not url.endswith("/health") else await client.get(url)
+                results[url] = {
+                    "status": r.status_code,
+                    "content_length": len(r.content),
+                    "first_bytes_hex": r.content[:16].hex(),
+                    "content_type": r.headers.get("content-type", ""),
+                }
+            except Exception as exc:
+                results[url] = {"error": str(exc)}
+    return {"mcp_base": mcp_base, "mcp_doc_url": MCP_ENDPOINTS[service], "results": results}
+
+
 @app.post("/export")
 async def export_file(payload: ExportRequest) -> Response:
     service = "document_generation"
