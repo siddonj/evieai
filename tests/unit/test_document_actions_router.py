@@ -21,7 +21,7 @@ class _FakeExportResponse:
         return {"content-type": "application/octet-stream"}.get(key, default)
 
     @property
-    def headers(self) -> "_FakeExportResponse":
+    def headers(self) -> _FakeExportResponse:
         return self
 
 
@@ -29,7 +29,7 @@ class _FakeExportClient:
     def __init__(self, **kwargs: object) -> None:
         pass
 
-    def __enter__(self) -> "_FakeExportClient":
+    def __enter__(self) -> _FakeExportClient:
         return self
 
     def __exit__(self, *args: object) -> None:
