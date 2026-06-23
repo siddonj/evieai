@@ -230,7 +230,67 @@ function formatDocumentType(value?: string): string {
   return (value || 'document_workflow').split('_').join(' ')
 }
 
-function PerformanceDashboardView({ userId, onBack }: { userId?: string; onBack: () => void }) {
+function TopNav({
+  currentView,
+  onNavigate,
+  onClear,
+}: {
+  currentView: View
+  onNavigate: (view: View) => void
+  onClear?: () => void
+}) {
+  const { user, isAdmin, logout } = useAuth()
+
+  const links: { id: View; label: string }[] = [
+    { id: 'chat', label: 'Chat' },
+    { id: 'performance', label: 'Portfolio' },
+    { id: 'network', label: 'Sites' },
+    { id: 'documents', label: 'Workflows' },
+    { id: 'outbox', label: 'Deliveries' },
+    ...(isAdmin ? [{ id: 'admin' as View, label: 'Operations' }] : []),
+    { id: 'settings', label: 'Settings' },
+  ]
+
+  return (
+    <nav className="app-nav" aria-label="Main navigation">
+      <div className="app-nav-brand">
+        <div className="evie-mark evie-mark-sm" aria-hidden="true">
+          <span className="mark-segment mark-segment-top" />
+          <span className="mark-segment mark-segment-mid" />
+          <span className="mark-segment mark-segment-bot" />
+        </div>
+        <span className="app-nav-title">EVIEAI</span>
+      </div>
+
+      <div className="app-nav-links" role="menubar">
+        {links.map(({ id, label }) => (
+          <button
+            key={id}
+            className={`nav-link${currentView === id || (id === 'settings' && currentView === 'service_health') ? ' active' : ''}`}
+            onClick={() => onNavigate(id)}
+            role="menuitem"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="app-nav-user">
+        {onClear && (
+          <button className="nav-action" onClick={onClear}>
+            Clear thread
+          </button>
+        )}
+        <span className="nav-email" title={user?.email}>{user?.email}</span>
+        <button className="nav-action" onClick={logout}>
+          Sign out
+        </button>
+      </div>
+    </nav>
+  )
+}
+
+function PerformanceDashboardView({ userId, onNavigate }: { userId?: string; onNavigate: (view: View) => void }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [data, setData] = useState<PerformanceData | null>(null)
@@ -261,6 +321,7 @@ function PerformanceDashboardView({ userId, onBack }: { userId?: string; onBack:
   return (
     <div className="page">
       <div className="bg-grid" aria-hidden="true" />
+      <TopNav currentView="performance" onNavigate={onNavigate} />
       <header className="hero">
         <p className="eyebrow">Portfolio signal</p>
         <h1>Portfolio performance</h1>
@@ -269,7 +330,7 @@ function PerformanceDashboardView({ userId, onBack }: { userId?: string; onBack:
 
       <div className="dashboard-shell">
         <div className="dashboard-toolbar">
-          <button className="status-btn" onClick={onBack}>Back to chat</button>
+          <button className="status-btn" onClick={() => onNavigate('chat')}>Back to chat</button>
           <button className="status-btn" onClick={() => void loadDashboard()} disabled={loading}>
             {loading ? 'Updating...' : 'Update now'}
           </button>
@@ -349,7 +410,7 @@ function PerformanceDashboardView({ userId, onBack }: { userId?: string; onBack:
   )
 }
 
-function NetworkDashboardView({ userId, onBack }: { userId?: string; onBack: () => void }) {
+function NetworkDashboardView({ userId, onNavigate }: { userId?: string; onNavigate: (view: View) => void }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [data, setData] = useState<NetworkData | null>(null)
@@ -380,6 +441,7 @@ function NetworkDashboardView({ userId, onBack }: { userId?: string; onBack: () 
   return (
     <div className="page">
       <div className="bg-grid" aria-hidden="true" />
+      <TopNav currentView="network" onNavigate={onNavigate} />
       <header className="hero">
         <p className="eyebrow">Site reliability</p>
         <h1>Network performance</h1>
@@ -388,7 +450,7 @@ function NetworkDashboardView({ userId, onBack }: { userId?: string; onBack: () 
 
       <div className="dashboard-shell">
         <div className="dashboard-toolbar">
-          <button className="status-btn" onClick={onBack}>Back to chat</button>
+          <button className="status-btn" onClick={() => onNavigate('chat')}>Back to chat</button>
           <button className="status-btn" onClick={() => void loadDashboard()} disabled={loading}>
             {loading ? 'Updating...' : 'Update now'}
           </button>
@@ -479,12 +541,12 @@ function NetworkDashboardView({ userId, onBack }: { userId?: string; onBack: () 
 function DocumentsView({
   userId,
   authHeader,
-  onBack,
+  onNavigate,
   onOpenReport,
 }: {
   userId?: string
   authHeader?: string
-  onBack: () => void
+  onNavigate: (view: View) => void
   onOpenReport: (documentActionId: number) => void
 }) {
   const [loading, setLoading] = useState(true)
@@ -529,6 +591,7 @@ function DocumentsView({
   return (
     <div className="page">
       <div className="bg-grid" aria-hidden="true" />
+      <TopNav currentView="documents" onNavigate={onNavigate} />
       <header className="hero">
         <p className="eyebrow">Governed Workflows</p>
         <h1>Workflow library</h1>
@@ -539,7 +602,7 @@ function DocumentsView({
 
       <div className="dashboard-shell">
         <div className="dashboard-toolbar">
-          <button className="status-btn" onClick={onBack}>Back to chat</button>
+          <button className="status-btn" onClick={() => onNavigate('chat')}>Back to chat</button>
           <button className="status-btn" onClick={() => void loadDocuments()} disabled={loading}>
             {loading ? 'Updating...' : 'Update now'}
           </button>
@@ -574,11 +637,11 @@ function DocumentsView({
 
 function OutboxView({
   authHeader,
-  onBack,
+  onNavigate,
   onOpenReport,
 }: {
   authHeader?: string
-  onBack: () => void
+  onNavigate: (view: View) => void
   onOpenReport: (documentActionId: number) => void
 }) {
   const [loading, setLoading] = useState(true)
@@ -613,6 +676,7 @@ function OutboxView({
   return (
     <div className="page">
       <div className="bg-grid" aria-hidden="true" />
+      <TopNav currentView="outbox" onNavigate={onNavigate} />
       <header className="hero">
         <p className="eyebrow">Downstream Handoffs</p>
         <h1>Delivery outbox</h1>
@@ -623,7 +687,7 @@ function OutboxView({
 
       <div className="dashboard-shell">
         <div className="dashboard-toolbar">
-          <button className="status-btn" onClick={onBack}>Back to chat</button>
+          <button className="status-btn" onClick={() => onNavigate('chat')}>Back to chat</button>
           <button className="status-btn" onClick={() => void loadOutbox()} disabled={loading}>
             {loading ? 'Updating...' : 'Update now'}
           </button>
@@ -673,11 +737,11 @@ function OutboxView({
 function ReportViewer({
   documentActionId,
   authHeader,
-  onBack,
+  onNavigate,
 }: {
   documentActionId: number
   authHeader?: string
-  onBack: () => void
+  onNavigate: (view: View) => void
 }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -724,6 +788,7 @@ function ReportViewer({
   return (
     <div className="page report-viewer-page">
       <div className="bg-grid" aria-hidden="true" />
+      <TopNav currentView="documents" onNavigate={onNavigate} />
       <header className="hero report-hero">
         <p className="eyebrow">Document review</p>
         <h1>{document?.title || 'Executive report'}</h1>
@@ -734,7 +799,7 @@ function ReportViewer({
 
       <div className="dashboard-shell report-shell">
         <div className="dashboard-toolbar">
-          <button className="status-btn" onClick={onBack}>Back to chat</button>
+          <button className="status-btn" onClick={() => onNavigate('documents')}>Back to workflows</button>
           <button className="status-btn" onClick={() => void loadDocument()} disabled={loading}>
             {loading ? 'Updating...' : 'Update now'}
           </button>
@@ -855,7 +920,7 @@ function nextId(): string {
 }
 
 function ChatView() {
-  const { user, token, isAdmin, logout } = useAuth()
+  const { user, token } = useAuth()
   const authHeader = token && token !== 'dev-session' ? `Bearer ${token}` : undefined
   const isDemoPath = window.location.pathname === DEMO_PATH || window.location.pathname.startsWith(`${DEMO_PATH}/`)
   const [input, setInput] = useState('')
@@ -1126,23 +1191,23 @@ function ChatView() {
   }
 
   if (view === 'performance') {
-    return <PerformanceDashboardView userId={user?.email} onBack={() => setView('chat')} />
+    return <PerformanceDashboardView userId={user?.email} onNavigate={setView} />
   }
 
   if (view === 'network') {
-    return <NetworkDashboardView userId={user?.email} onBack={() => setView('chat')} />
+    return <NetworkDashboardView userId={user?.email} onNavigate={setView} />
   }
 
   if (view === 'documents') {
-    return <DocumentsView userId={user?.email} authHeader={authHeader} onBack={() => setView('chat')} onOpenReport={openReport} />
+    return <DocumentsView userId={user?.email} authHeader={authHeader} onNavigate={setView} onOpenReport={openReport} />
   }
 
   if (view === 'outbox') {
-    return <OutboxView authHeader={authHeader} onBack={() => setView('chat')} onOpenReport={openReport} />
+    return <OutboxView authHeader={authHeader} onNavigate={setView} onOpenReport={openReport} />
   }
 
   if (view === 'report' && selectedDocumentId) {
-    return <ReportViewer documentActionId={selectedDocumentId} authHeader={authHeader} onBack={() => setView('documents')} />
+    return <ReportViewer documentActionId={selectedDocumentId} authHeader={authHeader} onNavigate={setView} />
   }
 
   const hasConversation = messages.length > 1
@@ -1151,23 +1216,18 @@ function ChatView() {
     <div className="page">
       <div className="bg-grid" aria-hidden="true" />
 
+      <TopNav
+        currentView={view}
+        onNavigate={setView}
+        onClear={hasConversation ? clearChat : undefined}
+      />
+
       <header className="hero hero-chat">
-        <div className="evie-brand">
-          <div className="evie-mark" aria-hidden="true">
-            <span className="mark-segment mark-segment-top" />
-            <span className="mark-segment mark-segment-mid" />
-            <span className="mark-segment mark-segment-bot" />
-          </div>
-          <div className="evie-wordmark">
-            <div className="evie-wordmark-title">EVIEAI</div>
-            <div className="evie-wordmark-tag">MULTIFAMILY AI SOLUTIONS</div>
-          </div>
-        </div>
         {IS_DEV_DEMO && <div className="mode-badge">Demo mode</div>}
         <p className="eyebrow">Operations workspace</p>
         <h1>Workspace Intelligence</h1>
         <p className="subtitle">
-          Ask natural-language questions across properties, deals, contacts, market data, and documents. Evie routes each request through the right tools and synthesizes a concise answer.
+          Ask about properties, deals, market data, or documents — Evie routes each request through the right systems.
         </p>
       </header>
 
@@ -1223,48 +1283,7 @@ function ChatView() {
         <div className="status">
           <div className="status-meta">
             <span>{statusText}</span>
-            <span className="status-subcopy">{user?.email || 'Local session'}</span>
           </div>
-          <span className="status-actions">
-            {isAdmin && (
-              <>
-                <button className="status-btn" onClick={() => setView('admin')} title="Open operations dashboard">
-                  Operations
-                </button>
-                <button className="status-btn" onClick={() => setView('settings')} title="Open settings">
-                  Settings
-                </button>
-              </>
-            )}
-            {!isAdmin && (
-              <button className="status-btn" onClick={() => setView('settings')} title="Open settings">
-                Settings
-              </button>
-            )}
-            <button className="status-btn" onClick={() => setView('service_health')} title="Open service health">
-              Service health
-            </button>
-            <button className="status-btn" onClick={() => setView('performance')} title="Open performance dashboard">
-              Portfolio
-            </button>
-            <button className="status-btn" onClick={() => setView('network')} title="Open network dashboard">
-              Sites
-            </button>
-            <button className="status-btn" onClick={() => setView('documents')} title="Open document workflows">
-              Workflows
-            </button>
-            <button className="status-btn" onClick={() => setView('outbox')} title="Open workflow outbox">
-              Deliveries
-            </button>
-            {hasConversation && (
-              <button className="status-btn" onClick={clearChat} title="Clear conversation history">
-                Clear thread
-              </button>
-            )}
-            <button className="status-btn" onClick={logout} title="Sign out">
-              Sign out
-            </button>
-          </span>
         </div>
 
         {/* Messages */}
