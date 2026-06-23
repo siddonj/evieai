@@ -450,103 +450,171 @@ def _sanitize_name(title: str) -> str:
 
 
 def _generate_excel(payload: ExportRequest) -> bytes:
+    import datetime
+
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
+    generated = datetime.datetime.now(datetime.UTC).strftime("%B %d, %Y")
+
     wb = Workbook()
     ws = wb.active
-    ws.title = payload.title[:31] or "Export"
+    ws.title = payload.title[:31] or "Report"
 
-    header_font = Font(bold=True, size=14, color="FFFFFF")
-    header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
-    section_font = Font(bold=True, size=12, color="1F4E79")
-    metric_header_font = Font(bold=True, size=10, color="FFFFFF")
-    metric_header_fill = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
-    thin_border = Border(
-        left=Side(style="thin"), right=Side(style="thin"),
-        top=Side(style="thin"), bottom=Side(style="thin"),
-    )
-    wrap = Alignment(wrap_text=True, vertical="top")
+    # ── Palette ────────────────────────────────────────────────────
+    NAVY, SAPPHIRE, LIGHT, ALT, WHITE = "1F4E79", "2E75B6", "EBF3FB", "F7FAFD", "FFFFFF"
+
+    # ── Reusable styles ────────────────────────────────────────────
+    def _font(bold=False, size=9, color="2C2C2C", italic=False):
+        return Font(bold=bold, size=size, color=color, name="Calibri", italic=italic)
+
+    def _fill(color):
+        return PatternFill(start_color=color, end_color=color, fill_type="solid")
+
+    def _border(color="D0E4F5"):
+        s = Side(style="thin", color=color)
+        return Border(left=s, right=s, top=s, bottom=s)
+
+    thin = _border()
+    left_accent = Border(left=Side(style="medium", color=NAVY))
+    center = Alignment(horizontal="center", vertical="center")
+    vcenter = Alignment(vertical="center", indent=1)
+    wrap = Alignment(wrap_text=True, vertical="top", indent=1)
+
+    # ── Title header (rows 1–2) ─────────────────────────────────────
+    for r, (val, fnt, ht) in enumerate([
+        (payload.title,      _font(bold=True, size=15, color=WHITE),       36),
+        (f"Generated {generated}  |  CONFIDENTIAL",
+                              _font(size=8, color="8FBFE0", italic=True),  16),
+    ], start=1):
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=5)
+        c = ws.cell(row=r, column=1, value=val)
+        c.font = fnt
+        c.fill = _fill(NAVY)
+        c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+        ws.row_dimensions[r].height = ht
+
+    row = 2
 
     if payload.type == "report":
-        data = payload.data
         sections = _report_sections(payload)
-        action_items = data.get("action_items", [])
-        tags = data.get("tags", [])
+        action_items = payload.data.get("action_items", [])
+        tags = payload.data.get("tags", [])
 
-        row = 1
-        ws.cell(row=row, column=1, value=payload.title).font = header_font
-        ws.cell(row=row, column=1).fill = header_fill
-        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
-        ws.cell(row=row, column=1).alignment = Alignment(horizontal="center", vertical="center")
-        ws.row_dimensions[row].height = 30
-
-        for section in sections:
+        for sec in sections:
+            # Section heading
             row += 2
-            ws.cell(row=row, column=1, value=section.get("heading", "")).font = section_font
-            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+            c = ws.cell(row=row, column=1, value=sec.get("heading", ""))
+            c.font = _font(bold=True, size=11, color=NAVY)
+            c.fill = _fill(LIGHT)
+            c.border = left_accent
+            c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+            ws.row_dimensions[row].height = 22
 
+            # Narrative content
             row += 1
-            ws.cell(row=row, column=1, value=section.get("content", "")).alignment = wrap
-            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
-            ws.row_dimensions[row].height = 60
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+            c = ws.cell(row=row, column=1, value=sec.get("content", ""))
+            c.font = _font(size=9, color="444444")
+            c.alignment = wrap
+            ws.row_dimensions[row].height = 52
 
-            metrics = section.get("key_metrics", [])
+            # Key-metrics table
+            metrics = sec.get("key_metrics", [])
             if metrics:
                 row += 1
-                for col, h in enumerate(["Metric", "Value", "Trend"], 1):
-                    c = ws.cell(row=row, column=col, value=h)
-                    c.font = metric_header_font
-                    c.fill = metric_header_fill
-                    c.border = thin_border
-                    c.alignment = Alignment(horizontal="center")
-                for m in metrics:
+                for col, label in enumerate(["Metric", "Value", "Trend"], 1):
+                    c = ws.cell(row=row, column=col, value=label)
+                    c.font = _font(bold=True, size=9, color=WHITE)
+                    c.fill = _fill(SAPPHIRE)
+                    c.border = thin
+                    c.alignment = center
+                ws.row_dimensions[row].height = 18
+
+                for i, m in enumerate(metrics):
                     row += 1
-                    ws.cell(row=row, column=1, value=m.get("label", "")).border = thin_border
-                    ws.cell(row=row, column=2, value=m.get("value", "")).border = thin_border
-                    ws.cell(row=row, column=3, value=m.get("trend", "")).border = thin_border
+                    row_fill = _fill(ALT) if i % 2 == 0 else _fill(WHITE)
+                    for col, (val, bold) in enumerate(
+                        [(m.get("label",""), False), (m.get("value",""), True), (m.get("trend",""), False)], 1
+                    ):
+                        c = ws.cell(row=row, column=col, value=val)
+                        c.font = _font(bold=bold, size=9)
+                        c.fill = row_fill
+                        c.border = thin
+                        c.alignment = vcenter
+                    ws.row_dimensions[row].height = 16
 
         if action_items:
             row += 2
-            ws.cell(row=row, column=1, value="Action Items").font = section_font
-            for item in action_items:
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+            c = ws.cell(row=row, column=1, value="Action Items")
+            c.font = _font(bold=True, size=11, color=NAVY)
+            c.fill = _fill(LIGHT)
+            c.border = left_accent
+            c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+            ws.row_dimensions[row].height = 22
+
+            for i, item in enumerate(action_items):
                 row += 1
-                ws.cell(row=row, column=1, value=f"  {item}").alignment = wrap
+                ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+                c = ws.cell(row=row, column=1, value=f"  ▸  {item}")
+                c.font = _font(size=9, color="333333")
+                c.fill = _fill(ALT) if i % 2 == 0 else _fill(WHITE)
+                c.alignment = Alignment(wrap_text=True, vertical="top")
+                ws.row_dimensions[row].height = 16
 
         if tags:
             row += 2
-            ws.cell(row=row, column=1, value="Tags").font = section_font
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+            c = ws.cell(row=row, column=1, value="Tags")
+            c.font = _font(bold=True, size=11, color=NAVY)
+            c.fill = _fill(LIGHT)
+            c.border = left_accent
+            c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+            ws.row_dimensions[row].height = 22
             row += 1
-            ws.cell(row=row, column=1, value=", ".join(tags))
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+            c = ws.cell(row=row, column=1, value="  " + "  •  ".join(tags))
+            c.font = _font(size=9, color="555555")
+            ws.row_dimensions[row].height = 16
 
-        ws.column_dimensions["A"].width = 30
+        ws.column_dimensions["A"].width = 32
         ws.column_dimensions["B"].width = 20
-        ws.column_dimensions["C"].width = 30
+        ws.column_dimensions["C"].width = 28
+        ws.column_dimensions["D"].width = 10
+        ws.column_dimensions["E"].width = 10
 
     else:
         headers = payload.data.get("headers", [])
-        rows = payload.data.get("rows", [])
-
-        ws.cell(row=1, column=1, value=payload.title).font = header_font
-        ws.cell(row=1, column=1).fill = header_fill
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max(len(headers), 1))
-        ws.cell(row=1, column=1).alignment = Alignment(horizontal="center")
-        ws.row_dimensions[1].height = 30
+        rows_data = payload.data.get("rows", [])
 
         if headers:
+            row += 2
             for col, h in enumerate(headers, 1):
-                c = ws.cell(row=2, column=col, value=h)
-                c.font = metric_header_font
-                c.fill = metric_header_fill
-                c.border = thin_border
-                c.alignment = Alignment(horizontal="center")
+                c = ws.cell(row=row, column=col, value=h)
+                c.font = _font(bold=True, size=9, color=WHITE)
+                c.fill = _fill(SAPPHIRE)
+                c.border = thin
+                c.alignment = center
+                ws.column_dimensions[chr(64 + col) if col <= 26 else "A"].width = 22
+            ws.row_dimensions[row].height = 20
 
-        for r_idx, row_data in enumerate(rows, 3 if headers else 2):
-            for c_idx, val in enumerate(row_data, 1):
-                ws.cell(row=r_idx, column=c_idx, value=str(val)).border = thin_border
+        for i, row_data in enumerate(rows_data):
+            row += 1
+            row_fill = _fill(ALT) if i % 2 == 0 else _fill(WHITE)
+            for col, val in enumerate(row_data, 1):
+                c = ws.cell(row=row, column=col, value=str(val))
+                c.font = _font(size=9)
+                c.fill = row_fill
+                c.border = thin
+                c.alignment = vcenter
+            ws.row_dimensions[row].height = 16
 
-        for i, _h in enumerate(headers, 1):
-            ws.column_dimensions[chr(64 + i) if i <= 26 else f"A{i}"].width = 25
+    # Freeze below the 2-row branded header
+    ws.freeze_panes = ws.cell(row=3, column=1)
+    ws.page_setup.fitToPage = True
+    ws.page_setup.fitToWidth = 1
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -555,84 +623,185 @@ def _generate_excel(payload: ExportRequest) -> bytes:
 
 
 def _generate_docx(payload: ExportRequest) -> bytes:
+    import datetime
+
     from docx import Document
     from docx.enum.table import WD_TABLE_ALIGNMENT
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.shared import Pt
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Cm, Pt, RGBColor
+
+    NAVY = RGBColor(0x1F, 0x4E, 0x79)
+    SAPPHIRE = RGBColor(0x2E, 0x75, 0xB6)
+    WHITE = RGBColor(0xFF, 0xFF, 0xFF)
+    GREY = RGBColor(0x99, 0x99, 0x99)
+
+    generated = datetime.datetime.now(datetime.UTC).strftime("%B %d, %Y")
 
     doc = Document()
 
-    style = doc.styles["Normal"]
-    style.font.name = "Calibri"
-    style.font.size = Pt(11)
-    style.paragraph_format.space_after = Pt(6)
+    # ── Margins ─────────────────────────────────────────────────────
+    pg = doc.sections[0]
+    pg.left_margin = pg.right_margin = Cm(2.54)
+    pg.top_margin = pg.bottom_margin = Cm(2.54)
 
+    # ── Base styles ─────────────────────────────────────────────────
+    normal = doc.styles["Normal"]
+    normal.font.name = "Calibri"
+    normal.font.size = Pt(10.5)
+    normal.paragraph_format.space_after = Pt(6)
+
+    for lvl, size, space_before in [(1, 22, 0), (2, 13, 14)]:
+        s = doc.styles[f"Heading {lvl}"]
+        s.font.name = "Calibri"
+        s.font.size = Pt(size)
+        s.font.bold = True
+        s.font.color.rgb = NAVY
+        s.paragraph_format.space_before = Pt(space_before)
+        s.paragraph_format.space_after = Pt(4)
+
+    # ── XML helpers ─────────────────────────────────────────────────
+    def _shade_cell(cell: Any, fill_hex: str) -> None:
+        tcPr = cell._tc.get_or_add_tcPr()
+        shd = OxmlElement("w:shd")
+        shd.set(qn("w:fill"), fill_hex)
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:val"), "clear")
+        tcPr.append(shd)
+
+    def _left_border(para: Any, color: str = "1F4E79", sz: int = 24) -> None:
+        pPr = para._p.get_or_add_pPr()
+        pBdr = OxmlElement("w:pBdr")
+        left = OxmlElement("w:left")
+        left.set(qn("w:val"), "single")
+        left.set(qn("w:sz"), str(sz))
+        left.set(qn("w:space"), "6")
+        left.set(qn("w:color"), color)
+        pBdr.append(left)
+        pPr.append(pBdr)
+
+    def _page_number_field(run: Any) -> None:
+        fldChar = OxmlElement("w:fldChar")
+        fldChar.set(qn("w:fldCharType"), "begin")
+        run._r.append(fldChar)
+        instr = OxmlElement("w:instrText")
+        instr.set(qn("xml:space"), "preserve")
+        instr.text = " PAGE "
+        run._r.append(instr)
+        fldChar2 = OxmlElement("w:fldChar")
+        fldChar2.set(qn("w:fldCharType"), "end")
+        run._r.append(fldChar2)
+
+    # ── Header ──────────────────────────────────────────────────────
+    hdr_section = doc.sections[0].header
+    for p in hdr_section.paragraphs:
+        p.clear()
+    hdr_para = hdr_section.paragraphs[0] if hdr_section.paragraphs else hdr_section.add_paragraph()
+    hdr_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    hr = hdr_para.add_run(payload.title)
+    hr.font.size = Pt(8)
+    hr.font.color.rgb = GREY
+    hr.font.italic = True
+    pPr = hdr_para._p.get_or_add_pPr()
+    pBdr = OxmlElement("w:pBdr")
+    bot = OxmlElement("w:bottom")
+    bot.set(qn("w:val"), "single")
+    bot.set(qn("w:sz"), "4")
+    bot.set(qn("w:space"), "1")
+    bot.set(qn("w:color"), "CCCCCC")
+    pBdr.append(bot)
+    pPr.append(pBdr)
+
+    # ── Footer with page number ──────────────────────────────────────
+    ftr_section = doc.sections[0].footer
+    for p in ftr_section.paragraphs:
+        p.clear()
+    ftr_para = ftr_section.paragraphs[0] if ftr_section.paragraphs else ftr_section.add_paragraph()
+    ftr_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    txt_run = ftr_para.add_run(f"{generated}  •  CONFIDENTIAL  •  Page ")
+    txt_run.font.size = Pt(8)
+    txt_run.font.color.rgb = GREY
+    pn_run = ftr_para.add_run()
+    pn_run.font.size = Pt(8)
+    pn_run.font.color.rgb = GREY
+    _page_number_field(pn_run)
+
+    # ── Title block ─────────────────────────────────────────────────
     title_para = doc.add_heading(payload.title, level=1)
     title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
+    date_para = doc.add_paragraph()
+    date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    dr = date_para.add_run(f"{generated}  •  CONFIDENTIAL")
+    dr.font.size = Pt(10)
+    dr.font.color.rgb = SAPPHIRE
+    date_para.paragraph_format.space_after = Pt(20)
+
+    # ── Helper: styled metric/data table ────────────────────────────
+    def _build_table(rows_data: list[list[str]], headers: list[str]) -> Any:
+        ncols = max(len(headers), max((len(r) for r in rows_data), default=0), 1)
+        tbl = doc.add_table(rows=1 + len(rows_data), cols=ncols)
+        tbl.style = "Table Grid"
+        tbl.alignment = WD_TABLE_ALIGNMENT.LEFT
+
+        hdr_cells = tbl.rows[0].cells
+        for i, h in enumerate(headers):
+            _shade_cell(hdr_cells[i], "1F4E79")
+            for p in hdr_cells[i].paragraphs:
+                run = p.add_run(h)
+                run.font.bold = True
+                run.font.size = Pt(9)
+                run.font.color.rgb = WHITE
+                p.paragraph_format.space_after = Pt(0)
+
+        for r_i, row_vals in enumerate(rows_data):
+            fill = "EBF3FB" if r_i % 2 == 0 else "FFFFFF"
+            data_cells = tbl.rows[r_i + 1].cells
+            for ci, val in enumerate(row_vals):
+                if ci < len(data_cells):
+                    _shade_cell(data_cells[ci], fill)
+                    for p in data_cells[ci].paragraphs:
+                        run = p.add_run(val)
+                        run.font.size = Pt(9)
+                        p.paragraph_format.space_after = Pt(0)
+        return tbl
+
+    # ── Content ─────────────────────────────────────────────────────
     if payload.type == "report":
-        data = payload.data
         sections = _report_sections(payload)
-        action_items = data.get("action_items", [])
-        tags = data.get("tags", [])
+        action_items = payload.data.get("action_items", [])
+        tags = payload.data.get("tags", [])
 
-        for section in sections:
-            doc.add_heading(section.get("heading", ""), level=2)
-            doc.add_paragraph(section.get("content", ""))
+        for sec in sections:
+            h2 = doc.add_heading(sec.get("heading", ""), level=2)
+            _left_border(h2)
+            doc.add_paragraph(sec.get("content", ""))
 
-            metrics = section.get("key_metrics", [])
+            metrics = sec.get("key_metrics", [])
             if metrics:
-                table = doc.add_table(rows=1, cols=3)
-                table.style = "Light Grid Accent 1"
-                table.alignment = WD_TABLE_ALIGNMENT.CENTER
-                hdr = table.rows[0].cells
-                for i, heading in enumerate(["Metric", "Value", "Trend"]):
-                    hdr[i].text = heading
-                    for p in hdr[i].paragraphs:
-                        for r in p.runs:
-                            r.bold = True
-                            r.font.size = Pt(9)
-                for m in metrics:
-                    row_cells = table.add_row().cells
-                    row_cells[0].text = str(m.get("label", ""))
-                    row_cells[1].text = str(m.get("value", ""))
-                    row_cells[2].text = str(m.get("trend", ""))
-                    for cell in row_cells:
-                        for p in cell.paragraphs:
-                            for r in p.runs:
-                                r.font.size = Pt(9)
-
-                doc.add_paragraph()
+                _build_table(
+                    [[m.get("label",""), m.get("value",""), m.get("trend","")] for m in metrics],
+                    ["Metric", "Value", "Trend"],
+                )
+                doc.add_paragraph().paragraph_format.space_after = Pt(4)
 
         if action_items:
-            doc.add_heading("Action Items", level=2)
+            h2 = doc.add_heading("Action Items", level=2)
+            _left_border(h2)
             for item in action_items:
                 doc.add_paragraph(item, style="List Bullet")
 
         if tags:
-            doc.add_heading("Tags", level=2)
-            doc.add_paragraph(", ".join(tags))
+            h2 = doc.add_heading("Tags", level=2)
+            _left_border(h2)
+            doc.add_paragraph("  ".join(f"[{t}]" for t in tags))
 
     else:
         headers = payload.data.get("headers", [])
-        rows = payload.data.get("rows", [])
-
+        rows_data = payload.data.get("rows", [])
         if headers:
-            table = doc.add_table(rows=1, cols=len(headers))
-            table.style = "Light Grid Accent 1"
-            table.alignment = WD_TABLE_ALIGNMENT.CENTER
-            hdr = table.rows[0].cells
-            for i, h in enumerate(headers):
-                hdr[i].text = h
-                for p in hdr[i].paragraphs:
-                    for r in p.runs:
-                        r.bold = True
-
-            for row_data in rows:
-                row_cells = table.add_row().cells
-                for i, val in enumerate(row_data):
-                    if i < len(row_cells):
-                        row_cells[i].text = str(val)
+            _build_table([[str(v) for v in row] for row in rows_data], headers)
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -641,86 +810,145 @@ def _generate_docx(payload: ExportRequest) -> bytes:
 
 
 def _generate_pdf(payload: ExportRequest) -> bytes:
+    import datetime
+
     from weasyprint import HTML
 
+    generated = datetime.datetime.now(datetime.UTC).strftime("%B %d, %Y")
+
     if payload.type == "report":
-        data = payload.data
         sections = _report_sections(payload)
-        action_items = data.get("action_items", [])
-        tags = data.get("tags", [])
-        table_headers = []
-        table_rows = []
+        action_items = payload.data.get("action_items", [])
+        table_headers: list = []
+        table_rows: list = []
     else:
         sections = []
         action_items = []
-        tags = payload.data.get("tags", [])
         table_headers = payload.data.get("headers", [])
         table_rows = payload.data.get("rows", [])
 
-    metric_rows = ""
+    def _kpi_grid(metrics: list) -> str:
+        if not metrics:
+            return ""
+        cols = 3
+        html = '<table style="width:100%;border-collapse:separate;border-spacing:5px;margin:10px 0 0 0;">'
+        for i in range(0, len(metrics), cols):
+            batch = metrics[i : i + cols]
+            html += "<tr>"
+            for m in batch:
+                label = m.get("label", "")
+                value = m.get("value", "")
+                trend = m.get("trend", "")
+                t = trend.lstrip()
+                t_color = "#2E7D32" if t.startswith("+") or "↑" in t else (
+                    "#C62828" if t.startswith("-") or "↓" in t else "#666"
+                )
+                html += (
+                    f'<td style="width:33%;border:1px solid #D0E4F5;border-top:3px solid #2E75B6;'
+                    f'padding:8px 12px;background:#F7FAFD;vertical-align:top;">'
+                    f'<div style="font-size:7pt;color:#888;text-transform:uppercase;'
+                    f'letter-spacing:0.6pt;margin-bottom:3px;">{label}</div>'
+                    f'<div style="font-size:14pt;font-weight:bold;color:#1F4E79;'
+                    f'margin-bottom:2px;">{value}</div>'
+                    f'<div style="font-size:8pt;color:{t_color};">{trend}</div>'
+                    f'</td>'
+                )
+            for _ in range(cols - len(batch)):
+                html += "<td></td>"
+            html += "</tr>"
+        html += "</table>"
+        return html
+
+    # Sections
+    sections_html = ""
     for s in sections:
-        metrics_html = ""
-        for m in s.get("key_metrics", []):
-            metrics_html += f"""
-            <tr>
-                <td style="padding:4px 8px;border:1px solid #ccc;font-size:9pt;">{m.get('label','')}</td>
-                <td style="padding:4px 8px;border:1px solid #ccc;font-size:9pt;font-weight:bold;">{m.get('value','')}</td>
-                <td style="padding:4px 8px;border:1px solid #ccc;font-size:9pt;color:#666;">{m.get('trend','')}</td>
-            </tr>"""
+        heading = s.get("heading", "")
+        content = s.get("content", "")
+        sections_html += (
+            f'<div style="page-break-inside:avoid;margin-bottom:22px;">'
+            f'<div style="border-left:4px solid #1F4E79;padding:2px 0 2px 10px;margin-bottom:6px;">'
+            f'<h2 style="color:#1F4E79;font-size:12pt;margin:0;font-weight:bold;">{heading}</h2>'
+            f'</div>'
+            f'<p style="font-size:9.5pt;line-height:1.65;color:#333;margin:0 0 4px 0;">{content}</p>'
+            f'{_kpi_grid(s.get("key_metrics", []))}'
+            f'</div>'
+        )
 
-        section_html = f"""
-        <div style="page-break-inside:avoid;margin-bottom:20px;">
-            <h2 style="color:#1F4E79;font-size:14pt;border-bottom:2px solid #1F4E79;padding-bottom:4px;">{s.get('heading','')}</h2>
-            <p style="font-size:10pt;line-height:1.5;color:#333;">{s.get('content','')}</p>
-            {f'<table style="width:100%;border-collapse:collapse;margin-top:8px;">{metrics_html}</table>' if metrics_html else ''}
-        </div>"""
-        metric_rows += section_html
-
+    # Data table
     table_html = ""
     if table_headers:
-        th = "".join(f"<th style='padding:6px 10px;border:1px solid #ccc;background:#2E75B6;color:#fff;font-size:9pt;text-align:left;'>{h}</th>" for h in table_headers)
-        tr = ""
-        for row in table_rows:
-            td = "".join(f"<td style='padding:4px 8px;border:1px solid #ccc;font-size:9pt;'>{str(v)}</td>" for v in row)
-            tr += f"<tr>{td}</tr>"
-        table_html = f"""
-        <table style="width:100%;border-collapse:collapse;margin-top:10px;">
-            <tr>{th}</tr>
-            {tr}
-        </table>"""
+        th = "".join(
+            f'<th style="padding:6px 10px;border:1px solid #1a4068;background:#1F4E79;'
+            f'color:#fff;font-size:9pt;text-align:left;">{h}</th>'
+            for h in table_headers
+        )
+        trs = ""
+        for i, row in enumerate(table_rows):
+            bg = "#F7FAFD" if i % 2 else "#FFFFFF"
+            td = "".join(
+                f'<td style="padding:5px 10px;border:1px solid #D5E6F3;font-size:9pt;background:{bg};">{str(v)}</td>'
+                for v in row
+            )
+            trs += f"<tr>{td}</tr>"
+        table_html = (
+            f'<table style="width:100%;border-collapse:collapse;margin-top:10px;">'
+            f'<thead><tr>{th}</tr></thead><tbody>{trs}</tbody></table>'
+        )
 
+    # Action items
     actions_html = ""
     if action_items:
-        items = "".join(f"<li style='font-size:10pt;margin-bottom:4px;'>{item}</li>" for item in action_items)
-        actions_html = f"""
-        <div style="page-break-inside:avoid;margin-top:20px;">
-            <h2 style="color:#1F4E79;font-size:14pt;border-bottom:2px solid #1F4E79;padding-bottom:4px;">Action Items</h2>
-            <ul>{items}</ul>
-        </div>"""
-
-    tags_html = ""
-    if tags:
-        tags_html = f"""
-        <div style="page-break-inside:avoid;margin-top:20px;">
-            <h2 style="color:#1F4E79;font-size:14pt;border-bottom:2px solid #1F4E79;padding-bottom:4px;">Tags</h2>
-            <p style="font-size:10pt;color:#666;">{', '.join(tags)}</p>
-        </div>"""
+        items = "".join(
+            f'<li style="font-size:9.5pt;margin-bottom:5px;line-height:1.5;">{item}</li>'
+            for item in action_items
+        )
+        actions_html = (
+            f'<div style="page-break-inside:avoid;margin-bottom:22px;">'
+            f'<div style="border-left:4px solid #1F4E79;padding:2px 0 2px 10px;margin-bottom:6px;">'
+            f'<h2 style="color:#1F4E79;font-size:12pt;margin:0;font-weight:bold;">Action Items</h2>'
+            f'</div>'
+            f'<ul style="margin:6px 0 0 0;padding-left:20px;">{items}</ul>'
+            f'</div>'
+        )
 
     html_str = f"""<!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <style>
-        @page {{ margin: 1.5cm 2cm; }}
-        body {{ font-family: 'Helvetica', 'Arial', sans-serif; color: #333; }}
-    </style>
+<meta charset="utf-8">
+<style>
+@page {{
+    margin: 2.2cm 2cm 2.5cm 2cm;
+    @bottom-right {{
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: 'Liberation Sans', Arial, sans-serif;
+        font-size: 7.5pt;
+        color: #aaa;
+    }}
+    @bottom-center {{
+        content: "CONFIDENTIAL";
+        font-family: 'Liberation Sans', Arial, sans-serif;
+        font-size: 7pt;
+        color: #aaa;
+        letter-spacing: 1.5pt;
+    }}
+}}
+body {{
+    font-family: 'Liberation Sans', 'Arial', sans-serif;
+    color: #2C2C2C;
+    margin: 0;
+    font-size: 10pt;
+}}
+</style>
 </head>
 <body>
-    <h1 style="color:#1F4E79;font-size:18pt;text-align:center;margin-bottom:24px;">{payload.title}</h1>
-    {metric_rows}
-    {table_html}
-    {actions_html}
-    {tags_html}
+<div style="background:#1F4E79;color:#fff;padding:22px 26px 18px 26px;margin-bottom:26px;">
+    <div style="font-size:7pt;letter-spacing:2pt;text-transform:uppercase;color:#8FBFE0;margin-bottom:7px;">CONFIDENTIAL REPORT</div>
+    <div style="font-size:19pt;font-weight:bold;line-height:1.2;margin-bottom:8px;">{payload.title}</div>
+    <div style="font-size:8.5pt;color:#8FBFE0;">Generated {generated}</div>
+</div>
+{sections_html}
+{table_html}
+{actions_html}
 </body>
 </html>"""
 
