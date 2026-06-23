@@ -243,8 +243,11 @@ class DocumentActionsService:
         export_url = f"{self.document_export_base_url}/export"
         export_payload = self._artifact_export_payload(record=record, output_format=output_format)
         try:
-            with httpx.Client(timeout=90.0, follow_redirects=True) as client:
+            with httpx.Client(timeout=90.0, follow_redirects=False) as client:
                 resp = client.post(export_url, json=export_payload)
+                # Azure Container Apps ingress returns 301 HTTP→HTTPS; re-POST to location.
+                if resp.status_code in (301, 302, 307, 308) and "location" in resp.headers:
+                    resp = client.post(resp.headers["location"], json=export_payload)
             if resp.status_code < 400 and resp.content:
                 return resp.content, resp.headers.get("content-type", self._artifact_content_type(output_format))
         except Exception:
