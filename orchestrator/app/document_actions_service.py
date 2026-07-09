@@ -237,6 +237,11 @@ class DocumentActionsService:
 
     def _artifact_export_payload(self, *, record: dict[str, Any], output_format: str) -> dict[str, Any]:
         markdown = str(record.get("draft_markdown") or f"# {record['title']}\n")
+        # The export template already renders the document title; drop a leading
+        # H1 that repeats it and let the markdown's own headings structure the body.
+        lines = markdown.lstrip().splitlines()
+        if lines and lines[0].startswith("# ") and lines[0][2:].strip() == str(record["title"]).strip():
+            markdown = "\n".join(lines[1:]).lstrip("\n")
         return {
             "type": "report",
             "format": output_format,
@@ -244,7 +249,7 @@ class DocumentActionsService:
             "data": {
                 "sections": [
                     {
-                        "heading": record["title"],
+                        "heading": "",
                         "content": markdown,
                         "key_metrics": [],
                     }

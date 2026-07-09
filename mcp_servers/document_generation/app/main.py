@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import re
+from html import escape as html_escape
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -444,6 +445,101 @@ def _report_sections(payload: ExportRequest) -> list[dict[str, Any]]:
 #  EXPORT — Generators
 # ═══════════════════════════════════════════════════════════════════════
 
+# ── Markdown-aware content rendering ────────────────────────────────
+# Workflow drafts arrive as markdown; render the structure instead of
+# emitting the raw markers so exported files read as finished documents.
+
+_MD_HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+_MD_BULLET = re.compile(r"^\s*[-*+]\s+(.*)$")
+_MD_ORDERED = re.compile(r"^\s*\d+[.)]\s+(.*)$")
+_MD_BOLD = re.compile(r"\*\*(.+?)\*\*")
+_MD_ITALIC = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
+_MD_CODE = re.compile(r"`([^`]+)`")
+
+
+def _md_blocks(content: str) -> list[tuple[str, int, str]]:
+    """Split markdown into (kind, level, text) blocks: heading, bullet, or para."""
+    blocks: list[tuple[str, int, str]] = []
+    for raw in str(content or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        heading = _MD_HEADING.match(line)
+        if heading:
+            blocks.append(("heading", len(heading.group(1)), heading.group(2).strip("* ").strip()))
+            continue
+        bullet = _MD_BULLET.match(line) or _MD_ORDERED.match(line)
+        if bullet:
+            blocks.append(("bullet", 0, bullet.group(1).strip()))
+            continue
+        blocks.append(("para", 0, line))
+    return blocks
+
+
+def _md_plain(text: str) -> str:
+    """Strip inline markdown markers, keeping the text."""
+    text = _MD_BOLD.sub(r"\1", text)
+    text = _MD_ITALIC.sub(r"\1", text)
+    return _MD_CODE.sub(r"\1", text)
+
+
+def _md_plain_content(content: str) -> str:
+    lines: list[str] = []
+    for kind, _level, text in _md_blocks(content):
+        prefix = "• " if kind == "bullet" else ""
+        lines.append(f"{prefix}{_md_plain(text)}")
+    return "\n".join(lines)
+
+
+def _md_html_inline(text: str) -> str:
+    escaped = html_escape(text, quote=False)
+    escaped = _MD_BOLD.sub(r"<strong>\1</strong>", escaped)
+    escaped = _MD_ITALIC.sub(r"<em>\1</em>", escaped)
+    return _MD_CODE.sub(r"<code>\1</code>", escaped)
+
+
+def _md_html(content: str) -> str:
+    parts: list[str] = []
+    in_list = False
+    for kind, level, text in _md_blocks(content):
+        if kind == "bullet":
+            if not in_list:
+                parts.append('<ul style="margin:2px 0 8px 16px;padding:0;">')
+                in_list = True
+            parts.append(
+                f'<li style="font-size:9.5pt;line-height:1.6;color:#333;margin:0 0 3px 0;">{_md_html_inline(text)}</li>'
+            )
+            continue
+        if in_list:
+            parts.append("</ul>")
+            in_list = False
+        if kind == "heading":
+            size = "11pt" if level <= 2 else ("10pt" if level == 3 else "9.5pt")
+            parts.append(
+                f'<h3 style="color:#1F4E79;font-size:{size};margin:10px 0 4px 0;font-weight:bold;">{_md_html_inline(text)}</h3>'
+            )
+        else:
+            parts.append(
+                f'<p style="font-size:9.5pt;line-height:1.65;color:#333;margin:0 0 6px 0;">{_md_html_inline(text)}</p>'
+            )
+    if in_list:
+        parts.append("</ul>")
+    return "".join(parts)
+
+
+def _docx_add_markdown(doc: Any, content: str) -> None:
+    for kind, level, text in _md_blocks(content):
+        if kind == "heading":
+            doc.add_heading(_md_plain(text), level=min(4, max(3, level)))
+            continue
+        para = doc.add_paragraph(style="List Bullet" if kind == "bullet" else None)
+        for index, piece in enumerate(_MD_BOLD.split(text)):
+            if not piece:
+                continue
+            run = para.add_run(_md_plain(piece))
+            run.bold = index % 2 == 1
+
+
 def _sanitize_name(title: str) -> str:
     name = re.sub(r"[^a-zA-Z0-9]+", "-", title).strip("-").lower()
     return name[:60] or "export"
@@ -503,22 +599,25 @@ def _generate_excel(payload: ExportRequest) -> bytes:
 
         for sec in sections:
             # Section heading
-            row += 2
-            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
-            c = ws.cell(row=row, column=1, value=sec.get("heading", ""))
-            c.font = _font(bold=True, size=11, color=NAVY)
-            c.fill = _fill(LIGHT)
-            c.border = left_accent
-            c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-            ws.row_dimensions[row].height = 22
+            if sec.get("heading"):
+                row += 2
+                ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+                c = ws.cell(row=row, column=1, value=sec.get("heading", ""))
+                c.font = _font(bold=True, size=11, color=NAVY)
+                c.fill = _fill(LIGHT)
+                c.border = left_accent
+                c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+                ws.row_dimensions[row].height = 22
 
             # Narrative content
+            narrative = _md_plain_content(sec.get("content", ""))
             row += 1
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
-            c = ws.cell(row=row, column=1, value=sec.get("content", ""))
+            c = ws.cell(row=row, column=1, value=narrative)
             c.font = _font(size=9, color="444444")
             c.alignment = wrap
-            ws.row_dimensions[row].height = 52
+            line_count = max(1, narrative.count("\n") + 1)
+            ws.row_dimensions[row].height = min(400, max(52, 14 * line_count))
 
             # Key-metrics table
             metrics = sec.get("key_metrics", [])
@@ -774,9 +873,10 @@ def _generate_docx(payload: ExportRequest) -> bytes:
         tags = payload.data.get("tags", [])
 
         for sec in sections:
-            h2 = doc.add_heading(sec.get("heading", ""), level=2)
-            _left_border(h2)
-            doc.add_paragraph(sec.get("content", ""))
+            if sec.get("heading"):
+                h2 = doc.add_heading(sec.get("heading", ""), level=2)
+                _left_border(h2)
+            _docx_add_markdown(doc, sec.get("content", ""))
 
             metrics = sec.get("key_metrics", [])
             if metrics:
@@ -863,13 +963,15 @@ def _generate_pdf(payload: ExportRequest) -> bytes:
     sections_html = ""
     for s in sections:
         heading = s.get("heading", "")
-        content = s.get("content", "")
+        heading_html = (
+            f'<div style="border-left:4px solid #1F4E79;padding:2px 0 2px 10px;margin-bottom:6px;">'
+            f'<h2 style="color:#1F4E79;font-size:12pt;margin:0;font-weight:bold;">{html_escape(heading, quote=False)}</h2>'
+            f'</div>'
+        ) if heading else ''
         sections_html += (
             f'<div style="page-break-inside:avoid;margin-bottom:22px;">'
-            f'<div style="border-left:4px solid #1F4E79;padding:2px 0 2px 10px;margin-bottom:6px;">'
-            f'<h2 style="color:#1F4E79;font-size:12pt;margin:0;font-weight:bold;">{heading}</h2>'
-            f'</div>'
-            f'<p style="font-size:9.5pt;line-height:1.65;color:#333;margin:0 0 4px 0;">{content}</p>'
+            f'{heading_html}'
+            f'{_md_html(s.get("content", ""))}'
             f'{_kpi_grid(s.get("key_metrics", []))}'
             f'</div>'
         )
