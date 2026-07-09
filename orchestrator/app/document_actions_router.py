@@ -116,6 +116,17 @@ def get_document_action(
     return record
 
 
+@router.delete("/{document_action_id}")
+def delete_document_action(
+    document_action_id: int,
+    actor: Annotated[dict[str, Any] | None, Depends(require_auth_optional)] = None,
+) -> dict[str, Any]:
+    record = _get_document_action_or_404(document_action_id)
+    _authorize_document_access(actor, record)
+    DOCUMENT_ACTIONS_SERVICE.delete(document_action_id=document_action_id)
+    return {"deleted": document_action_id}
+
+
 @router.post("/{document_action_id}/approve")
 def approve_draft(
     document_action_id: int,

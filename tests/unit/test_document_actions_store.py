@@ -142,3 +142,35 @@ def test_store_lists_actions_for_user_newest_first(tmp_path):
 
     assert [action["id"] for action in actions] == [second["id"], first["id"]]
     assert all(action["user_id"] == "alice" for action in actions)
+
+
+def test_store_delete_removes_record(tmp_path):
+    db_path = tmp_path / "document_actions.db"
+    store = DocumentActionsStore(db_path=db_path)
+    created = store.create_draft(
+        user_id="alice",
+        work_packet_id="wp-1",
+        document_type="executive_briefing",
+        title="Executive Briefing",
+        draft_markdown="# Briefing",
+    )
+
+    store.delete(created["id"])
+
+    try:
+        store.get(created["id"])
+        raised = False
+    except Exception:
+        raised = True
+    assert raised
+    assert store.list_actions(user_id="alice") == []
+
+
+def test_store_delete_missing_record_raises(tmp_path):
+    store = DocumentActionsStore(db_path=tmp_path / "document_actions.db")
+    try:
+        store.delete(999)
+        raised = False
+    except KeyError:
+        raised = True
+    assert raised

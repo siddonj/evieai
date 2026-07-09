@@ -421,6 +421,15 @@ class ActionsStore:
             "result": (json.loads(row["result_json"]) if row["result_json"] else None),
         }
 
+    def delete_action_request(self, action_id: str) -> bool:
+        """Remove an action request row. The append-only audit ledger is not touched."""
+        with self._connect() as conn:
+            cur = conn.execute(
+                "DELETE FROM action_request WHERE action_id = ?",
+                (action_id,),
+            )
+        return cur.rowcount > 0
+
     def list_approval_queue(self, status: str = "pending", limit: int = 100) -> list[dict[str, Any]]:
         with self._connect() as conn:
             rows = conn.execute(

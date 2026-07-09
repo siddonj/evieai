@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import uuid
 from pathlib import Path
 from typing import Any
@@ -107,6 +108,32 @@ class DocumentActionsService:
             "destination": destination,
             "announcement": executed["announcement"],
         }
+
+    def delete(self, *, document_action_id: int) -> None:
+        record = self.store.get(document_action_id)
+
+        if self.actions_store is not None:
+            for action_id in self._collect_action_ids(record):
+                self.actions_store.delete_action_request(action_id)
+
+        artifact_dir = self.artifact_root / str(document_action_id)
+        if artifact_dir.is_dir():
+            shutil.rmtree(artifact_dir, ignore_errors=True)
+
+        self.store.delete(document_action_id)
+
+    @staticmethod
+    def _collect_action_ids(record: dict[str, Any]) -> list[str]:
+        action_ids: list[str] = []
+        for key in ("announcement", "export_package"):
+            value = record.get(key)
+            if isinstance(value, dict):
+                action_id = value.get("action_id") or (
+                    value.get("announcement") or {}
+                ).get("action_id")
+                if isinstance(action_id, str) and action_id:
+                    action_ids.append(action_id)
+        return action_ids
 
     def export_package(self, *, document_action_id: int) -> dict[str, Any]:
         record = self.store.get(document_action_id)

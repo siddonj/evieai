@@ -181,6 +181,19 @@ class DocumentActionsStore:
             ).fetchone()
         return self._row_to_dict(row)
 
+    def delete(self, document_action_id: int) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "DELETE FROM document_action_announcements WHERE document_action_id = ?",
+                (document_action_id,),
+            )
+            cur = conn.execute(
+                "DELETE FROM document_actions WHERE id = ?",
+                (document_action_id,),
+            )
+            if cur.rowcount == 0:
+                raise KeyError(f"document action {document_action_id} not found")
+
     def list_actions(
         self,
         *,
