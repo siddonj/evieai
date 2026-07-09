@@ -8,6 +8,7 @@ import { LoginPage } from './LoginPage'
 import { ResultDeck, ToolBadge, LiveToolBadge, downloadResource, type ChatResponse, type DocumentAction } from './Cards'
 import { WorkPacketPanel } from './WorkPacketPanel'
 import { useDemoLauncher } from './useDemoLauncher.js'
+import { DEMO_PERFORMANCE_DATA, DEMO_NETWORK_DATA } from './demoDashboards'
 
 const SettingsPage = lazy(() => import('./SettingsPage').then(m => ({ default: m.SettingsPage })))
 const AdminPage = lazy(() => import('./AdminPage').then(m => ({ default: m.AdminPage })))
@@ -297,6 +298,7 @@ function PerformanceDashboardView({ userId, onNavigate }: { userId?: string; onN
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [data, setData] = useState<PerformanceData | null>(null)
+  const [isSampleData, setIsSampleData] = useState(false)
 
   async function loadDashboard() {
     setLoading(true)
@@ -309,9 +311,15 @@ function PerformanceDashboardView({ userId, onNavigate }: { userId?: string; onN
       }
       const payload = (await res.json()) as PerformanceData
       setData(payload)
+      setIsSampleData(false)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      setError(`Could not load performance dashboard: ${message}`)
+      if (IS_DEV_DEMO) {
+        setData(DEMO_PERFORMANCE_DATA)
+        setIsSampleData(true)
+      } else {
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        setError(`Could not load performance dashboard: ${message}`)
+      }
     } finally {
       setLoading(false)
     }
@@ -340,6 +348,7 @@ function PerformanceDashboardView({ userId, onNavigate }: { userId?: string; onN
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
+        {isSampleData && <div className="dashboard-sample-note">Showing sample data — live services are not connected.</div>}
 
         {loading && !data && <div className="dashboard-loading">Loading portfolio data...</div>}
 
@@ -417,6 +426,7 @@ function NetworkDashboardView({ userId, onNavigate }: { userId?: string; onNavig
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [data, setData] = useState<NetworkData | null>(null)
+  const [isSampleData, setIsSampleData] = useState(false)
 
   async function loadDashboard() {
     setLoading(true)
@@ -429,9 +439,15 @@ function NetworkDashboardView({ userId, onNavigate }: { userId?: string; onNavig
       }
       const payload = (await res.json()) as NetworkData
       setData(payload)
+      setIsSampleData(false)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      setError(`Could not load network dashboard: ${message}`)
+      if (IS_DEV_DEMO) {
+        setData(DEMO_NETWORK_DATA)
+        setIsSampleData(true)
+      } else {
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        setError(`Could not load network dashboard: ${message}`)
+      }
     } finally {
       setLoading(false)
     }
@@ -460,6 +476,7 @@ function NetworkDashboardView({ userId, onNavigate }: { userId?: string; onNavig
         </div>
 
         {error && <div className="dashboard-error">{error}</div>}
+        {isSampleData && <div className="dashboard-sample-note">Showing sample data — live services are not connected.</div>}
         {loading && !data && <div className="dashboard-loading">Loading network data...</div>}
 
         {data && (
