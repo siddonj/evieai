@@ -5033,6 +5033,13 @@ body {
   color: #cfe1ff;
 }
 
+.workflow-approve-hint {
+  margin: 0;
+  align-self: center;
+  font-size: 0.78rem;
+  color: #f3d5a8;
+}
+
 .result-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));

@@ -8,6 +8,12 @@ const STATUS_LABELS: Record<DocumentAction['status'], string> = {
   blocked: 'Needs approval',
 }
 
+// Approval requires a destination ref; default it so a fresh draft can be
+// approved immediately instead of presenting a disabled button with no cue.
+function suggestDestinationRef(action: DocumentAction): string {
+  return action.destination_ref || `Reports/${action.title}`
+}
+
 type DocumentWorkflowPanelProps = {
   action: DocumentAction
   orchestratorUrl: string
@@ -30,14 +36,14 @@ export function DocumentWorkflowPanel({
   onViewReport,
 }: DocumentWorkflowPanelProps) {
   const [destinationType, setDestinationType] = useState(action.destination_type || 'onedrive')
-  const [destinationRef, setDestinationRef] = useState(action.destination_ref || '')
+  const [destinationRef, setDestinationRef] = useState(suggestDestinationRef(action))
   const [selectedFormats, setSelectedFormats] = useState<string[]>(action.output_formats?.length ? action.output_formats : ['pdf', 'docx'])
   const [busy, setBusy] = useState<'create' | 'approve' | 'finalize' | 'export' | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
     setDestinationType(action.destination_type || 'onedrive')
-    setDestinationRef(action.destination_ref || '')
+    setDestinationRef(suggestDestinationRef(action))
     setSelectedFormats(action.output_formats?.length ? action.output_formats : ['pdf', 'docx'])
   }, [action])
 
@@ -267,6 +273,9 @@ export function DocumentWorkflowPanel({
           >
             {busy === 'approve' ? 'Approving…' : 'Approve draft'}
           </button>
+          {canApprove && !destinationRef.trim() && (
+            <p className="workflow-approve-hint">Enter a destination above to enable approval.</p>
+          )}
           <button
             className="status-btn"
             onClick={(event) => {
