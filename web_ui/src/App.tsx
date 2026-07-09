@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { AuthProvider, useAuth } from './auth'
 import { getOrchestratorUrl } from './apiBase'
 import { DocumentWorkflowPanel } from './DocumentWorkflowPanel'
@@ -127,6 +128,7 @@ type ChatMessage = {
   role: 'user' | 'assistant'
   text: string
   data?: ChatResponse
+  errorDetail?: string
 }
 
 type LegacyChatMessage = {
@@ -138,6 +140,7 @@ type LegacyChatMessage = {
 }
 
 type LiveTool = {
+  id: string
   name: string
   label: string
   status: 'calling' | 'done' | 'error'
@@ -212,7 +215,7 @@ function loadHistory(): ChatMessage[] {
 
 function renderMarkdown(text: string): string {
   try {
-    return marked.parse(text || '', { breaks: true }) as string
+    return DOMPurify.sanitize(marked.parse(text || '', { breaks: true }) as string)
   } catch {
     return text || ''
   }
@@ -920,7 +923,7 @@ function nextId(): string {
 }
 
 function ChatView() {
-  const { user, token } = useAuth()
+  const { user, token, logout } = useAuth()
   const authHeader = token && token !== 'dev-session' ? `Bearer ${token}` : undefined
   const isDemoPath = window.location.pathname === DEMO_PATH || window.location.pathname.startsWith(`${DEMO_PATH}/`)
   const [input, setInput] = useState('')
@@ -958,7 +961,6 @@ function ChatView() {
   const [streamingText, setStreamingText] = useState('')
   const [activeTools, setActiveTools] = useState<LiveTool[]>([])
   const [completedTools, setCompletedTools] = useState<LiveTool[]>([])
-  const [streamError, setStreamError] = useState('')
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -998,8 +1000,8 @@ function ChatView() {
       if (calling.length > 0) return `🔍 Querying: ${calling.map((t) => t.label.split(' → ')[0]).join(', ')}...`
       return 'Generating response...'
     }
-    return `Connected to ${ORCHESTRATOR_URL}  |  User: ${user?.email}  |  MF Brokerage`
-  }, [loading, activeTools, user])
+    return 'Evie · Multifamily Intelligence · Ready'
+  }, [loading, activeTools])
 
   function updateDocumentAction(messageId: string, nextAction: DocumentAction) {
     setMessages((prev) => prev.map((msg) => {
@@ -1055,7 +1057,6 @@ function ChatView() {
     setStreamingText('')
     setActiveTools([])
     setCompletedTools([])
-    setStreamError('')
     finalDataRef.current = null
 
     try {
@@ -1074,13 +1075,30 @@ function ChatView() {
 
       if (!res.ok) {
         const errText = await res.text()
-        throw new Error(`HTTP ${res.status}: ${errText}`)
+        if (res.status === 401) {
+          setMessages((prev) => [
+            ...prev,
+            { id: nextId(), role: 'assistant', text: 'Your session has expired. Please sign in again to continue.' },
+          ])
+          logout()
+          return
+        }
+        const friendly = res.status >= 500
+          ? 'I ran into a problem on the server while answering. Please try again in a moment.'
+          : 'I could not process that request. Please try rephrasing or try again.'
+        const detailError = new Error(friendly)
+        ;(detailError as Error & { detail?: string }).detail = `HTTP ${res.status}: ${errText}`
+        throw detailError
       }
 
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
       let fullReply = ''
+      let streamErrorMsg = ''
+      let toolSeq = 0
+      const liveActive: LiveTool[] = []
+      const liveCompleted: LiveTool[] = []
 
       while (true) {
         const { done, value } = await reader.read()
@@ -1113,14 +1131,23 @@ function ChatView() {
 
             case 'tool':
               if (event.status === 'calling') {
-                setActiveTools((prev) => [...prev, { name: event.name, label: event.label, status: 'calling' }])
-              } else if (event.status === 'done') {
-                setActiveTools((prev) => prev.filter((t) => t.name !== event.name))
-                setCompletedTools((prev) => [...prev, { name: event.name, label: event.label, status: 'done', summary: event.summary }])
-              } else if (event.status === 'error') {
-                setActiveTools((prev) => prev.filter((t) => t.name !== event.name))
-                setCompletedTools((prev) => [...prev, { name: event.name, label: event.label, status: 'error', summary: event.summary }])
+                toolSeq += 1
+                liveActive.push({ id: `${event.name}-${toolSeq}`, name: event.name, label: event.label, status: 'calling' })
+              } else if (event.status === 'done' || event.status === 'error') {
+                const matchIndex = liveActive.findIndex((t) => t.name === event.name)
+                toolSeq += 1
+                const finished: LiveTool = {
+                  id: matchIndex >= 0 ? liveActive[matchIndex].id : `${event.name}-${toolSeq}`,
+                  name: event.name,
+                  label: event.label,
+                  status: event.status,
+                  summary: event.summary,
+                }
+                if (matchIndex >= 0) liveActive.splice(matchIndex, 1)
+                liveCompleted.push(finished)
               }
+              setActiveTools([...liveActive])
+              setCompletedTools([...liveCompleted])
               break
 
             case 'done':
@@ -1135,14 +1162,16 @@ function ChatView() {
               break
 
             case 'error':
-              setStreamError(event.message || 'Unknown error')
+              streamErrorMsg = event.message || 'Unknown error'
               break
           }
         }
       }
 
       // Finalize the streaming message
-      const finalText = streamError ? `I encountered an error: ${streamError}` : (fullReply || 'No response from orchestrator.')
+      const finalText = streamErrorMsg
+        ? 'I ran into a problem while putting that answer together. Please try again in a moment.'
+        : (fullReply || 'I did not get a response back. Please try again.')
 
       if (activeDemoScenario && text === currentPrompt) {
         const nextPrompt = advanceDemoStep(text)
@@ -1156,13 +1185,18 @@ function ChatView() {
         role: 'assistant',
         text: finalText,
         data: finalDataRef.current ?? undefined,
+        errorDetail: streamErrorMsg || undefined,
       }
       setMessages((prev) => [...prev, assistantMsg])
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
+      const isNetworkError = err instanceof TypeError
+      const friendly = isNetworkError
+        ? 'I am having trouble reaching the data services right now. Please check the connection and try again.'
+        : err instanceof Error ? err.message : 'Something went wrong. Please try again.'
+      const detail = err instanceof Error ? (err as Error & { detail?: string }).detail || (isNetworkError ? err.message : undefined) : undefined
       setMessages((prev) => [
         ...prev,
-        { id: nextId(), role: 'assistant', text: `I could not reach the orchestrator. ${message}` },
+        { id: nextId(), role: 'assistant', text: friendly, errorDetail: detail },
       ])
     } finally {
       setLoading(false)
@@ -1178,12 +1212,8 @@ function ChatView() {
     }
   }
 
-  if (view === 'settings') {
-    return <Suspense fallback={<div className="dashboard-loading">Loading settings panel...</div>}><SettingsPage initialTab="service_health" /></Suspense>
-  }
-
-  if (view === 'service_health') {
-    return <Suspense fallback={<div className="dashboard-loading">Loading service health...</div>}><SettingsPage initialTab="service_health" /></Suspense>
+  if (view === 'settings' || view === 'service_health') {
+    return <Suspense fallback={<div className="dashboard-loading">Loading settings panel...</div>}><SettingsPage initialTab="service_health" onBack={() => setView('chat')} /></Suspense>
   }
 
   if (view === 'admin') {
@@ -1231,8 +1261,8 @@ function ChatView() {
         </p>
       </header>
 
-      {/* Suggested Prompts */}
-      {showPrompts && !loading && (
+      {/* Recommended workflows — first-run only */}
+      {showPrompts && !loading && !hasConversation && (
         <>
           <div className="section-label-row">
             <span className="section-label">Recommended workflows</span>
@@ -1255,13 +1285,18 @@ function ChatView() {
                   ))}
                 </div>
               </button>
-              ))}
-            </div>
-            <div className="section-label-row">
-              <span className="section-label">Quick prompts</span>
-              <span className="section-label-meta">{SUGGESTED_PROMPTS.length} shortcuts</span>
-            </div>
+            ))}
+          </div>
+        </>
+      )}
 
+      {/* Quick prompts — always reachable */}
+      {!loading && (
+        <>
+          <div className="section-label-row">
+            <span className="section-label">Quick prompts</span>
+            <span className="section-label-meta">{SUGGESTED_PROMPTS.length} shortcuts</span>
+          </div>
           <div className="suggested-prompts">
             {SUGGESTED_PROMPTS.map((p) => (
               <button
@@ -1287,7 +1322,7 @@ function ChatView() {
         </div>
 
         {/* Messages */}
-        <div className="messages">
+        <div className="messages" aria-live="polite">
           {messages.map((msg) => (
             <div key={msg.id} className={`bubble ${msg.role}`}>
               <div className="label">{msg.role === 'user' ? 'You' : 'Agent'}</div>
@@ -1295,6 +1330,12 @@ function ChatView() {
                 className="text prose"
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }}
               />
+              {msg.errorDetail && (
+                <details className="bubble-error-detail">
+                  <summary>Technical details</summary>
+                  <pre>{msg.errorDetail}</pre>
+                </details>
+              )}
               {msg.data?.document_actions?.map((action) => (
                 <div key={action.id} className="message-section">
                   <DocumentWorkflowPanel
@@ -1350,7 +1391,7 @@ function ChatView() {
               {activeTools.length > 0 && (
                 <div className="live-tools">
                   {activeTools.map((t) => (
-                    <LiveToolBadge key={t.name} name={t.name} label={t.label} status="calling" />
+                    <LiveToolBadge key={t.id} name={t.name} label={t.label} status="calling" />
                   ))}
                 </div>
               )}
@@ -1360,7 +1401,7 @@ function ChatView() {
                 <div className="live-tools">
                   {completedTools.map((t) => (
                     <LiveToolBadge
-                      key={t.name}
+                      key={t.id}
                       name={t.name}
                       label={t.label}
                       status={t.status === 'error' ? 'error' : 'done'}
@@ -1466,8 +1507,8 @@ function ChatView() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask about properties, deals, market data, or documents..."
+            aria-label="Message Evie"
             rows={4}
-            disabled={loading}
           />
           <div className="composer-actions">
             <button className="composer-send" onClick={() => sendMessage()} disabled={loading || !input.trim()}>

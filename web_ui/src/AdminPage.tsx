@@ -439,33 +439,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
             </div>
           )}
 
-          {/* Data Sources */}
-          <div className="datasource-section">
-            <h2>Reference sources</h2>
-            <div className="datasource-grid">
-              {[
-                { name: 'Real Estate DB', status: 'Available' },
-                { name: 'Market Analytics', status: 'Available' },
-                { name: 'Tenant Database', status: 'Available' },
-                { name: 'Financial Records', status: 'Available' },
-                { name: 'Document Library', status: 'Available' },
-                { name: 'Communications', status: 'Available' },
-              ].map((ds) => (
-                <div key={ds.name} className="datasource-item">
-                  <div className="ds-icon" aria-hidden="true" />
-                  <div className="ds-name">{ds.name}</div>
-                  <div className="ds-status">{ds.status}</div>
-                </div>
-              ))}
-            </div>
-          </div>
         </>
       )}
 
       {/* Service Detail Modal */}
       {selectedService && (
-        <div className="modal-overlay" onClick={() => setSelectedService(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setSelectedService(null)} onKeyDown={(e) => { if (e.key === 'Escape') setSelectedService(null) }}>
+          <div className="modal-content" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>{getServiceCategory(selectedService.name).label}</h2>
               <button className="modal-close" onClick={() => setSelectedService(null)}>
@@ -496,15 +476,6 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </div>
               )}
 
-              <div className="detail-group">
-                <label>Logs</label>
-                <div className="detail-logs">
-                  <p>Recent activity logs would appear here.</p>
-                  <code className="log-sample">
-                    {`[2026-05-30T14:32:45Z] Service health check: OK\n[2026-05-30T14:32:40Z] Response time: ${selectedService.response_time_ms || 0}ms`}
-                  </code>
-                </div>
-              </div>
             </div>
             <div className="modal-footer">
               <button className="modal-button" onClick={() => setSelectedService(null)}>
@@ -517,4 +488,3 @@ export function AdminPage({ onBack }: AdminPageProps) {
     </div>
   )
 }
-// Rebuild trigger - 20260529-230156

@@ -1,5 +1,5 @@
 /* ─── Types ─────────────────────────────────────────────────────── */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getOrchestratorUrl } from './apiBase'
 
 const ORCHESTRATOR_URL = getOrchestratorUrl()
@@ -295,6 +295,19 @@ function fileIcon(name: string): string {
 export function ExportMenu({ type, title, data }: { type: 'report' | 'table'; title: string; data: any }) {
   const [open, setOpen] = useState(false)
   const [exporting, setExporting] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [open])
 
   const formats = [
     { key: 'xlsx', label: 'Excel (.xlsx)', icon: '📊' },
@@ -304,6 +317,7 @@ export function ExportMenu({ type, title, data }: { type: 'report' | 'table'; ti
 
   const handleExport = async (format: string) => {
     setExporting(format)
+    setError(null)
     try {
       const res = await fetch(`${ORCHESTRATOR_URL}/export`, {
         method: 'POST',
@@ -311,14 +325,12 @@ export function ExportMenu({ type, title, data }: { type: 'report' | 'table'; ti
         body: JSON.stringify({ type, format, title, data }),
       })
       if (!res.ok) {
-        const text = await res.text().catch(() => res.statusText)
-        alert(`Export failed (${res.status}): ${text.slice(0, 300)}`)
+        setError(`Export failed — the ${format.toUpperCase()} service returned an error. Try again in a moment.`)
         return
       }
       const contentType = res.headers.get('content-type') || ''
       if (!contentType.includes('application/') && !contentType.includes('octet-stream')) {
-        const text = await res.text().catch(() => '')
-        alert(`Export returned unexpected content type "${contentType}".${text ? ' Response: ' + text.slice(0, 200) : ''}`)
+        setError(`Export failed — unexpected response from the ${format.toUpperCase()} service.`)
         return
       }
       const blob = await res.blob()
@@ -336,33 +348,41 @@ export function ExportMenu({ type, title, data }: { type: 'report' | 'table'; ti
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
       }, 1000)
-    } catch (e) {
-      alert('Export failed. See console for details.')
-      console.error('Export error:', e)
+      setOpen(false)
+    } catch {
+      setError('Export failed — could not reach the export service. Try again in a moment.')
     } finally {
       setExporting(null)
-      setOpen(false)
     }
   }
 
   return (
-    <div className="export-menu-wrapper" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}>
-      <button className="export-btn" onClick={() => setOpen(!open)} title="Export" aria-label="Export options">
+    <div ref={wrapperRef} className="export-menu-wrapper" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}>
+      <button
+        className="export-btn"
+        onClick={() => { setOpen(!open); setError(null) }}
+        title="Export"
+        aria-label="Export options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
         <span className="export-btn-icon">⬇️</span>
         <span className="export-btn-arrow">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div className="export-dropdown">
+        <div className="export-dropdown" role="menu">
           {formats.map((f) => (
             <button
               key={f.key}
+              role="menuitem"
               className="export-option"
               onClick={() => handleExport(f.key)}
-              disabled={exporting === f.key}
+              disabled={exporting !== null}
             >
               {exporting === f.key ? <span className="export-spinner">⏳</span> : f.icon} {f.label}
             </button>
           ))}
+          {error && <div className="export-error" role="alert">{error}</div>}
         </div>
       )}
     </div>

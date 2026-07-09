@@ -64,6 +64,7 @@ type Tab = 'data_sources' | 'approvals' | 'service_health' | 'routing'
 
 type SettingsPageProps = {
   initialTab?: Tab
+  onBack?: () => void
 }
 
 type ServiceHealthRow = {
@@ -131,7 +132,7 @@ type RoutingHealth = {
   }>
 }
 
-export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProps) {
+export function SettingsPage({ initialTab = 'service_health', onBack }: SettingsPageProps) {
   const { logout, user: currentUser } = useAuth()
   const [tab, setTab] = useState<Tab>(initialTab)
   const [userMessage, setUserMessage] = useState('')
@@ -529,6 +530,11 @@ export function SettingsPage({ initialTab = 'service_health' }: SettingsPageProp
       <main className="settings-shell">
         {/* Tab Navigation */}
         <div className="settings-tabs">
+          {onBack && (
+            <button className="settings-tab settings-tab-back" onClick={onBack}>
+              ← Back to chat
+            </button>
+          )}
           <button className={`settings-tab ${tab === 'service_health' ? 'active' : ''}`} onClick={() => setTab('service_health')}>
             Service health
           </button>
