@@ -5,7 +5,7 @@ import { AuthProvider, useAuth } from './auth'
 import { getOrchestratorUrl } from './apiBase'
 import { DocumentWorkflowPanel } from './DocumentWorkflowPanel'
 import { LoginPage } from './LoginPage'
-import { ResultDeck, ToolBadge, LiveToolBadge, downloadResource, type ChatResponse, type DocumentAction } from './Cards'
+import { ResultDeck, ToolBadge, LiveToolBadge, downloadResource, formatBytes, type ChatResponse, type DocumentAction } from './Cards'
 import { WorkPacketPanel } from './WorkPacketPanel'
 import { useDemoLauncher } from './useDemoLauncher.js'
 import { DEMO_PERFORMANCE_DATA, DEMO_NETWORK_DATA } from './demoDashboards'
@@ -892,7 +892,7 @@ function ReportViewer({
                   <article key={`${artifact.file_name || artifact.format || 'artifact'}-${index}`} className="mini-card">
                     <span>{artifact.format || 'artifact'}</span>
                     <strong>{artifact.file_name || 'Generated file'}</strong>
-                    <p>{artifact.blob_url || artifact.storage_ref || 'Stored'}</p>
+                    {artifact.size_bytes ? <p>{formatBytes(artifact.size_bytes)}</p> : null}
                     {artifact.file_name && (
                       <button
                         className="status-btn"
@@ -907,7 +907,7 @@ function ReportViewer({
                   <article key={`export-${artifact.file_name || artifact.format || 'artifact'}-${index}`} className="mini-card">
                     <span>{artifact.format || 'export'}</span>
                     <strong>{artifact.file_name || 'Export package file'}</strong>
-                    <p>{artifact.blob_url || artifact.storage_ref || 'Stored'}</p>
+                    {artifact.size_bytes ? <p>{formatBytes(artifact.size_bytes)}</p> : null}
                     {artifact.file_name && (
                       <button
                         className="status-btn"

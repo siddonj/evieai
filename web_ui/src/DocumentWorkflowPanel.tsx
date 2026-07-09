@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { DocumentAction } from './Cards'
+import { downloadResource, formatBytes, type DocumentAction } from './Cards'
 
 const STATUS_LABELS: Record<DocumentAction['status'], string> = {
   draft: 'Draft ready',
@@ -120,6 +120,17 @@ export function DocumentWorkflowPanel({
       setError(err instanceof Error ? err.message : 'Could not approve draft')
     } finally {
       setBusy(null)
+    }
+  }
+
+  async function handleDownloadArtifact(fileName: string) {
+    setError('')
+    try {
+      const url = `${orchestratorUrl}/document-actions/${action.id}/artifacts/${encodeURIComponent(fileName)}`
+      await downloadResource(url, fileName)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Download failed'
+      setError(`Could not download ${fileName}: ${message}`)
     }
   }
 
@@ -316,7 +327,18 @@ export function DocumentWorkflowPanel({
             <article key={`${artifact.file_name || artifact.format || 'artifact'}-${index}`} className="mini-card">
               <span>{artifact.format || 'artifact'}</span>
               <strong>{artifact.file_name || 'Generated file'}</strong>
-              <p>{artifact.blob_url || artifact.storage_ref || 'Stored'}</p>
+              {artifact.size_bytes ? <p>{formatBytes(artifact.size_bytes)}</p> : null}
+              {artifact.file_name && (
+                <button
+                  className="status-btn"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void handleDownloadArtifact(artifact.file_name!)
+                  }}
+                >
+                  Download
+                </button>
+              )}
             </article>
           ))}
         </div>
