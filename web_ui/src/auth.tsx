@@ -40,9 +40,24 @@ type AuthCtx = {
 }
 
 const AuthContext = createContext<AuthCtx | null>(null)
-const DEV_LOGIN_BYPASS = import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEV_LOGIN_BYPASS !== 'true'
-const DEV_USER: User = {
-  id: 'dev-admin',
+
+export function isDemoLoginBypassEnabled(options?: {
+  hostname?: string
+  isDev?: boolean
+  enableEnvFlag?: boolean
+}): boolean {
+  const hostname = (options?.hostname || '').toLowerCase()
+  const isDemoHost = hostname === 'demo.resiq.co' || hostname.endsWith('.resiq.co')
+  return Boolean(options?.isDev || options?.enableEnvFlag || isDemoHost)
+}
+
+const DEMO_LOGIN_BYPASS = isDemoLoginBypassEnabled({
+  hostname: typeof window !== 'undefined' ? window.location.hostname : '',
+  isDev: import.meta.env.DEV,
+  enableEnvFlag: import.meta.env.VITE_ENABLE_DEMO_LOGIN_BYPASS === 'true',
+})
+const DEMO_USER: User = {
+  id: 'demo-admin',
   email: import.meta.env.VITE_DEV_LOGIN_EMAIL || 'admin@evie.ai',
   role: 'admin',
 }
@@ -70,8 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<{ token: string; user: User } | null>(() => {
     const stored = loadSession()
     if (stored) return stored
-    if (DEV_LOGIN_BYPASS) {
-      return { token: 'dev-session', user: DEV_USER }
+    if (DEMO_LOGIN_BYPASS) {
+      return { token: 'demo-session', user: DEMO_USER }
     }
     return null
   })
@@ -82,6 +97,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = user?.role === 'admin'
 
   const login = useCallback(async (email: string, password: string): Promise<string | null> => {
+    if (DEMO_LOGIN_BYPASS) {
+      saveSession('demo-session', DEMO_USER)
+      setSession({ token: 'demo-session', user: DEMO_USER })
+      return null
+    }
+
     setIsLoading(true)
     try {
       const resp = await fetch(`${API_BASE}/auth/login`, {
@@ -105,11 +126,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     clearSession()
-    setSession(DEV_LOGIN_BYPASS ? { token: 'dev-session', user: DEV_USER } : null)
+    setSession(DEMO_LOGIN_BYPASS ? { token: 'demo-session', user: DEMO_USER } : null)
   }, [])
 
   const register = useCallback(
     async (email: string, password: string, role: 'admin' | 'user' = 'user'): Promise<string | null> => {
+      if (DEMO_LOGIN_BYPASS) {
+        saveSession('demo-session', DEMO_USER)
+        setSession({ token: 'demo-session', user: DEMO_USER })
+        return null
+      }
+
       setIsLoading(true)
       try {
         const resp = await fetch(`${API_BASE}/auth/register`, {

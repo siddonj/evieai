@@ -1,9 +1,13 @@
 import { useState } from 'react'
-import { useAuth } from './auth'
+import { useAuth, isDemoLoginBypassEnabled } from './auth'
 
 export function LoginPage() {
   const { login, register, isLoading } = useAuth()
-  const isDevDemo = import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEV_LOGIN_BYPASS !== 'true'
+  const isDevDemo = isDemoLoginBypassEnabled({
+    hostname: typeof window !== 'undefined' ? window.location.hostname : '',
+    isDev: import.meta.env.DEV,
+    enableEnvFlag: import.meta.env.VITE_ENABLE_DEMO_LOGIN_BYPASS === 'true',
+  })
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
