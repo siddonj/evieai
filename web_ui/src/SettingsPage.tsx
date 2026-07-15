@@ -538,6 +538,9 @@ export function SettingsPage({ initialTab = 'service_health', onBack }: Settings
           <button className={`settings-tab ${tab === 'service_health' ? 'active' : ''}`} onClick={() => setTab('service_health')}>
             Service health
           </button>
+          <button className={`settings-tab ${tab === 'data_sources' ? 'active' : ''}`} onClick={() => setTab('data_sources')}>
+            Data sources
+          </button>
           <button className={`settings-tab ${tab === 'routing' ? 'active' : ''}`} onClick={() => setTab('routing')}>
             Routing
           </button>
