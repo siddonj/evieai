@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import { getOrchestratorUrl } from './apiBase'
 
 export type User = {
@@ -56,10 +56,20 @@ const DEMO_LOGIN_BYPASS = isDemoLoginBypassEnabled({
   isDev: import.meta.env.DEV,
   enableEnvFlag: import.meta.env.VITE_ENABLE_DEMO_LOGIN_BYPASS === 'true',
 })
-const DEMO_USER: User = {
-  id: 'demo-admin',
-  email: import.meta.env.VITE_DEV_LOGIN_EMAIL || 'admin@evie.ai',
-  role: 'admin',
+// Demo-host bypass signs in against the real API so the session carries a
+// valid JWT; a fabricated token gets 401s from any endpoint that validates it.
+const DEMO_LOGIN_EMAIL = import.meta.env.VITE_DEMO_LOGIN_EMAIL || 'admin@evieai.local'
+const DEMO_LOGIN_PASSWORD = import.meta.env.VITE_DEMO_LOGIN_PASSWORD || 'admin'
+
+function isTokenUsable(token: string): boolean {
+  const parts = token.split('.')
+  if (parts.length !== 3) return false
+  try {
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))) as { exp?: unknown }
+    return typeof payload.exp !== 'number' || payload.exp * 1000 > Date.now() + 60_000
+  } catch {
+    return false
+  }
 }
 
 function normalizeApiError(detail: unknown, fallback: string): string {
@@ -84,10 +94,8 @@ function normalizeApiError(detail: unknown, fallback: string): string {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<{ token: string; user: User } | null>(() => {
     const stored = loadSession()
-    if (stored) return stored
-    if (DEMO_LOGIN_BYPASS) {
-      return { token: 'demo-session', user: DEMO_USER }
-    }
+    if (stored && isTokenUsable(stored.token)) return stored
+    clearSession()
     return null
   })
   const [isLoading, setIsLoading] = useState(false)
@@ -97,12 +105,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = user?.role === 'admin'
 
   const login = useCallback(async (email: string, password: string): Promise<string | null> => {
-    if (DEMO_LOGIN_BYPASS) {
-      saveSession('demo-session', DEMO_USER)
-      setSession({ token: 'demo-session', user: DEMO_USER })
-      return null
-    }
-
     setIsLoading(true)
     try {
       const resp = await fetch(`${API_BASE}/auth/login`, {
@@ -126,17 +128,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     clearSession()
-    setSession(DEMO_LOGIN_BYPASS ? { token: 'demo-session', user: DEMO_USER } : null)
+    setSession(null)
   }, [])
+
+  useEffect(() => {
+    if (DEMO_LOGIN_BYPASS && !session) {
+      void login(DEMO_LOGIN_EMAIL, DEMO_LOGIN_PASSWORD)
+    }
+  }, [session, login])
 
   const register = useCallback(
     async (email: string, password: string, role: 'admin' | 'user' = 'user'): Promise<string | null> => {
-      if (DEMO_LOGIN_BYPASS) {
-        saveSession('demo-session', DEMO_USER)
-        setSession({ token: 'demo-session', user: DEMO_USER })
-        return null
-      }
-
       setIsLoading(true)
       try {
         const resp = await fetch(`${API_BASE}/auth/register`, {

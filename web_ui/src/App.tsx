@@ -941,7 +941,7 @@ function nextId(): string {
 
 function ChatView() {
   const { user, token, logout } = useAuth()
-  const authHeader = token && token !== 'dev-session' ? `Bearer ${token}` : undefined
+  const authHeader = token ? `Bearer ${token}` : undefined
   const isDemoPath = window.location.pathname === DEMO_PATH || window.location.pathname.startsWith(`${DEMO_PATH}/`)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
